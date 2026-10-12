@@ -377,7 +377,7 @@ static void Game_changeDisc(char* path) {
 	game_info.size = game.size;
 	
 	disk_control_ext.replace_image_index(0, &game_info);
-	putFile(CHANGE_DISC_PATH, path); // MinUI still needs to know this to update recents.txt
+	putFile(CHANGE_DISC_PATH, path); // Cannelloni still needs to know this to update recents.txt
 }
 
 ///////////////////////////////////////
@@ -3032,7 +3032,7 @@ static struct {
 	SDL_Surface* overlay;
 	char* items[MENU_ITEM_COUNT];
 	char* disc_paths[9]; // up to 9 paths, Arc the Lad Collection is 7 discs
-	char minui_dir[256];
+	char cannelloni_dir[256];
 	char slot_path[256];
 	char base_path[256];
 	char bmp_path[256];
@@ -3065,10 +3065,10 @@ void Menu_init(void) {
 	
 	char emu_name[256];
 	getEmuName(game.path, emu_name);
-	sprintf(menu.minui_dir, SHARED_USERDATA_PATH "/.minui/%s", emu_name);
-	mkdir(menu.minui_dir, 0755);
+	sprintf(menu.cannelloni_dir, SHARED_USERDATA_PATH "/.cannelloni/%s", emu_name);
+	mkdir(menu.cannelloni_dir, 0755);
 
-	sprintf(menu.slot_path, "%s/%s.txt", menu.minui_dir, game.name);
+	sprintf(menu.slot_path, "%s/%s.txt", menu.cannelloni_dir, game.name);
 	
 	if (simple_mode) menu.items[ITEM_OPTS] = "Reset";
 	
@@ -3566,7 +3566,7 @@ static int OptionQuicksave_onConfirm(MenuList* list, int i) {
 static MenuList options_menu = {
 	.type = MENU_LIST,
 	.items = (MenuItem[]) {
-		{"Frontend", "MinUI (" BUILD_DATE " " BUILD_HASH ")",.on_confirm=OptionFrontend_openMenu},
+		{"Frontend", "Cannelloni (" BUILD_DATE " " BUILD_HASH ")",.on_confirm=OptionFrontend_openMenu},
 		{"Emulator",.on_confirm=OptionEmulator_openMenu},
 		{"Controls",.on_confirm=OptionControls_openMenu},
 		{"Shortcuts",.on_confirm=OptionShortcuts_openMenu}, 
@@ -4123,8 +4123,8 @@ static void Menu_updateState(void) {
 
 	state_slot = last_slot;
 
-	sprintf(menu.bmp_path, "%s/%s.%d.bmp", menu.minui_dir, game.name, menu.slot);
-	sprintf(menu.txt_path, "%s/%s.%d.txt", menu.minui_dir, game.name, menu.slot);
+	sprintf(menu.bmp_path, "%s/%s.%d.bmp", menu.cannelloni_dir, game.name, menu.slot);
+	sprintf(menu.txt_path, "%s/%s.%d.txt", menu.cannelloni_dir, game.name, menu.slot);
 	
 	menu.save_exists = exists(save_path);
 	menu.preview_exists = menu.save_exists && exists(menu.bmp_path);

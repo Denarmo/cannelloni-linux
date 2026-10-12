@@ -1,4 +1,4 @@
-MinUI is a minimal launcher for the RGB30, Trimui Smart (and Pro), Miyoo Mini (and Plus), M17, and RG35XX--all from the same SD card. Why? Why not?
+Cannelloni is a minimal launcher for the RGB30, Trimui Smart (and Pro), Miyoo Mini (and Plus), M17, and RG35XX--all from the same SD card. Why? Why not?
 
 Source:
 https://github.com/shauninman/minui
@@ -8,7 +8,7 @@ Installing
 
 PREFACE
 
-On devices that support two SD cards (eg. RG35XX) I will use the name "TF1" to refer to the card that goes into slot one of the device. All other instances of "SD card" or "primary card" refer to the card that goes into the second slot or to the sole SD card of devices that only support a single card. To get the most out of MinUI on devices that support two SD cards you should install MinUI on the second card.
+On devices that support two SD cards (eg. RG35XX) I will use the name "TF1" to refer to the card that goes into slot one of the device. All other instances of "SD card" or "primary card" refer to the card that goes into the second slot or to the sole SD card of devices that only support a single card. To get the most out of Cannelloni on devices that support two SD cards you should install Cannelloni on the second card.
 
 Copy all the folders from this zip file to the root of your primary card.
 
@@ -38,14 +38,14 @@ To exit P8-NATIVE.pak, press start. Then select "SHUTDOWN".
 
 To exit Splore.pak, press start. In-game select "EXIT TO SPLORE". With a cart selected in splore press start, select "OPTIONS", and then "SHUTDOWN PICO-8". 
 
-Please note that Splore.pak and P8-NATIVE.pak don't/can't implement MinUI's uniform features like the in-game menu (including save states), faux sleep, and quicksave/auto-resume.
+Please note that Splore.pak and P8-NATIVE.pak don't/can't implement Cannelloni's uniform features like the in-game menu (including save states), faux sleep, and quicksave/auto-resume.
 
 ----------------------------------------
 Wi-Fi.pak (RGB30-only)
 
 Open "wifi.txt" in a plain text editor and enter your network name and password on two separate lines and save, eg.
 
-  minui
+  cannelloni
   lessismore
 
 Copy "Wi-Fi.pak" to "/Tools/rgb30/" on your SD card. The first time you open the pak (or any time you change the contents of "wifi.txt") it will update the network name and password then connect. Subsequent launches will toggle wi-fi on and off. Wi-fi will drain the battery so it's best to only enable it when you plan to use it and disable it when you're done. Your Wi-fi state persists across reboots.

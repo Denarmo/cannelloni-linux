@@ -1,0 +1,13 @@
+* text=auto eol=lf
+*.sh text eol=lf
+*.c text eol=lf
+*.h text eol=lf
+makefile* text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.bin binary
+*.bmp binary
+*.png binary
+*.jpg binary
+*.img binary
+*.meta binary

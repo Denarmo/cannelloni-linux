@@ -1,7 +1,7 @@
 #!/bin/sh
 
-export PLATFORM="rgb30"
-export SDCARD_PATH="/storage/roms"
+export PLATFORM="my282"
+export SDCARD_PATH="/mnt/SDCARD"
 export BIOS_PATH="$SDCARD_PATH/Bios"
 export SAVES_PATH="$SDCARD_PATH/Saves"
 export SYSTEM_PATH="$SDCARD_PATH/.system/$PLATFORM"
@@ -13,49 +13,51 @@ export DATETIME_PATH="$SHARED_USERDATA_PATH/datetime.txt"
 
 #######################################
 
-# JELOS aggressively repairs disks and leaves litter on the SD card
-rm $SDCARD_PATH/FSCK*.REC
-
 export PATH=$SYSTEM_PATH/bin:$PATH
 export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:$LD_LIBRARY_PATH
 
-# required for sdl12-compat
-export SDL_VIDEODRIVER=kmsdrm
-export SDL_AUDIODRIVER=alsa
+#######################################
 
-# required for sdl1 fbcon
-# export SDL_VIDEODRIVER=fbcon
-# export SDL_AUDIODRIVER=alsa
-# export SDL_NOMOUSE=1
+reclock()
+{
+	overclock.elf userspace 2 1344 384 1080 0
+}
 
-echo userspace > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
-CPU_PATH=/sys/devices/system/cpu/cpufreq/policy0/scaling_setspeed
-CPU_SPEED_PERF=1992000
-echo $CPU_SPEED_PERF > $CPU_PATH
+echo 0 > /sys/class/leds/led1/brightness
+reclock
+
+killall -9 tee
+rm -f "$SDCARD_PATH/update.log"
+while :; do
+	killall -9 wpa_supplicant
+	killall -9 MtpDaemon
+	ifconfig wlan0 down
+	sleep 2
+done &
 
 #######################################
 
-keymon.elf & # &> $SDCARD_PATH/keymon.txt &
+keymon.elf & #> $LOGS_PATH/keymon.txt 2>&1 &
 
 #######################################
 
 mkdir -p "$LOGS_PATH"
-mkdir -p "$SHARED_USERDATA_PATH/.minui"
-AUTO_PATH=$USERDATA_PATH/auto.sh
+mkdir -p "$SHARED_USERDATA_PATH/.cannelloni"
+AUTO_PATH="$USERDATA_PATH/auto.sh"
 if [ -f "$AUTO_PATH" ]; then
-	"$AUTO_PATH" # &> $LOGS_PATH/auto.txt
+	"$AUTO_PATH" # > $LOGS_PATH/auto.txt 2>&1
 fi
 
 cd $(dirname "$0")
 
 #######################################
 
-EXEC_PATH=/tmp/minui_exec
+EXEC_PATH="/tmp/cannelloni_exec"
 NEXT_PATH="/tmp/next"
 touch "$EXEC_PATH" && sync
 while [ -f "$EXEC_PATH" ]; do
-	echo $CPU_SPEED_PERF > $CPU_PATH
-	minui.elf &> $LOGS_PATH/minui.txt
+	cannelloni.elf > $LOGS_PATH/cannelloni.txt 2>&1
+	reclock
 	echo `date +'%F %T'` > "$DATETIME_PATH"
 	sync
 	
@@ -63,10 +65,10 @@ while [ -f "$EXEC_PATH" ]; do
 		CMD=`cat $NEXT_PATH`
 		eval $CMD
 		rm -f $NEXT_PATH
-		echo $CPU_SPEED_PERF > $CPU_PATH
+		reclock
 		echo `date +'%F %T'` > "$DATETIME_PATH"
 		sync
 	fi
 done
 
-shutdown # just in case
+shutdown

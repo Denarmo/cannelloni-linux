@@ -1,8 +1,8 @@
-# MinUI
+# Cannelloni
 
-MinUI is a focused, custom launcher and libretro frontend for [a variety of retro handhelds](#supported-devices).
+Cannelloni is a focused, custom launcher and libretro frontend for [a variety of retro handhelds](#supported-devices), forked and rebranded from [MinUI](https://github.com/shauninman/MinUI).
 
-<img src="github/minui-main.png" width=320 /> <img src="github/minui-menu-gbc.png" width=320 /> 
+<img src="github/cannelloni-main.png" width=320 /> <img src="github/cannelloni-menu-gbc.png" width=320 /> 
 
 ## Features
 
@@ -31,8 +31,6 @@ MinUI is a focused, custom launcher and libretro frontend for [a variety of retr
 - Single SD card compatible with
   multiple devices from different
   manufacturers
-
-You can [grab the latest version here](https://github.com/shauninman/MinUI/releases).
 
 > Devices with a physical power switch
 > use MENU to sleep and wake instead of
@@ -66,29 +64,29 @@ Extras:
 
 | Device | Added | Status |
 | -- | -- | -- |
-| Anbernic RG28xx | MinUI-20240429b-2 | Legacy |
-| Anbernic RG34xx | MinUI-20241227-0 | Legacy |
-| Anbernic RG34xxSP | MinUI-20250920-0 | Legacy |
-| Anbernic RG35xx | MinUI-20230922b-2 | Legacy |
-| Anbernic RG35xx Plus | MinUI-20240106b-0 | Legacy |
-| Anbernic RG35xxH | MinUI-20240120b-1 | Legacy |
-| Anbernic RG35xxSP | MinUI-20240525-0 | Legacy |
-| Anbernic RG40xxH | MinUI-20240717-1 | Legacy |
-| Anbernic RG40xxV | MinUI-20240831-0 | Legacy | 
-| Anbernic RG CubeXX | MinUI-202401028-0 | Legacy | 
-| GKD Pixel | MinUI-20240120b-1 | Legacy |
-| M17 | MinUI-20231126b-2 | Legacy |
-| MagicX XU Mini M | MinUI-20240831-0 | Legacy | 
-| MagicX Mini Zero 28 | MinUI-20250111-0 | Legacy |
-| Miyoo A30 | MinUI-20240705-0 | Legacy |
-| Miyoo Flip | MinUI-20250111-0 | Legacy |
-| Miyoo Mini | MinUI-20230922b-2 | Legacy |
-| Miyoo Mini Flip | MinUI-20251023-0 | Legacy |
-| Miyoo Mini Plus | MinUI-20230922b-2 | Legacy |
-| Powkiddy RGB30 | MinUI-20231014b-1 | Legacy |
-| Trimui Brick | MinUI-20241028-0 | Legacy |
-| Trimui Smart | MinUI-20230922b-2 | Legacy |
-| Trimui Smart Pro | MinUI-20231111b-2 | Legacy |
+| Anbernic RG28xx | Cannelloni-20240429b-2 | Legacy |
+| Anbernic RG34xx | Cannelloni-20241227-0 | Legacy |
+| Anbernic RG34xxSP | Cannelloni-20250920-0 | Legacy |
+| Anbernic RG35xx | Cannelloni-20230922b-2 | Legacy |
+| Anbernic RG35xx Plus | Cannelloni-20240106b-0 | Legacy |
+| Anbernic RG35xxH | Cannelloni-20240120b-1 | Legacy |
+| Anbernic RG35xxSP | Cannelloni-20240525-0 | Legacy |
+| Anbernic RG40xxH | Cannelloni-20240717-1 | Legacy |
+| Anbernic RG40xxV | Cannelloni-20240831-0 | Legacy | 
+| Anbernic RG CubeXX | Cannelloni-202401028-0 | Legacy | 
+| GKD Pixel | Cannelloni-20240120b-1 | Legacy |
+| M17 | Cannelloni-20231126b-2 | Legacy |
+| MagicX XU Mini M | Cannelloni-20240831-0 | Legacy | 
+| MagicX Mini Zero 28 | Cannelloni-20250111-0 | Legacy |
+| Miyoo A30 | Cannelloni-20240705-0 | Legacy |
+| Miyoo Flip | Cannelloni-20250111-0 | Legacy |
+| Miyoo Mini | Cannelloni-20230922b-2 | Legacy |
+| Miyoo Mini Flip | Cannelloni-20251023-0 | Legacy |
+| Miyoo Mini Plus | Cannelloni-20230922b-2 | Legacy |
+| Powkiddy RGB30 | Cannelloni-20231014b-1 | Legacy |
+| Trimui Brick | Cannelloni-20241028-0 | Legacy |
+| Trimui Smart | Cannelloni-20230922b-2 | Legacy |
+| Trimui Smart Pro | Cannelloni-20231111b-2 | Legacy |
 
 > [!NOTE]
 > **Active** actively working on compatibility and improvements specific to this device  
@@ -104,7 +102,7 @@ The sequel, MiniUI for the Miyoo Mini (2022/04/20-2022/10/23), has been archived
 
 The return of MinUI for the original Anbernic RG35XX (2023/02/26-2023/03/26) has been archived [here](https://github.com/shauninman/MinUI-Legacy-RG35XX).
 
-The current MinUI which introduced support for multiple devices starting with the Trimui Smart, Miyoo Mini (and Plus), and the original Anbernic RG35XX was released on [2023/09/22][init-release] with the initial functional commit 6 months earlier on [2023/03/27][init-commit].
+The multi-device version of MinUI (now forked as Cannelloni) which introduced support for multiple devices starting with the Trimui Smart, Miyoo Mini (and Plus), and the original Anbernic RG35XX was released on [2023/09/22][init-release] with the initial functional commit 6 months earlier on [2023/03/27][init-commit].
 
 [init-release]:https://github.com/shauninman/MinUI/releases/tag/v20230922b-2
 [init-commit]:https://github.com/shauninman/MinUI/commit/53e0296ea5a2794290fb5783765af6cee0063445#diff-b993e61ab6e66a19b67c88cfb98261aa9267d250de8bb56463662f67aae1a558

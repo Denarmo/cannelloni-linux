@@ -1,7 +1,7 @@
 #!/bin/sh
 
-export PLATFORM="my355"
-export SDCARD_PATH="/mnt/SDCARD"
+export PLATFORM="rgb30"
+export SDCARD_PATH="/storage/roms"
 export BIOS_PATH="$SDCARD_PATH/Bios"
 export SAVES_PATH="$SDCARD_PATH/Saves"
 export SYSTEM_PATH="$SDCARD_PATH/.system/$PLATFORM"
@@ -13,35 +13,20 @@ export DATETIME_PATH="$SHARED_USERDATA_PATH/datetime.txt"
 
 #######################################
 
-export PATH=$SYSTEM_PATH/bin:/usr/miyoo/bin:/usr/miyoo/sbin:$PATH
-export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:/usr/miyoo/lib:$LD_LIBRARY_PATH
+# JELOS aggressively repairs disks and leaves litter on the SD card
+rm $SDCARD_PATH/FSCK*.REC
 
-#######################################
+export PATH=$SYSTEM_PATH/bin:$PATH
+export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:$LD_LIBRARY_PATH
 
-#headphone jack
-echo 150 > /sys/class/gpio/export
-echo -n in > /sys/class/gpio/gpio150/direction
+# required for sdl12-compat
+export SDL_VIDEODRIVER=kmsdrm
+export SDL_AUDIODRIVER=alsa
 
-#motor
-echo 20 > /sys/class/gpio/export
-echo -n out > /sys/class/gpio/gpio20/direction
-echo -n 0 > /sys/class/gpio/gpio20/value
-
-#keyboard
-echo 0 > /sys/class/miyooio_chr_dev/joy_type
-
-#led
-echo 0 > /sys/class/leds/work/brightness
-
-mkdir -p /tmp/miyoo_inputd
-miyoo_inputd &
-
-# disable system-level lid handling
-mv /dev/input/event1 /dev/input/event1.disabled
-
-# TODO: disable network stuff
-
-#######################################
+# required for sdl1 fbcon
+# export SDL_VIDEODRIVER=fbcon
+# export SDL_AUDIODRIVER=alsa
+# export SDL_NOMOUSE=1
 
 echo userspace > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
 CPU_PATH=/sys/devices/system/cpu/cpufreq/policy0/scaling_setspeed
@@ -50,27 +35,27 @@ echo $CPU_SPEED_PERF > $CPU_PATH
 
 #######################################
 
-keymon.elf > $LOGS_PATH/keymon.txt 2>&1 &
+keymon.elf & # &> $SDCARD_PATH/keymon.txt &
 
 #######################################
 
 mkdir -p "$LOGS_PATH"
-mkdir -p "$SHARED_USERDATA_PATH/.minui"
-AUTO_PATH="$USERDATA_PATH/auto.sh"
+mkdir -p "$SHARED_USERDATA_PATH/.cannelloni"
+AUTO_PATH=$USERDATA_PATH/auto.sh
 if [ -f "$AUTO_PATH" ]; then
-	"$AUTO_PATH" # > $LOGS_PATH/auto.txt 2>&1
+	"$AUTO_PATH" # &> $LOGS_PATH/auto.txt
 fi
 
 cd $(dirname "$0")
 
 #######################################
 
-EXEC_PATH="/tmp/minui_exec"
+EXEC_PATH=/tmp/cannelloni_exec
 NEXT_PATH="/tmp/next"
 touch "$EXEC_PATH" && sync
 while [ -f "$EXEC_PATH" ]; do
-	minui.elf > $LOGS_PATH/minui.txt 2>&1
 	echo $CPU_SPEED_PERF > $CPU_PATH
+	cannelloni.elf &> $LOGS_PATH/cannelloni.txt
 	echo `date +'%F %T'` > "$DATETIME_PATH"
 	sync
 	
@@ -84,4 +69,4 @@ while [ -f "$EXEC_PATH" ]; do
 	fi
 done
 
-shutdown
+shutdown # just in case

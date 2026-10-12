@@ -1,10 +1,10 @@
 #!/bin/sh
-# MiniUI.pak
+# Cannelloni.pak
 
 #######################################
 
-export PLATFORM="gkdpixel"
-export SDCARD_PATH="/media/roms"
+export PLATFORM="m17"
+export SDCARD_PATH="/sdcard"
 export BIOS_PATH="$SDCARD_PATH/Bios"
 export SAVES_PATH="$SDCARD_PATH/Saves"
 export SYSTEM_PATH="$SDCARD_PATH/.system/$PLATFORM"
@@ -16,18 +16,19 @@ export DATETIME_PATH="$SHARED_USERDATA_PATH/datetime.txt"
 
 mkdir -p "$USERDATA_PATH"
 mkdir -p "$LOGS_PATH"
-mkdir -p "$SHARED_USERDATA_PATH/.minui"
+mkdir -p "$SHARED_USERDATA_PATH/.cannelloni"
 
 #######################################
 
-killall -9 power_daemon
-killall -9 key_daemon
+echo performance > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+echo performance > /sys/devices/platform/10091000.gpu/devfreq/10091000.gpu/governor
 
 #######################################
 
-export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:$LD_LIBRARY_PATH
-export PATH=$SYSTEM_PATH/bin:$PATH
+export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:/usr/lib:$LD_LIBRARY_PATH
+export PATH=$SYSTEM_PATH/bin:/usr/bin:$PATH
 
+start_adbd.sh
 keymon.elf &
 
 #######################################
@@ -51,11 +52,11 @@ cd $(dirname "$0")
 
 #######################################
 
-EXEC_PATH="/tmp/minui_exec"
+EXEC_PATH="/tmp/cannelloni_exec"
 NEXT_PATH="/tmp/next"
 touch "$EXEC_PATH"  && sync
 while [ -f $EXEC_PATH ]; do
-	minui.elf &> $LOGS_PATH/minui.txt
+	cannelloni.elf &> $LOGS_PATH/cannelloni.txt
 	echo `date +'%F %T'` > "$DATETIME_PATH"
 	sync
 	
@@ -67,9 +68,14 @@ while [ -f $EXEC_PATH ]; do
 		sync
 	fi
 	
+	# physical powerswitch, enter low power mode
 	if [ -f "/tmp/poweroff" ]; then
-		break
+		rm -f "/tmp/poweroff"
+		killall keymon.elf
+		shutdown
+		# TODO: figure out how to control led?
+		while :; do
+			sleep 5
+		done
 	fi
 done
-
-poweroff # TODO: not sure this does anything

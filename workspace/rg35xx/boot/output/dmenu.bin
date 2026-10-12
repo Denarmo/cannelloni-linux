@@ -7,7 +7,7 @@ TF2_PATH=/mnt/sdcard
 SDCARD_PATH=$TF1_PATH
 SYSTEM_DIR=/.system
 SYSTEM_FRAG=$SYSTEM_DIR/rg35xx
-UPDATE_FRAG=/MinUI.zip
+UPDATE_FRAG=/Cannelloni.zip
 SYSTEM_PATH=${SDCARD_PATH}${SYSTEM_FRAG}
 UPDATE_PATH=${SDCARD_PATH}${UPDATE_FRAG}
 
@@ -42,7 +42,7 @@ UPDATE_PATH=${SDCARD_PATH}${UPDATE_FRAG}
 
 # is there an update available?
 if [ -f $UPDATE_PATH ]; then
-	FLAG_PATH=/misc/.minstalled
+	FLAG_PATH=/misc/.cannelloni_installed
 	if [ ! -f $FLAG_PATH ]; then
 		ACTION=installing
 	else
@@ -100,7 +100,7 @@ done
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin:$PATH
 export LD_LIBRARY_PATH=/usr/lib/:/lib/
 export HOME=$SDCARD_PATH
-busybox chroot $ROOTFS_MOUNTPOINT $SYSTEM_PATH/paks/MinUI.pak/launch.sh
+busybox chroot $ROOTFS_MOUNTPOINT $SYSTEM_PATH/paks/Cannelloni.pak/launch.sh
 
 umount $ROOTFS_MOUNTPOINT
 busybox losetup --detach $LOOPDEVICE

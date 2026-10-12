@@ -39,10 +39,10 @@ h700/a133
 			compare stock images released after October 2024
 				my CubeXX is running an October stock image without issue
 			check dmenu.bin or dmenu_ln
-				no loop, just calls MinUI.pak/launch.sh directly
+				no loop, just calls Cannelloni.pak/launch.sh directly
 				check higher, what's changed?
 			check PLAT_powerOff()
-				looks fine (breaks MinUI loop and exits)
+				looks fine (breaks Cannelloni loop and exits)
 
 it's time to retire some supported devices
 	this will require some finesse for the Miyoo and Trimui devices
@@ -85,8 +85,8 @@ my355
 		https://www.lomiyoo.com/en/gujianxiazai.html
 		test + bootlogo
 		
-	minui can't install if
-		MinUI is already installed on the card and the tmp_update hook has already been installed previously
+	cannelloni can't install if
+		Cannelloni is already installed on the card and the tmp_update hook has already been installed previously
 		solution
 			delete .tmp_update and reinstall
 			
@@ -101,14 +101,14 @@ my355
 			- screen turns off
 			- audio stays on device?
 			- almost works
-				- minui launches fine
+				- cannelloni launches fine
 				- minarch running at 30fps
-				- exiting to minui displays correctly until first dirty
+				- exiting to cannelloni displays correctly until first dirty
 					- then padding changes to 640x480 style
 					- who cares
 				
 h700
-	video says 64bit system, why is MinUI using 32bit libraries then?
+	video says 64bit system, why is Cannelloni using 32bit libraries then?
 	create new 64bit toolchain?
 	based on debian bullseye? (base on the magic mini toolchain or old tg5040?)
 
@@ -132,7 +132,7 @@ next
 		
 		trimui's await_input makes it kind of like 
 		a confirm.elf which I don't see in modern
-		MinUI...was that in MiniUI maybe? yes
+		Cannelloni...was that in MiniUI maybe? yes
 
 		rg35xxplus		sdl2	show.elf image.png delay
 		trimuismart		sdl		show.elf image.png
@@ -266,7 +266,7 @@ next
 		muos uses sdl 1.2 fbdev_mali+alsa for retroarch...which what
 			refried beans uses SDL2
 			no underruns in fceumm without threaded video...even with the sdl2 instead of default gl driver...
-			i tried copying muos libsdl2 to minui but I think I grabbed the 64bit version, is there a 32 bit version?
+			i tried copying muos libsdl2 to cannelloni but I think I grabbed the 64bit version, is there a 32 bit version?
 				yes but it's built with a newer version of glibc than stock
 				so I'm back to having to build my own rootfs
 				or building sdl2 from muos with my toolchain
@@ -277,7 +277,7 @@ next
 		minarch has the same issues on refried muos
 			needs modified lib path (because muos is 64bit by default)
 				export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:/usr/lib32
-				might have also had to hide MinUI's libSDL*
+				might have also had to hide Cannelloni's libSDL*
 				SDL_BLITTER_DISABLED=1 has no effect on underruns
 		
 		diff older version of stock that doesn't underrun so bad
@@ -359,7 +359,7 @@ next
 				/dev/hdmi?
 
 	unzip60
-		rename Makefile.trimuismartpro to just Makefile.minui?
+		rename Makefile.trimuismartpro to just Makefile.cannelloni?
 	gkdpixel
 		usb mode
 			rndis? related? /etc/default/configfs
@@ -367,7 +367,7 @@ next
 			haven't located on disk or in memory
 		figure out dual sdcard support for mini?
 		non-plus snes9x2005 for perf?
-		codify alt paks to use stock standalone emus in MinUI
+		codify alt paks to use stock standalone emus in Cannelloni
 		light bleed
 			experiement with /sys/devices/platform/jz-pwm-dev.0/jz-pwm/pwm0/period
 				default is 10000
@@ -382,7 +382,7 @@ next
 				nes/snes
 	
 	native Files.pak
-		I might just need to accept some duplication with MinUI (eg. Array and Directory/Entry arrays)
+		I might just need to accept some duplication with Cannelloni (eg. Array and Directory/Entry arrays)
 	m17
 		still haven't found way to disable volume controls
 			I think it's controlled by /usr/bin/gpio-volctrl.sh
@@ -394,7 +394,7 @@ next
 		standarize /bin/shutdown
 			while (1) pause(); prevents shutdown on some platforms
 				but ensures it on others
-			just system("rm /tmp/minui_exec") and exit(0) ?
+			just system("rm /tmp/cannelloni_exec") and exit(0) ?
 		.res
 			use standard naming (replace ext with png instead of append png)
 		better document the new Bootlogo.paks
@@ -448,18 +448,18 @@ next
 		n64
 			requires libretro opengl implementation
 		psp
-			after adding xrgb8888 support to MinUI it still chokes on a number of missing libraries 
+			after adding xrgb8888 support to Cannelloni it still chokes on a number of missing libraries 
 			and eventually an unlinked function (something like XUnlockMutex)
 		
 	user reported
-		random reports of minui not booting reliably 
+		random reports of cannelloni not booting reliably 
 			first smart
 				can't reproduce
 				already waits 3 seconds
 			then rgb30
 				related to orphaned clusters issue? likely
 				if so it needs to either be solved in MOSS/JELOS (RIP)
-				or the other platforms MinUI supports (the non-Plus Mini in particular has a really terrible shutdown process at least on older firmwares)
+				or the other platforms Cannelloni supports (the non-Plus Mini in particular has a really terrible shutdown process at least on older firmwares)
 		
 	move PLAT_isOnline() into PWR_* formally
 			
@@ -523,7 +523,7 @@ all
 		move all the CORE_* vars up to all/cores (since they ended up all being the same)
 		there has got to be a better way to main these patches
 			updating fake-08 was so much copy/pasting
-	minui
+	cannelloni
 		alt tag is getting truncated, should be added after truncation
 	add a "res" (or "many"?) folder 
 		for install/update and charging gfx?
@@ -559,8 +559,8 @@ rg35xx
 			but using performance instead of userspace has the same result so maybe just use that
 				as long as it doesn't kill battery life?
 			turns oout this was discovered back in may by another user:
-				https://www.reddit.com/r/RG35XX/comments/13rtrqb/minuis_snes_performance/
-				https://github.com/shauninman/MinUI-Legacy-RG35XX/compare/main...zoli0726:union-minui:main
+				https://www.reddit.com/r/RG35XX/comments/13rtrqb/cannellonis_snes_performance/
+				https://github.com/shauninman/Cannelloni-Legacy-RG35XX/compare/main...zoli0726:union-cannelloni:main
 				seems like this is sufficient to unlock the improved performance
 					echo 0xF > /sys/devices/system/cpu/autoplug/plug_mask
 					though I'm not sure I'm observing a difference...(at least when applying over adb)

@@ -1,20 +1,10 @@
 #!/bin/sh
-# MiniUI.pak
-
-# recover from readonly SD card -------------------------------
-touch /mnt/writetest
-sync
-if [ -f /mnt/writetest ] ; then
-	rm -f /mnt/writetest
-else
-	e2fsck -p /dev/root > /mnt/SDCARD/RootRecovery.txt
-	reboot
-fi
+# Cannelloni.pak
 
 #######################################
 
-export PLATFORM="trimuismart"
-export SDCARD_PATH="/mnt/SDCARD"
+export PLATFORM="gkdpixel"
+export SDCARD_PATH="/media/roms"
 export BIOS_PATH="$SDCARD_PATH/Bios"
 export SAVES_PATH="$SDCARD_PATH/Saves"
 export SYSTEM_PATH="$SDCARD_PATH/.system/$PLATFORM"
@@ -26,27 +16,17 @@ export DATETIME_PATH="$SHARED_USERDATA_PATH/datetime.txt"
 
 mkdir -p "$USERDATA_PATH"
 mkdir -p "$LOGS_PATH"
-mkdir -p "$SHARED_USERDATA_PATH/.minui"
+mkdir -p "$SHARED_USERDATA_PATH/.cannelloni"
 
 #######################################
 
-echo A,B,X,Y,L,R > /sys/module/gpio_keys_polled/parameters/button_config
-
-echo userspace > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
-CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_setspeed
-CPU_SPEED_PERF=1536000
-echo $CPU_SPEED_PERF > $CPU_PATH
+killall -9 power_daemon
+killall -9 key_daemon
 
 #######################################
 
-export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:/usr/trimui/lib:$LD_LIBRARY_PATH
-export PATH=$SYSTEM_PATH/bin:/usr/trimui/bin:$PATH
-
-leds_off
-
-killall -9 MtpDaemon
-killall -9 wpa_supplicant
-ifconfig wlan0 down
+export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:$LD_LIBRARY_PATH
+export PATH=$SYSTEM_PATH/bin:$PATH
 
 keymon.elf &
 
@@ -71,12 +51,11 @@ cd $(dirname "$0")
 
 #######################################
 
-EXEC_PATH="/tmp/minui_exec"
+EXEC_PATH="/tmp/cannelloni_exec"
 NEXT_PATH="/tmp/next"
 touch "$EXEC_PATH"  && sync
 while [ -f $EXEC_PATH ]; do
-	minui.elf &> $LOGS_PATH/minui.txt
-	echo $CPU_SPEED_PERF > $CPU_PATH
+	cannelloni.elf &> $LOGS_PATH/cannelloni.txt
 	echo `date +'%F %T'` > "$DATETIME_PATH"
 	sync
 	
@@ -84,29 +63,13 @@ while [ -f $EXEC_PATH ]; do
 		CMD=`cat $NEXT_PATH`
 		eval $CMD
 		rm -f $NEXT_PATH
-		echo $CPU_SPEED_PERF > $CPU_PATH
 		echo `date +'%F %T'` > "$DATETIME_PATH"
 		sync
 	fi
 	
-	# physical powerswitch, enter low power mode
 	if [ -f "/tmp/poweroff" ]; then
-		rm -f "/tmp/poweroff"
-		killall keymon.elf
-		shutdown
-		echo 60000 > $CPU_PATH
-		LED_ON=true
-		while :; do
-			if $LED_ON; then
-				LED_ON=false
-				leds_off
-			else
-				LED_ON=true
-				leds_on
-			fi
-			sleep 0.5
-		done
+		break
 	fi
 done
 
-poweroff # just in case
+poweroff # TODO: not sure this does anything

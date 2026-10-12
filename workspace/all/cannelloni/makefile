@@ -19,7 +19,7 @@ SDL?=SDL
 
 ###########################################################
 
-TARGET = minui
+TARGET = cannelloni
 INCDIR = -I. -I../common/ -I../../$(PLATFORM)/platform/
 SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/api.c ../../$(PLATFORM)/platform/platform.c
 

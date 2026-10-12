@@ -525,8 +525,8 @@ void PLAT_enableBacklight(int enable) {
 }
 
 void PLAT_powerOff(void) {
-	// break the MinUI.pak/launch.sh while loop
-	unlink("/tmp/minui_exec");
+	// break the Cannelloni.pak/launch.sh while loop
+	unlink("/tmp/cannelloni_exec");
 	sleep(2);
 
 	SetRawVolume(MUTE_VOLUME_RAW);

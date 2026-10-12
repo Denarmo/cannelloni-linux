@@ -10,7 +10,7 @@ echo 0 > /sys/devices/virtual/vtconsole/vtcon1/bind
 
 SDCARD_PATH=/media/roms
 SYSTEM_PATH=$SDCARD_PATH/.system/gkdpixel
-UPDATE_PATH=$SDCARD_PATH/MinUI.zip
+UPDATE_PATH=$SDCARD_PATH/Cannelloni.zip
 
 # is there an update available?
 if [ -f $UPDATE_PATH ]; then
@@ -18,14 +18,14 @@ if [ -f $UPDATE_PATH ]; then
 	
 	if [ ! -d $SYSTEM_PATH ]; then
 		ACTION=installing
-		echo "install MinUI" >> $SDCARD_PATH/log.txt
+		echo "install Cannelloni" >> $SDCARD_PATH/log.txt
 	else
 		ACTION=updating
-		echo "update MinUI" >> $SDCARD_PATH/log.txt
+		echo "update Cannelloni" >> $SDCARD_PATH/log.txt
 	fi
 	
 	# show action
-	dd skip=54 if=/usr/share/minui/$ACTION.bmp of=/dev/fb0 bs=1
+	dd skip=54 if=/usr/share/cannelloni/$ACTION.bmp of=/dev/fb0 bs=1
 	sync
 	
 	unzip -o $UPDATE_PATH -d $SDCARD_PATH
@@ -37,7 +37,7 @@ if [ -f $UPDATE_PATH ]; then
 	$SYSTEM_PATH/bin/install.sh
 fi
 
-LAUNCH_PATH=/media/roms/.system/gkdpixel/paks/MinUI.pak/launch.sh
+LAUNCH_PATH=/media/roms/.system/gkdpixel/paks/Cannelloni.pak/launch.sh
 if [ -f "$LAUNCH_PATH" ]; then
 	$LAUNCH_PATH > /media/roms/log.txt 2>&1
 else

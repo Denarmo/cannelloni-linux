@@ -11,7 +11,7 @@ WIFI_PASS=${WIFI[1]}
 
 ##############
 
-. /etc/profile # NOTE: this nukes MinUI's PATH modifications
+. /etc/profile # NOTE: this nukes Cannelloni's PATH modifications
 PATH=/storage/roms/.system/rgb30/bin:$PATH
 
 CUR_NAME=`get_setting wifi.ssid`
