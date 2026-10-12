@@ -124,6 +124,18 @@ EXEC_PATH=/tmp/cannelloni_exec
 NEXT_PATH="/tmp/next"
 touch "$EXEC_PATH"  && sync
 
+# Apply current accent color theme if needed
+COLOR_FILE="$SHARED_USERDATA_PATH/.cannelloni/accent_color.txt"
+CURRENT_FILE="$SHARED_USERDATA_PATH/.cannelloni/.current_accent"
+if [ -f "$COLOR_FILE" ]; then
+	COLOR_VAL=$(cat "$COLOR_FILE" | head -n1 | tr -d '\r\n')
+	CURR_VAL=""
+	[ -f "$CURRENT_FILE" ] && CURR_VAL=$(cat "$CURRENT_FILE" | head -n1 | tr -d '\r\n')
+	if [ "$COLOR_VAL" != "$CURR_VAL" ] && [ -f "$SYSTEM_PATH/bin/apply_accent_color.sh" ]; then
+		"$SYSTEM_PATH/bin/apply_accent_color.sh" "$COLOR_VAL"
+	fi
+fi
+
 while [ -f "$EXEC_PATH" ]; do
 	overclock.elf $CPU_SPEED_PERF
 	if command -v cannelloni.elf >/dev/null 2>&1; then

@@ -4,6 +4,8 @@
 *.elf
 *.dtb
 *.zip
+__pycache__/
+*.pyc
 
 build
 build_release
