@@ -44,6 +44,7 @@ fi
 echo "updater resolved PLATFORM: '$PLATFORM'"
 
 TARGET_SCRIPT="/mnt/SDCARD/.tmp_update/$PLATFORM.sh"
+[ ! -f "$TARGET_SCRIPT" ] && TARGET_SCRIPT="$(dirname "$0")/$PLATFORM.sh"
 echo "Checking target script: $TARGET_SCRIPT (exists: $([ -f "$TARGET_SCRIPT" ] && echo YES || echo NO))"
 sync
 

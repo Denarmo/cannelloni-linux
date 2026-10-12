@@ -39,9 +39,11 @@ echo "Setting executable permissions on .tmp_update..."
 chmod +x .tmp_update/updater .tmp_update/*.sh .tmp_update/*/* 2>/dev/null
 
 # .tmp_update/updater does the actual installation (and later, updating)
-echo "Copying .tmp_update to $SDCARD_PATH/..."
-cp -rf .tmp_update $SDCARD_PATH/
-chmod +x $SDCARD_PATH/.tmp_update/updater $SDCARD_PATH/.tmp_update/*.sh $SDCARD_PATH/.tmp_update/*/* 2>/dev/null
+echo "Ensuring .tmp_update is present at $SDCARD_PATH/..."
+[ -d ".tmp_update" ] && cp -rf .tmp_update "$SDCARD_PATH/" 2>/dev/null
+[ ! -f "$SDCARD_PATH/.tmp_update/updater" ] && [ -d "$SDCARD_PATH/miyoo354/app/.tmp_update" ] && cp -rf "$SDCARD_PATH/miyoo354/app/.tmp_update" "$SDCARD_PATH/" 2>/dev/null
+[ ! -f "$SDCARD_PATH/.tmp_update/updater" ] && [ -d "$SDCARD_PATH/miyoo/app/.tmp_update" ] && cp -rf "$SDCARD_PATH/miyoo/app/.tmp_update" "$SDCARD_PATH/" 2>/dev/null
+chmod +x "$SDCARD_PATH/.tmp_update/updater" "$SDCARD_PATH/.tmp_update/"*.sh "$SDCARD_PATH/.tmp_update/"*/* 2>/dev/null
 
 sync
 echo "Executing $SDCARD_PATH/.tmp_update/updater..."
