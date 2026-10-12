@@ -125,7 +125,15 @@ NEXT_PATH="/tmp/next"
 touch "$EXEC_PATH"  && sync
 while [ -f "$EXEC_PATH" ]; do
 	overclock.elf $CPU_SPEED_PERF
-	cannelloni.elf &> $LOGS_PATH/cannelloni.txt
+	if command -v cannelloni.elf >/dev/null 2>&1; then
+		cannelloni.elf &> $LOGS_PATH/cannelloni.txt
+	elif [ -f "$SYSTEM_PATH/bin/cannelloni.elf" ]; then
+		"$SYSTEM_PATH/bin/cannelloni.elf" &> $LOGS_PATH/cannelloni.txt
+	elif command -v minui.elf >/dev/null 2>&1; then
+		minui.elf &> $LOGS_PATH/cannelloni.txt
+	elif [ -f "$SYSTEM_PATH/bin/minui.elf" ]; then
+		"$SYSTEM_PATH/bin/minui.elf" &> $LOGS_PATH/cannelloni.txt
+	fi
 	
 	echo `date +'%F %T'` > "$DATETIME_PATH"
 	sync

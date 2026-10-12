@@ -62,6 +62,11 @@ for item in in_minui_zip.infolist():
         with open("workspace/miyoomini/install/boot.sh", "rb") as f:
             data = f.read()
 
+    # Update miyoomini launch.sh
+    if name == ".system/miyoomini/paks/Cannelloni.pak/launch.sh":
+        with open("skeleton/SYSTEM/miyoomini/paks/Cannelloni.pak/launch.sh", "rb") as f:
+            data = f.read()
+
     # Update any minui references in scripts
     if name.endswith(".sh") or name.endswith(".txt"):
         try:
@@ -74,7 +79,21 @@ for item in in_minui_zip.infolist():
         except UnicodeDecodeError:
             pass
 
-    out_cannelloni_zip.writestr(name, data)
+    # Ensure cannelloni.elf exists alongside minui.elf
+    if name.endswith("/bin/minui.elf"):
+        cannelloni_name = name.replace("/bin/minui.elf", "/bin/cannelloni.elf")
+        zinfo_c = zipfile.ZipInfo(cannelloni_name)
+        zinfo_c.compress_type = zipfile.ZIP_DEFLATED
+        zinfo_c.external_attr = 0o755 << 16
+        out_cannelloni_zip.writestr(zinfo_c, data)
+
+    zinfo = zipfile.ZipInfo(name)
+    zinfo.compress_type = zipfile.ZIP_DEFLATED
+    if name.endswith(".sh") or name.endswith("MainUI") or name.endswith("updater") or name.endswith(".elf") or name.endswith(".bin"):
+        zinfo.external_attr = 0o755 << 16
+    else:
+        zinfo.external_attr = 0o644 << 16
+    out_cannelloni_zip.writestr(zinfo, data)
 
 # Add NDS.pak across all platforms from our skeleton
 platforms = [
@@ -147,6 +166,17 @@ with zipfile.ZipFile(SRC_BASE_ZIP, "r") as base_in, \
         else:
             zinfo.external_attr = 0o644 << 16
         base_out.writestr(zinfo, data)
+
+        # Also write .tmp_update directly to root of base archive for native Miyoo stock updater compatibility
+        if name.startswith("miyoo354/app/.tmp_update/"):
+            tmp_name = name.replace("miyoo354/app/.tmp_update/", ".tmp_update/")
+            zinfo_tmp = zipfile.ZipInfo(tmp_name)
+            zinfo_tmp.compress_type = zipfile.ZIP_DEFLATED
+            if tmp_name.endswith(".sh") or tmp_name.endswith("updater") or tmp_name.endswith(".elf"):
+                zinfo_tmp.external_attr = 0o755 << 16
+            else:
+                zinfo_tmp.external_attr = 0o644 << 16
+            base_out.writestr(zinfo_tmp, data)
 
     # Add Nintendo DS ROM folder
     base_out.writestr("Roms/Nintendo DS (NDS)/.keep", b"# Nintendo DS ROMs (.nds, .zip)\n")
