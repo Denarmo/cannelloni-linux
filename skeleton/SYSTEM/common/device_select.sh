@@ -361,6 +361,78 @@ fi
 
 log "Wizard configuration complete: Device='$SELECTED', Language='$SELECTED_LANG', Accent='$CURR_COLOR'"
 
+cleanup_bootstrap() {
+    PLAT="$1"
+    log "Performing post-installation cleanup for platform '$PLAT'..."
+    
+    # Always remove update zip files
+    rm -f "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null
+    rm -rf "$SDCARD_PATH/.tmp_update-old" 2>/dev/null
+    
+    # Remove bootstrap files and folders not belonging to the chosen platform
+    case "$PLAT" in
+        "miyoomini")
+            # Keep miyoo and miyoo354
+            rm -rf "$SDCARD_PATH/trimui" "$SDCARD_PATH/rg35xx" "$SDCARD_PATH/rg35xxplus" \
+                   "$SDCARD_PATH/gkdpixel" "$SDCARD_PATH/magicx" "$SDCARD_PATH/miyoo285" \
+                   "$SDCARD_PATH/miyoo355" 2>/dev/null
+            rm -f "$SDCARD_PATH/dmenu.bin" "$SDCARD_PATH/em_ui.sh" 2>/dev/null
+            ;;
+        "my282")
+            # Miyoo A30
+            rm -rf "$SDCARD_PATH/trimui" "$SDCARD_PATH/rg35xx" "$SDCARD_PATH/rg35xxplus" \
+                   "$SDCARD_PATH/gkdpixel" "$SDCARD_PATH/magicx" "$SDCARD_PATH/miyoo285" \
+                   "$SDCARD_PATH/miyoo355" "$SDCARD_PATH/miyoo354" 2>/dev/null
+            rm -f "$SDCARD_PATH/dmenu.bin" "$SDCARD_PATH/em_ui.sh" 2>/dev/null
+            ;;
+        "my355")
+            # Miyoo Flip
+            rm -rf "$SDCARD_PATH/trimui" "$SDCARD_PATH/rg35xx" "$SDCARD_PATH/rg35xxplus" \
+                   "$SDCARD_PATH/gkdpixel" "$SDCARD_PATH/magicx" "$SDCARD_PATH/miyoo285" \
+                   "$SDCARD_PATH/miyoo" "$SDCARD_PATH/miyoo354" 2>/dev/null
+            rm -f "$SDCARD_PATH/dmenu.bin" "$SDCARD_PATH/em_ui.sh" 2>/dev/null
+            ;;
+        "tg5040"|"trimuismart")
+            # TrimUI
+            rm -rf "$SDCARD_PATH/miyoo" "$SDCARD_PATH/miyoo354" "$SDCARD_PATH/miyoo355" \
+                   "$SDCARD_PATH/miyoo285" "$SDCARD_PATH/rg35xx" "$SDCARD_PATH/rg35xxplus" \
+                   "$SDCARD_PATH/gkdpixel" "$SDCARD_PATH/magicx" 2>/dev/null
+            rm -f "$SDCARD_PATH/dmenu.bin" "$SDCARD_PATH/em_ui.sh" 2>/dev/null
+            ;;
+        "rg35xx"|"rg35xxplus")
+            # Anbernic
+            rm -rf "$SDCARD_PATH/miyoo" "$SDCARD_PATH/miyoo354" "$SDCARD_PATH/miyoo355" \
+                   "$SDCARD_PATH/miyoo285" "$SDCARD_PATH/trimui" "$SDCARD_PATH/gkdpixel" \
+                   "$SDCARD_PATH/magicx" 2>/dev/null
+            rm -f "$SDCARD_PATH/em_ui.sh" 2>/dev/null
+            ;;
+        "gkdpixel")
+            rm -rf "$SDCARD_PATH/miyoo" "$SDCARD_PATH/miyoo354" "$SDCARD_PATH/miyoo355" \
+                   "$SDCARD_PATH/miyoo285" "$SDCARD_PATH/trimui" "$SDCARD_PATH/rg35xx" \
+                   "$SDCARD_PATH/rg35xxplus" "$SDCARD_PATH/magicx" 2>/dev/null
+            rm -f "$SDCARD_PATH/dmenu.bin" "$SDCARD_PATH/em_ui.sh" 2>/dev/null
+            ;;
+        "m17")
+            rm -rf "$SDCARD_PATH/miyoo" "$SDCARD_PATH/miyoo354" "$SDCARD_PATH/miyoo355" \
+                   "$SDCARD_PATH/miyoo285" "$SDCARD_PATH/trimui" "$SDCARD_PATH/rg35xx" \
+                   "$SDCARD_PATH/rg35xxplus" "$SDCARD_PATH/gkdpixel" "$SDCARD_PATH/magicx" 2>/dev/null
+            rm -f "$SDCARD_PATH/dmenu.bin" 2>/dev/null
+            ;;
+        "magicmini"|"zero28")
+            rm -rf "$SDCARD_PATH/miyoo" "$SDCARD_PATH/miyoo354" "$SDCARD_PATH/miyoo355" \
+                   "$SDCARD_PATH/miyoo285" "$SDCARD_PATH/trimui" "$SDCARD_PATH/rg35xx" \
+                   "$SDCARD_PATH/rg35xxplus" "$SDCARD_PATH/gkdpixel" 2>/dev/null
+            rm -f "$SDCARD_PATH/dmenu.bin" "$SDCARD_PATH/em_ui.sh" 2>/dev/null
+            ;;
+    esac
+    log "Cleanup of unnecessary bootstrap folders complete."
+    sync
+}
+
+if [ "$MODE" != "--device-only" ]; then
+    cleanup_bootstrap "$TARGET_PLATFORM"
+fi
+
 SAY="$SDCARD_PATH/.system/$TARGET_PLATFORM/bin/say.elf"
 [ ! -x "$SAY" ] && SAY="say.elf"
 if [ -x "$SAY" ] || command -v say.elf >/dev/null 2>&1; then
