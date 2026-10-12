@@ -1,10 +1,10 @@
-# minui-wifi.pak
+# cannelloni-wifi.pak
 
-A MinUI app that manages wifi connections.
+A Cannelloni app that manages wifi connections.
 
 ## Requirements
 
-This pak is designed and tested on the following MinUI Platforms and devices:
+This pak is designed and tested on the following Cannelloni Platforms and devices:
 
 - `miyoomini`: Miyoo Mini Plus (_not_ the Miyoo Mini)
 - `my282`: Miyoo A30
@@ -16,17 +16,17 @@ Use the correct platform for your device.
 
 ## Installation
 
-1. Mount your MinUI SD card.
+1. Mount your Cannelloni SD card.
 2. Download the latest release from Github. It will be named `Wifi.pak.zip`.
 3. Copy the zip file to `/Tools/$PLATFORM/Wifi.pak.zip`.
 4. Extract the zip in place, then delete the zip file.
 5. Confirm that there is a `/Tools/$PLATFORM/Wifi.pak/launch.sh` file on your SD card.
-6. Unmount your SD Card and insert it into your MinUI device.
+6. Unmount your SD Card and insert it into your Cannelloni device.
 
 ## Usage
 
 > [!NOTE]
-> When wifi is enabled for the Miyoo A30 or Miyoo Mini Plus, MinUI may report an incorrect status for the connection. See [this pull request](https://github.com/shauninman/MinUI/pull/41) for more details.
+> When wifi is enabled for the Miyoo A30 or Miyoo Mini Plus, Cannelloni may report an incorrect status for the connection. See [this pull request](https://github.com/shauninman/Cannelloni/pull/41) for more details.
 
 Browse to `Tools > Wifi` and press `A` to enter the wifi management screen. It will display your current wifi connection status, and allow you to scan for available networks as well as connect to them (with password entry).
 
@@ -54,7 +54,7 @@ The following is an example:
 
 ```shell
 # awesome wifi for home
-Minui Rules:shauninman-too
+Cannelloni Rules:shauninman-too
 
 # the previous newline is ignored
 madison:CatmillaNumber1

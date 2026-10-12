@@ -1,7 +1,7 @@
 Cannelloni is a minimal launcher for the Trimui Smart (and Pro) and Brick, the Miyoo Mini (and Plus), A30, and Flip, the Powkiddy RGB30, the M17, the MagicX XU Mini M and Mini Zero 28, and the Anbernic RG*XX family--all from the same SD card. Why? Why not?
 
 Source:
-https://github.com/shauninman/minui (forked as Cannelloni)
+https://github.com/Denarmo/cannelloni-linux
 
 ----------------------------------------
 Installing
@@ -168,26 +168,26 @@ Bios file names are case-sensitive:
 Settings Menu, Wi-Fi & Accent Color
 
 Press the MENU button in the launcher to open the Settings menu. Here you can:
-- Toggle Nonna's Kitchen (FTP server) on or off
+- Toggle Nonna's Kitchen (Web management server on port 1091) on or off
 - View Wi-Fi status and connect/reconnect on supported devices
-- Customize the accent color (default: Gold, Cannoli, Coral Red, Emerald, Purple, Amber, White)
+- Customize the accent color (default: Cannelloni Gold #f1c40f)
+- Swap A/B or X/Y button mappings
+- Select default emulators (e.g. Libretro melonDS / DeSmuME vs standalone DraStic)
 - View system hardware model, release, and commit info
 
-To manually set a custom accent color, place the color name or definition in "/.userdata/shared/.cannelloni/accent_color.txt".
+To manually set a custom accent color, place the color definition in "/.userdata/shared/.cannelloni/accent_color.txt".
 
 ----------------------------------------
-Nonna's Kitchen (Wireless FTP File Transfer)
+Nonna's Kitchen (Web Management Service)
 
-Nonna's Kitchen allows transferring ROMs, saves, states, and BIOS files wirelessly over your local Wi-Fi network without removing the SD card.
+Nonna's Kitchen hosts a built-in web management interface running on port 1091 (matching the Cannelloni web interface at https://github.com/Denarmo/cannelloni). It allows managing ROMs, saves, states, and BIOS files directly from any web browser on your phone, tablet, or PC without removing your SD card.
 
 To use:
 1. Ensure your device is connected to Wi-Fi.
-2. Launch "Nonna's Kitchen" from the Tools menu, or enable it from the Settings menu (press MENU).
-3. Connect from your computer, phone, or tablet using any FTP client (such as FileZilla, Cyberduck, or your operating system's native file manager) to the address shown on screen (eg. ftp://192.168.1.xxx:2121).
-   Username: cannelloni
-   Password: cannelloni
-   (Anonymous login is also supported)
-4. Transfer files directly to and from your SD card.
+2. Launch "Nonna's Kitchen" from the Tools menu.
+3. Open any web browser on your computer or phone and navigate to:
+   http://<DEVICE_IP>:1091
+4. Enjoy drag-and-drop file upload, file browsing, and instant storage management.
 
 
 ----------------------------------------

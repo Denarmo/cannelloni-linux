@@ -25,6 +25,8 @@ BODY = """# Cannelloni v20261012-0
 Welcome to Cannelloni for Linux handhelds (Anbernic, Miyoo, TrimUI, Powkiddy, MagicX, and GKD).
 
 ## What's New in this Release:
+- **Official Cannelloni Boot Logo**: Integrated the official Cannelloni logo across all handheld boot sequences, startup logos, and action screens.
+- **Full Brand Replacement**: Cleaned and replaced all mentions of MinUI with Cannelloni across code, scripts, binaries (`cannelloni-list`, `cannelloni-keyboard`, `cannelloni-presenter`), and documentation.
 - **Unified Single-Zip Distribution**: All core systems, emulators, tools, and platform installers delivered in one unified archive (`Cannelloni-20261012-0.zip`).
 - **New Top-Level Settings Menu**: Direct access from the main screen to:
   - **Wi-Fi**: Connect to wireless networks, view IP, and toggle auto-start on boot directly on-device.

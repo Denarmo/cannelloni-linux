@@ -65,9 +65,9 @@ get_ssid_and_ip() {
 }
 
 main_screen() {
-    minui_list_file="/tmp/minui-list"
-    rm -f "$minui_list_file" "/tmp/minui-output"
-    touch "$minui_list_file"
+    cannelloni_list_file="/tmp/cannelloni-list"
+    rm -f "$cannelloni_list_file" "/tmp/cannelloni-output"
+    touch "$cannelloni_list_file"
 
     template_file="$PAK_DIR/res/settings.json"
 
@@ -93,28 +93,28 @@ main_screen() {
         fi
     fi
 
-    cp "$template_file" "$minui_list_file"
+    cp "$template_file" "$cannelloni_list_file"
     if [ "$enabled" = true ]; then
-        sed -i "s/IS_ENABLED/1/" "$minui_list_file"
+        sed -i "s/IS_ENABLED/1/" "$cannelloni_list_file"
     else
-        sed -i "s/IS_ENABLED/0/" "$minui_list_file"
+        sed -i "s/IS_ENABLED/0/" "$cannelloni_list_file"
     fi
     if [ "$start_on_boot" = true ]; then
-        sed -i "s/IS_START_ON_BOOT/1/" "$minui_list_file"
+        sed -i "s/IS_START_ON_BOOT/1/" "$cannelloni_list_file"
     else
-        sed -i "s/IS_START_ON_BOOT/0/" "$minui_list_file"
+        sed -i "s/IS_START_ON_BOOT/0/" "$cannelloni_list_file"
     fi
-    sed -i "s/NETWORK_SSID/$ssid/" "$minui_list_file"
-    sed -i "s/NETWORK_IP_ADDRESS/$ip_address/" "$minui_list_file"
+    sed -i "s/NETWORK_SSID/$ssid/" "$cannelloni_list_file"
+    sed -i "s/NETWORK_IP_ADDRESS/$ip_address/" "$cannelloni_list_file"
 
-    killall minui-presenter >/dev/null 2>&1 || true
-    minui-list --disable-auto-sleep --item-key settings --file "$minui_list_file" --format json --cancel-text "EXIT" --title "Wifi Configuration" --write-location /tmp/minui-output --write-value state
+    killall cannelloni-presenter >/dev/null 2>&1 || true
+    cannelloni-list --disable-auto-sleep --item-key settings --file "$cannelloni_list_file" --format json --cancel-text "EXIT" --title "Wifi Configuration" --write-location /tmp/cannelloni-output --write-value state
 }
 
 networks_screen() {
-    minui_list_file="/tmp/minui-list"
-    rm -f "$minui_list_file" "/tmp/minui-output"
-    touch "$minui_list_file"
+    cannelloni_list_file="/tmp/cannelloni-list"
+    rm -f "$cannelloni_list_file" "/tmp/cannelloni-output"
+    touch "$cannelloni_list_file"
 
     show_message "Scanning for networks" forever
     DELAY=30
@@ -122,51 +122,51 @@ networks_screen() {
     if [ "$PLATFORM" = "my355" ]; then
         wpa_cli -i wlan0 scan
         for i in $(seq 1 "$DELAY"); do
-            wpa_cli -i wlan0 scan_results | grep -v "ssid" | cut -f 5 | sort -u >>"$minui_list_file"
-            if [ -s "$minui_list_file" ]; then
+            wpa_cli -i wlan0 scan_results | grep -v "ssid" | cut -f 5 | sort -u >>"$cannelloni_list_file"
+            if [ -s "$cannelloni_list_file" ]; then
                 break
             fi
             sleep 1
         done
     else
         for i in $(seq 1 "$DELAY"); do
-            iw dev wlan0 scan | grep SSID: | cut -d':' -f2- | sed -e 's/^[ \t]*//' -e 's/[ \t]*$//' | sort -u >>"$minui_list_file"
-            if [ -s "$minui_list_file" ]; then
+            iw dev wlan0 scan | grep SSID: | cut -d':' -f2- | sed -e 's/^[ \t]*//' -e 's/[ \t]*$//' | sort -u >>"$cannelloni_list_file"
+            if [ -s "$cannelloni_list_file" ]; then
                 break
             fi
             sleep 1
         done
     fi
 
-    killall minui-presenter >/dev/null 2>&1 || true
-    minui-list --disable-auto-sleep --file "$minui_list_file" --format text --confirm-text "CONNECT" --title "Wifi Networks" --write-location /tmp/minui-output
+    killall cannelloni-presenter >/dev/null 2>&1 || true
+    cannelloni-list --disable-auto-sleep --file "$cannelloni_list_file" --format text --confirm-text "CONNECT" --title "Wifi Networks" --write-location /tmp/cannelloni-output
 }
 
 saved_networks_screen() {
-    minui_list_file="/tmp/minui-list"
-    rm -f "$minui_list_file" "/tmp/minui-output"
-    touch "$minui_list_file"
+    cannelloni_list_file="/tmp/cannelloni-list"
+    rm -f "$cannelloni_list_file" "/tmp/cannelloni-output"
+    touch "$cannelloni_list_file"
 
     if [ ! -f "$SDCARD_PATH/wifi.txt" ]; then
         show_message "No wifi.txt file found" 2
         return 1
     fi
 
-    sed '/^#/d; /^$/d; s/:.*//' "$SDCARD_PATH/wifi.txt" >"$minui_list_file"
+    sed '/^#/d; /^$/d; s/:.*//' "$SDCARD_PATH/wifi.txt" >"$cannelloni_list_file"
 
-    if [ ! -s "$minui_list_file" ]; then
+    if [ ! -s "$cannelloni_list_file" ]; then
         show_message "No saved networks found" 2
         return 1
     fi
 
-    killall minui-presenter >/dev/null 2>&1 || true
-    minui-list --disable-auto-sleep --file "$minui_list_file" --format text --title "Wifi Networks" --confirm-text "FORGET" --write-location /tmp/minui-output
+    killall cannelloni-presenter >/dev/null 2>&1 || true
+    cannelloni-list --disable-auto-sleep --file "$cannelloni_list_file" --format text --title "Wifi Networks" --confirm-text "FORGET" --write-location /tmp/cannelloni-output
 }
 
 password_screen() {
     SSID="$1"
 
-    rm -f "/tmp/minui-output"
+    rm -f "/tmp/cannelloni-output"
     touch "$SDCARD_PATH/wifi.txt"
 
     initial_password=""
@@ -174,8 +174,8 @@ password_screen() {
         initial_password="$(grep "^$SSID:" "$SDCARD_PATH/wifi.txt" | cut -d':' -f2- | xargs)"
     fi
 
-    killall minui-presenter >/dev/null 2>&1 || true
-    minui-keyboard --title "Enter Password" --initial-value "$initial_password" --write-location /tmp/minui-output
+    killall cannelloni-presenter >/dev/null 2>&1 || true
+    cannelloni-keyboard --title "Enter Password" --initial-value "$initial_password" --write-location /tmp/cannelloni-output
     exit_code=$?
     if [ "$exit_code" -eq 2 ]; then
         return 2
@@ -188,7 +188,7 @@ password_screen() {
         return 1
     fi
 
-    password="$(cat /tmp/minui-output)"
+    password="$(cat /tmp/cannelloni-output)"
     if [ -z "$password" ]; then
         show_message "Password cannot be empty" 2
         return 1
@@ -214,7 +214,7 @@ show_message() {
         seconds="forever"
     fi
 
-    killall minui-presenter >/dev/null 2>&1 || true
+    killall cannelloni-presenter >/dev/null 2>&1 || true
     echo "$message" 1>&2
     if [ "$PLATFORM" = "miyoomini" ]; then
         SAY_BIN="$SDCARD_PATH/.system/miyoomini/bin/say.elf"
@@ -232,9 +232,9 @@ show_message() {
         return 0
     fi
     if [ "$seconds" = "forever" ]; then
-        minui-presenter --message "$message" --timeout -1 &
+        cannelloni-presenter --message "$message" --timeout -1 &
     else
-        minui-presenter --message "$message" --timeout "$seconds"
+        cannelloni-presenter --message "$message" --timeout "$seconds"
     fi
 }
 
@@ -459,7 +459,7 @@ forget_network_loop() {
             break
         fi
 
-        SSID="$(cat /tmp/minui-output)"
+        SSID="$(cat /tmp/cannelloni-output)"
         # remove the SSID from the wifi.txt file
         sed -i "/^$SSID:/d" "$SDCARD_PATH/wifi.txt"
         if ! write_config "true"; then
@@ -481,7 +481,7 @@ forget_network_loop() {
         break
     done
 
-    killall minui-presenter >/dev/null 2>&1 || true
+    killall cannelloni-presenter >/dev/null 2>&1 || true
     echo "$next_screen" >/tmp/wifi-next-screen
 }
 
@@ -516,7 +516,7 @@ network_loop() {
             break
         fi
 
-        SSID="$(cat /tmp/minui-output)"
+        SSID="$(cat /tmp/cannelloni-output)"
         password_screen "$SSID"
         exit_code=$?
         # exit codes: 2 = back button (go back to networks screen)
@@ -543,13 +543,13 @@ network_loop() {
         break
     done
 
-    killall minui-presenter >/dev/null 2>&1 || true
+    killall cannelloni-presenter >/dev/null 2>&1 || true
     echo "$next_screen" >/tmp/wifi-next-screen
 }
 
 cleanup() {
     rm -f /tmp/stay_awake /tmp/wifi-next-screen
-    killall minui-presenter >/dev/null 2>&1 || true
+    killall cannelloni-presenter >/dev/null 2>&1 || true
 }
 
 main() {
@@ -568,18 +568,18 @@ main() {
         fi
     fi
 
-    if ! command -v minui-keyboard >/dev/null 2>&1; then
-        show_message "minui-keyboard not found" 2
+    if ! command -v cannelloni-keyboard >/dev/null 2>&1; then
+        show_message "cannelloni-keyboard not found" 2
         return 1
     fi
 
-    if ! command -v minui-list >/dev/null 2>&1; then
-        show_message "minui-list not found" 2
+    if ! command -v cannelloni-list >/dev/null 2>&1; then
+        show_message "cannelloni-list not found" 2
         return 1
     fi
 
-    if ! command -v minui-presenter >/dev/null 2>&1; then
-        show_message "minui-presenter not found" 2
+    if ! command -v cannelloni-presenter >/dev/null 2>&1; then
+        show_message "cannelloni-presenter not found" 2
         return 1
     fi
 
@@ -609,9 +609,9 @@ main() {
     fi
 
     chmod +x "$PAK_DIR/bin/$architecture/jq"
-    chmod +x "$PAK_DIR/bin/$PLATFORM/minui-keyboard"
-    chmod +x "$PAK_DIR/bin/$PLATFORM/minui-list"
-    chmod +x "$PAK_DIR/bin/$PLATFORM/minui-presenter"
+    chmod +x "$PAK_DIR/bin/$PLATFORM/cannelloni-keyboard"
+    chmod +x "$PAK_DIR/bin/$PLATFORM/cannelloni-list"
+    chmod +x "$PAK_DIR/bin/$PLATFORM/cannelloni-presenter"
 
     while true; do
         main_screen
@@ -621,7 +621,7 @@ main() {
             break
         fi
 
-        output="$(cat /tmp/minui-output)"
+        output="$(cat /tmp/cannelloni-output)"
         selected_index="$(echo "$output" | jq -r '.selected')"
         selection="$(echo "$output" | jq -r ".settings[$selected_index].name")"
 

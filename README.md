@@ -37,11 +37,11 @@ Cannelloni takes the opposite path:
 
 ## 🚀 Handheld Experience & Features
 
-### 🍳 Nonna's Kitchen (Wireless FTP File Transfer)
-- Transfer ROMs, BIOS files, saves, and save states wirelessly over Wi-Fi on supported devices without removing your SD card.
-- Built-in lightweight FTP server running on port 2121.
-- Simple toggle directly in the Settings menu (press `MENU` in the launcher) or launch as a standalone tool.
-- Full compatibility with any standard FTP client (FileZilla, Cyberduck, WinSCP, or native mobile and desktop file managers).
+### 🍳 Nonna's Kitchen (Web Management Service)
+- Manage ROMs, BIOS files, saves, and save states wirelessly over Wi-Fi on supported devices without removing your SD card.
+- Built-in web server running on port 1091 with drag-and-drop file upload, matching the Cannelloni web management interface.
+- Open directly in any mobile or desktop web browser (`http://<DEVICE_IP>:1091`).
+- Clean HTML5 dashboard for uploading ROMs into console directories, managing save files, and monitoring SD card storage.
 
 ### ⚡ Built-in Nintendo DS (melonDS) Core Integration
 - Zero-configuration Nintendo DS emulation directly integrated with Cannelloni's launcher and In-Game Menu.

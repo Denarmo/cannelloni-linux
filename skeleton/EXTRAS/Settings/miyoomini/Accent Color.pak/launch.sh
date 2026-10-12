@@ -7,10 +7,10 @@ PAK_DIR="$(dirname "$0")"
 SAY="/mnt/SDCARD/.system/$PLATFORM/bin/say.elf"
 [ ! -x "$SAY" ] && SAY="say.elf"
 
-# Locate minui-list binary
-LIST_BIN="$SDCARD_PATH/Settings/$PLATFORM/Wi-Fi.pak/bin/$PLATFORM/minui-list"
-[ ! -x "$LIST_BIN" ] && LIST_BIN="$SDCARD_PATH/Tools/$PLATFORM/Wi-Fi.pak/bin/$PLATFORM/minui-list"
-[ ! -x "$LIST_BIN" ] && LIST_BIN="$PAK_DIR/../Wi-Fi.pak/bin/$PLATFORM/minui-list"
+# Locate cannelloni-list binary
+LIST_BIN="$SDCARD_PATH/Settings/$PLATFORM/Wi-Fi.pak/bin/$PLATFORM/cannelloni-list"
+[ ! -x "$LIST_BIN" ] && LIST_BIN="$SDCARD_PATH/Tools/$PLATFORM/Wi-Fi.pak/bin/$PLATFORM/cannelloni-list"
+[ ! -x "$LIST_BIN" ] && LIST_BIN="$PAK_DIR/../Wi-Fi.pak/bin/$PLATFORM/cannelloni-list"
 
 COLOR_FILE="$SDCARD_PATH/.userdata/shared/.cannelloni/accent_color.txt"
 mkdir -p "$(dirname "$COLOR_FILE")"

@@ -1,7 +1,7 @@
 Cannelloni is a minimal launcher for the RGB30, Trimui Smart (and Pro), Miyoo Mini (and Plus), M17, and RG35XX--all from the same SD card. Why? Why not?
 
 Source:
-https://github.com/shauninman/minui
+https://github.com/Denarmo/cannelloni-linux
 
 ----------------------------------------
 Installing

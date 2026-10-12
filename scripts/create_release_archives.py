@@ -4,6 +4,8 @@ import zipfile
 import shutil
 import struct
 import urllib.request
+import tarfile
+import binascii
 
 RELEASE_TAG = "v20261012-0"
 RELEASE_NAME = "Cannelloni-20261012-0"
@@ -46,8 +48,10 @@ def add_dir_to_zip(zout, src_dir, zip_prefix, written_entries):
                 ("." not in f and not f.startswith(".")) or
                 f in (
                     "drastic", "cpuclock", "show_hotkeys", "minui-keyboard",
-                    "minui-list", "minui-presenter", "iw", "jq", "service-on",
-                    "service-off", "wifi-enabled", "on-boot", "png2raw"
+                    "minui-list", "minui-presenter", "cannelloni-keyboard",
+                    "cannelloni-list", "cannelloni-presenter", "cannelloni.elf",
+                    "iw", "jq", "service-on", "service-off", "wifi-enabled",
+                    "on-boot", "png2raw"
                 )
             )
             if is_exec:
@@ -93,11 +97,64 @@ def patch_minui_settings(data, platform):
             with open(hook_bin_path, 'rb') as f:
                 hook = f.read()
             b[hook_offset : hook_offset + len(hook)] = hook
-            # b 0x2bb98 from 0x154ac: offset = 0x59b9
             b_inst = 0xea000000 | 0x59b9
             b[jump_offset : jump_offset + 4] = struct.pack('<I', b_inst)
             print("Patched Settings menu hook into miyoomini ELF!")
     return bytes(b)
+
+def build_dmenu_rg35xxplus():
+    """Builds RG35XX Plus/H/SP/CubeXX/28XX dmenu.bin with official Cannelloni assets."""
+    with zipfile.ZipFile(SRC_BASE_ZIP) as z:
+        orig_dmenu = z.read("rg35xxplus/dmenu.bin")
+    idx = orig_dmenu.find(b"BINARY\n")
+    orig_tar = orig_dmenu[idx+7:]
+    unzip_data = None
+    with tarfile.open(fileobj=io.BytesIO(orig_tar), mode="r:gz") as tar:
+        for m in tar.getmembers():
+            if m.name == "unzip":
+                unzip_data = tar.extractfile(m).read()
+                break
+    
+    tar_buf = io.BytesIO()
+    with tarfile.open(fileobj=tar_buf, mode="w:gz") as tar:
+        def add_bytes(name, data, mode=0o644):
+            ti = tarfile.TarInfo(name=name)
+            ti.size = len(data)
+            ti.mode = mode
+            ti.mtime = 1700000000
+            tar.addfile(ti, io.BytesIO(data))
+        
+        add_bytes("bootlogo.bmp", open("workspace/rg35xxplus/boot/bootlogo.bmp", "rb").read())
+        add_bytes("installing", open("workspace/rg35xxplus/boot/installing.bmp", "rb").read()[54:])
+        add_bytes("updating", open("workspace/rg35xxplus/boot/updating.bmp", "rb").read()[54:])
+        add_bytes("bootlogo-r.bmp", open("workspace/rg35xxplus/boot/bootlogo-r.bmp", "rb").read())
+        add_bytes("installing-r", open("workspace/rg35xxplus/boot/installing-r.bmp", "rb").read()[54:])
+        add_bytes("updating-r", open("workspace/rg35xxplus/boot/updating-r.bmp", "rb").read()[54:])
+        add_bytes("bootlogo-s.bmp", open("workspace/rg35xxplus/boot/bootlogo-s.bmp", "rb").read())
+        add_bytes("installing-s", open("workspace/rg35xxplus/boot/installing-s.bmp", "rb").read()[54:])
+        add_bytes("updating-s", open("workspace/rg35xxplus/boot/updating-s.bmp", "rb").read()[54:])
+        add_bytes("bootlogo-w.bmp", open("workspace/rg35xxplus/boot/bootlogo-w.bmp", "rb").read())
+        add_bytes("installing-w", open("workspace/rg35xxplus/boot/installing-w.bmp", "rb").read()[54:])
+        add_bytes("updating-w", open("workspace/rg35xxplus/boot/updating-w.bmp", "rb").read()[54:])
+        if unzip_data:
+            add_bytes("unzip", unzip_data, mode=0o755)
+    new_tar = tar_buf.getvalue()
+    boot_sh = open("workspace/rg35xxplus/boot/boot.sh", "rb").read()
+    return boot_sh + b"BINARY\n" + new_tar + b"\n"
+
+def build_dmenu_rg35xx():
+    """Builds RG35XX (original) dmenu.bin with official Cannelloni assets."""
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("installing", open("workspace/rg35xx/boot/installing.bmp", "rb").read()[64:])
+        z.writestr("updating", open("workspace/rg35xx/boot/updating.bmp", "rb").read()[64:])
+    zip_data = zip_buf.getvalue()
+    uu_lines = [b"begin 644 data\n"]
+    for i in range(0, len(zip_data), 45):
+        uu_lines.append(binascii.b2a_uu(zip_data[i:i+45]))
+    uu_lines.append(b"`\nend\n")
+    boot_sh = open("workspace/rg35xx/boot/boot.sh", "rb").read()
+    return boot_sh + b"BINARY\n" + b"".join(uu_lines)
 
 # ----------------------------------------------------
 # 1. Process and rebuild Cannelloni.zip (from MinUI.zip)
@@ -154,12 +211,21 @@ for item in in_minui_zip.infolist():
             with open(local_res, "rb") as f:
                 data = f.read()
 
+    # Inject Cannelloni boot logo assets into Cannelloni.zip
+    if name == ".system/miyoomini/dat/image1.jpg":
+        with open("skeleton/SYSTEM/miyoomini/dat/image1.jpg", "rb") as f:
+            data = f.read()
+    if name == ".system/trimuismart/dat/logo.bmp":
+        with open("skeleton/SYSTEM/trimuismart/dat/logo.bmp", "rb") as f:
+            data = f.read()
+
     # Update any minui references in scripts
     if name.endswith(".sh") or name.endswith(".txt"):
         try:
             content = data.decode("utf-8")
             content = content.replace("MinUI.pak", "Cannelloni.pak")
             content = content.replace("MinUI.zip", "Cannelloni.zip")
+            content = content.replace("MinUI", "Cannelloni")
             content = content.replace("/tmp/minui_exec", "/tmp/cannelloni_exec")
             content = content.replace(".minui", ".cannelloni")
             data = content.encode("utf-8")
@@ -278,11 +344,36 @@ with zipfile.ZipFile(SRC_BASE_ZIP, "r") as base_in, \
         elif name.endswith(".tmp_update/miyoomini.sh"):
             with open("workspace/miyoomini/install/boot.sh", "rb") as f:
                 data = f.read()
+        elif name == "rg35xxplus/dmenu.bin":
+            data = build_dmenu_rg35xxplus()
+        elif name == "rg35xx/dmenu.bin":
+            data = build_dmenu_rg35xx()
+        elif name.endswith("installing.png"):
+            if "brick" in name:
+                data = open("workspace/tg5040/install/brick/installing.png", "rb").read()
+            elif "trimuismart" in name:
+                data = open("workspace/trimuismart/install/installing.png", "rb").read()
+            else:
+                data = open("workspace/miyoomini/install/installing.png", "rb").read()
+        elif name.endswith("updating.png"):
+            if "brick" in name:
+                data = open("workspace/tg5040/install/brick/updating.png", "rb").read()
+            elif "trimuismart" in name:
+                data = open("workspace/trimuismart/install/updating.png", "rb").read()
+            else:
+                data = open("workspace/miyoomini/install/updating.png", "rb").read()
+        elif name == "gkdpixel/install.sh":
+            data = open("workspace/gkdpixel/boot/install.sh", "rb").read()
+        elif name == "gkdpixel/boot.sh":
+          data = open("workspace/gkdpixel/boot/boot.sh", "rb").read()
+        elif name == "gkdpixel/installing.bmp":
+            data = open("workspace/gkdpixel/boot/installing.bmp", "rb").read()
         elif name.endswith(".sh") or name.endswith(".txt"):
             try:
                 content = data.decode("utf-8")
                 content = content.replace("MinUI.zip", "Cannelloni.zip")
                 content = content.replace("MinUI.pak", "Cannelloni.pak")
+                content = content.replace("MinUI", "Cannelloni")
                 content = content.replace("/tmp/minui_exec", "/tmp/cannelloni_exec")
                 content = content.replace(".minui", ".cannelloni")
                 data = content.encode("utf-8")

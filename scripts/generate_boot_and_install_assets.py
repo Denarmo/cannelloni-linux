@@ -1,0 +1,164 @@
+import os
+import io
+import gzip
+from PIL import Image, ImageFont, ImageDraw
+
+LOGO_PATH = ".github/resources/logo.png"
+FONT_PATH = "skeleton/SYSTEM/res/BPreplayBold-unhinted.otf"
+
+logo = Image.open(LOGO_PATH)
+bbox = logo.getbbox()
+logo_cropped = logo.crop(bbox)
+
+def make_bootlogo(w, h, logo_h=None, rotate_deg=0, mode="RGB", quantize_colors=None):
+    """Generates a boot logo image centered on a black background."""
+    if logo_h is None:
+        logo_h = int(min(w, h) * 0.32)
+    logo_w = int(logo_cropped.width * (logo_h / logo_cropped.height))
+    scaled = logo_cropped.resize((logo_w, logo_h), Image.Resampling.LANCZOS)
+    if quantize_colors:
+        scaled = scaled.quantize(colors=quantize_colors).convert("RGBA")
+    
+    canvas_w = w if rotate_deg in (0, 180) else h
+    canvas_h = h if rotate_deg in (0, 180) else w
+    bg = Image.new(mode, (canvas_w, canvas_h), (0, 0, 0, 255) if mode == "RGBA" else (0, 0, 0))
+    
+    lx = (bg.width - scaled.width) // 2
+    ly = (bg.height - scaled.height) // 2
+    bg.paste(scaled, (lx, ly), scaled)
+    
+    if rotate_deg != 0:
+        bg = bg.rotate(rotate_deg, expand=True)
+    return bg
+
+def make_action_screen(w, h, text, mode="RGB", rotate_deg=0):
+    """Generates an installation/updating screen with the Cannelloni logo and action text."""
+    canvas_w = w if rotate_deg in (0, 180) else h
+    canvas_h = h if rotate_deg in (0, 180) else w
+    
+    scale = min(canvas_w / 640.0, canvas_h / 480.0)
+    logo_h = max(24, int(115 * scale))
+    logo_w = int(logo_cropped.width * (logo_h / logo_cropped.height))
+    scaled_logo = logo_cropped.resize((logo_w, logo_h), Image.Resampling.LANCZOS)
+    
+    font_size = max(10, int(26 * scale))
+    font = ImageFont.truetype(FONT_PATH, font_size)
+    
+    im = Image.new(mode, (canvas_w, canvas_h), (0, 0, 0, 255) if mode == "RGBA" else (0, 0, 0))
+    lx = (canvas_w - logo_w) // 2
+    total_h = logo_h + int(28 * scale) + font_size
+    start_y = int((canvas_h - total_h) // 2)
+    im.paste(scaled_logo, (lx, start_y), scaled_logo)
+    
+    draw = ImageDraw.Draw(im)
+    tb = draw.textbbox((0, 0), text, font=font)
+    tw = tb[2] - tb[0]
+    tx = (canvas_w - tw) // 2
+    ty = int(start_y + logo_h + 28 * scale)
+    draw.text((tx, ty), text, font=font, fill=(255, 255, 255))
+    
+    if rotate_deg != 0:
+        im = im.rotate(rotate_deg, expand=True)
+    return im
+
+def save_image(img, path, fmt=None, quality=90):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if fmt is None:
+        ext = os.path.splitext(path)[1].lower()
+        if ext in ('.jpg', '.jpeg'):
+            fmt = 'JPEG'
+        elif ext == '.bmp':
+            fmt = 'BMP'
+        else:
+            fmt = 'PNG'
+    if fmt == 'JPEG':
+        img.convert('RGB').save(path, format=fmt, quality=quality)
+    elif fmt == 'BMP':
+        img.save(path, format=fmt)
+    else:
+        img.save(path, format=fmt)
+    print(f"Generated {path} ({img.size}, {img.mode})")
+
+def main():
+    print("Generating official Cannelloni boot logos and action screens...")
+
+    # 1. Boot logos
+    save_image(make_bootlogo(640, 480, logo_h=140), "skeleton/SYSTEM/miyoomini/dat/image1.jpg", "JPEG", quality=90)
+    save_image(make_bootlogo(240, 320, logo_h=60, rotate_deg=90), "skeleton/SYSTEM/trimuismart/dat/logo.bmp", "BMP")
+    save_image(make_bootlogo(100, 100, logo_h=45), "skeleton/EXTRAS/Tools/m17/Bootlogo.pak/logo.bmp", "BMP")
+    save_image(make_bootlogo(480, 640, logo_h=140, rotate_deg=90, mode="RGBA", quantize_colors=64), "skeleton/EXTRAS/Tools/my282/Bootlogo.pak/bootlogo.bmp", "BMP")
+    save_image(make_bootlogo(640, 480, logo_h=140), "skeleton/EXTRAS/Tools/my355/Bootlogo.pak/payload/logo.bmp", "BMP")
+    save_image(make_bootlogo(128, 128, logo_h=60), "skeleton/EXTRAS/Tools/tg5040/Bootlogo.pak/bootlogo.bmp", "BMP")
+    save_image(make_bootlogo(216, 237, logo_h=90), "skeleton/EXTRAS/Tools/tg5040/Bootlogo.pak/brick/bootlogo.bmp", "BMP")
+    save_image(make_bootlogo(120, 120, logo_h=55), "skeleton/EXTRAS/Tools/zero28/Bootlogo.pak/bootlogo.bmp", "BMP")
+    save_image(make_bootlogo(640, 480, logo_h=140), "workspace/rg35xx/boot/boot_logo.png", "PNG")
+    save_image(make_bootlogo(640, 480, logo_h=140), "workspace/rg35xxplus/boot/bootlogo.bmp", "BMP")
+    save_image(make_bootlogo(480, 640, logo_h=140, rotate_deg=90), "workspace/rg35xxplus/boot/bootlogo-r.bmp", "BMP")
+    save_image(make_bootlogo(720, 720, logo_h=160), "workspace/rg35xxplus/boot/bootlogo-s.bmp", "BMP")
+    save_image(make_bootlogo(720, 480, logo_h=140), "workspace/rg35xxplus/boot/bootlogo-w.bmp", "BMP")
+
+    # 2. Action screens (Installing and Updating)
+    # 640x480 standard
+    ins_640 = make_action_screen(640, 480, "Installing Cannelloni...")
+    upd_640 = make_action_screen(640, 480, "Updating Cannelloni...")
+
+    for plat in ["miyoomini", "my282", "my355", "zero28", "tg5040"]:
+        save_image(ins_640, f"workspace/{plat}/install/installing.png", "PNG")
+        save_image(upd_640, f"workspace/{plat}/install/updating.png", "PNG")
+
+    save_image(ins_640, "workspace/rg35xx/boot/installing.bmp", "BMP")
+    save_image(upd_640, "workspace/rg35xx/boot/updating.bmp", "BMP")
+    save_image(ins_640, "workspace/rg35xxplus/boot/installing.bmp", "BMP")
+    save_image(upd_640, "workspace/rg35xxplus/boot/updating.bmp", "BMP")
+
+    # 960x720 Brick
+    ins_960 = make_action_screen(960, 720, "Installing Cannelloni...")
+    upd_960 = make_action_screen(960, 720, "Updating Cannelloni...")
+    save_image(ins_960, "workspace/tg5040/install/brick/installing.png", "PNG")
+    save_image(upd_960, "workspace/tg5040/install/brick/updating.png", "PNG")
+
+    # 320x240 TrimUI Smart & GKD Pixel
+    ins_320 = make_action_screen(320, 240, "Installing Cannelloni...")
+    upd_320 = make_action_screen(320, 240, "Updating Cannelloni...")
+    save_image(ins_320, "workspace/trimuismart/install/installing.png", "PNG")
+    save_image(upd_320, "workspace/trimuismart/install/updating.png", "PNG")
+    save_image(ins_320, "workspace/gkdpixel/boot/installing.bmp", "BMP")
+    save_image(upd_320, "workspace/gkdpixel/boot/updating.bmp", "BMP")
+
+    # 480x272 M17
+    ins_480_272 = make_action_screen(480, 272, "Installing Cannelloni...")
+    upd_480_272 = make_action_screen(480, 272, "Updating Cannelloni...")
+    save_image(ins_480_272, "workspace/m17/boot/installing.bmp", "BMP")
+    save_image(upd_480_272, "workspace/m17/boot/updating.bmp", "BMP")
+
+    # 480x640 MagicMini & RG35XX Plus Rotated
+    ins_480_640 = make_action_screen(480, 640, "Installing Cannelloni...")
+    upd_480_640 = make_action_screen(480, 640, "Updating Cannelloni...")
+    save_image(ins_480_640, "workspace/magicmini/install/installing.bmp", "BMP")
+    save_image(upd_480_640, "workspace/magicmini/install/updating.bmp", "BMP")
+    save_image(ins_480_640, "workspace/rg35xxplus/boot/installing-r.bmp", "BMP")
+    save_image(upd_480_640, "workspace/rg35xxplus/boot/updating-r.bmp", "BMP")
+
+    # 720x720 Square
+    ins_720 = make_action_screen(720, 720, "Installing Cannelloni...")
+    upd_720 = make_action_screen(720, 720, "Updating Cannelloni...")
+    save_image(ins_720, "workspace/rg35xxplus/boot/installing-s.bmp", "BMP")
+    save_image(upd_720, "workspace/rg35xxplus/boot/updating-s.bmp", "BMP")
+
+    # 720x480 Wide
+    ins_720_480 = make_action_screen(720, 480, "Installing Cannelloni...")
+    upd_720_480 = make_action_screen(720, 480, "Updating Cannelloni...")
+    save_image(ins_720_480, "workspace/rg35xxplus/boot/installing-w.bmp", "BMP")
+    save_image(upd_720_480, "workspace/rg35xxplus/boot/updating-w.bmp", "BMP")
+
+    # Tool and Setting resource images
+    save_image(upd_640, "skeleton/EXTRAS/Settings/rgb30/Wi-Fi.pak/res/update.png", "PNG")
+    save_image(upd_640, "skeleton/EXTRAS/Tools/my282/Bootlogo.pak/res/updating.png", "PNG")
+    save_image(make_action_screen(640, 480, "Rebooting..."), "skeleton/EXTRAS/Tools/my355/Bootlogo.pak/res/reboot.png", "PNG")
+    save_image(make_action_screen(640, 480, "Replacing Boot Logo..."), "skeleton/EXTRAS/Tools/my355/Bootlogo.pak/res/replace-logo.png", "PNG")
+    save_image(make_action_screen(640, 480, "Rebooting..."), "workspace/my355/init/res/reboot.png", "PNG")
+
+    print("All assets generated successfully!")
+
+if __name__ == "__main__":
+    main()
