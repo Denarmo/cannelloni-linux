@@ -1,44 +1,46 @@
 #!/bin/sh
 
-echo "=== [$(date +'%Y-%m-%d %H:%M:%S')] MainUI bootstrap triggered ==="
-echo "Script path: $0"
-echo "Current directory: $(pwd)"
+LOG_FILE="/mnt/SDCARD/cannelloni_install.log"
+log() {
+	echo "$@"
+	echo "$@" >> "$LOG_FILE" 2>/dev/null
+	sync
+}
+
+log "=== [$(date +'%Y-%m-%d %H:%M:%S')] MainUI bootstrap triggered ==="
+log "Script path: $0"
+log "Current directory: $(pwd)"
 
 cd $(dirname "$0")
-echo "Moved to: $(pwd)"
+log "Moved to: $(pwd)"
 
 INFO=`cat /proc/cpuinfo 2> /dev/null`
-echo "CPU info snippet: $(echo "$INFO" | grep -iE 'hardware|model|processor|cortex|arm' | tr '\n' ' ')"
-echo "axp_test present: $([ -f "/customer/app/axp_test" ] && echo YES || echo NO)"
-sync
+log "CPU info snippet: $(echo "$INFO" | grep -iE 'hardware|model|processor|cortex|arm' | tr '\n' ' ')"
+log "axp_test present: $([ -f "/customer/app/axp_test" ] && echo YES || echo NO)"
+log "SD card root contents: $(ls -la /mnt/SDCARD 2>/dev/null | tr '\n' ' ')"
 
 case $INFO in
 *"0xd05"*)
-	echo "Detected 0xd05 (Miyoo Flip), running ./my355.sh"
-	sync
+	log "Detected 0xd05 (Miyoo Flip), running ./my355.sh"
 	./my355.sh
 	;;
 *"sun8i"*)
-	echo "Detected sun8i (Miyoo A30), running ./my282.sh"
-	sync
+	log "Detected sun8i (Miyoo A30), running ./my282.sh"
 	./my282.sh
 	;;
 *"SStar"*|*"sstar"*|*"Sigmastar"*|*"SigmaStar"*|*"SSD20"*|*"infinity2"*|*"Infinity2"*|*"MStar"*)
-	echo "Detected SigmaStar SoC, running ./miyoomini.sh"
-	sync
+	log "Detected SigmaStar SoC, running ./miyoomini.sh"
 	./miyoomini.sh
 	;;
 *)
-	echo "Matching fallback for Miyoo Mini / Mini Plus..."
+	log "Matching fallback for Miyoo Mini / Mini Plus..."
 	if [ -f "/customer/app/axp_test" ] || [ -d "/customer/app" ]; then
-		echo "Found /customer/app, running ./miyoomini.sh"
-		sync
+		log "Found /customer/app, running ./miyoomini.sh"
 		./miyoomini.sh
 	else
-		echo "ERROR: Unknown hardware in MainUI"
+		log "ERROR: Unknown hardware in MainUI!"
 	fi
 	;;
 esac
 
-echo "MainUI exited with code: $?"
-sync
+log "MainUI exited with code: $?"

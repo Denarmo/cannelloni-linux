@@ -1,7 +1,14 @@
 #!/bin/sh
 # NOTE: becomes .tmp_update/miyoomini.sh
 
-echo "=== [$(date +'%Y-%m-%d %H:%M:%S')] .tmp_update/miyoomini.sh triggered ==="
+LOG_FILE="/mnt/SDCARD/cannelloni_install.log"
+log() {
+	echo "$@"
+	echo "$@" >> "$LOG_FILE" 2>/dev/null
+	sync
+}
+
+log "=== [$(date +'%Y-%m-%d %H:%M:%S')] .tmp_update/miyoomini.sh triggered ==="
 
 PLATFORM="miyoomini"
 SDCARD_PATH="/mnt/SDCARD"
@@ -9,22 +16,22 @@ UPDATE_PATH="$SDCARD_PATH/Cannelloni.zip"
 if [ ! -f "$UPDATE_PATH" ]; then
 	FOUND_ZIP=$(ls "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null | head -n1)
 	if [ -n "$FOUND_ZIP" ] && [ -f "$FOUND_ZIP" ]; then
-		echo "Found update package: $FOUND_ZIP"
+		log "Found update package: $FOUND_ZIP"
 		UPDATE_PATH="$FOUND_ZIP"
 	fi
 fi
 SYSTEM_PATH="$SDCARD_PATH/.system"
 
-echo "UPDATE_PATH: $UPDATE_PATH (exists: $([ -f "$UPDATE_PATH" ] && echo YES || echo NO))"
-echo "SYSTEM_PATH: $SYSTEM_PATH (exists: $([ -d "$SYSTEM_PATH" ] && echo YES || echo NO))"
-sync
+log "UPDATE_PATH: $UPDATE_PATH (exists: $([ -f "$UPDATE_PATH" ] && echo YES || echo NO))"
+log "SYSTEM_PATH: $SYSTEM_PATH (exists: $([ -d "$SYSTEM_PATH" ] && echo YES || echo NO))"
+log "SD card contents before install: $(ls -la "$SDCARD_PATH" 2>/dev/null | tr '\n' ' ')"
 
 CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 echo performance > "$CPU_PATH" 2>/dev/null
 
 # install/update
 if [ -f "$UPDATE_PATH" ]; then 
-	echo "Install package detected at $UPDATE_PATH"
+	log "Install package detected at $UPDATE_PATH"
 	cd $(dirname "$0")/$PLATFORM
 	
 	# init backlight
@@ -40,55 +47,60 @@ if [ -f "$UPDATE_PATH" ]; then
 
 	chmod +x ./show.elf 2>/dev/null
 	if [ -d "$SYSTEM_PATH" ]; then
-		echo "Existing .system found, showing updating.png..."
+		log "Existing .system found, showing updating.png..."
 		./show.elf ./updating.png 2>/dev/null &
 	else
-		echo "Fresh install, showing installing.png..."
+		log "Fresh install, showing installing.png..."
 		./show.elf ./installing.png 2>/dev/null &
 	fi
 	sync
 	
-	echo "Unpacking update archive to $SDCARD_PATH/..."
+	log "Unpacking update archive $UPDATE_PATH to $SDCARD_PATH/..."
 	mv $SDCARD_PATH/.tmp_update $SDCARD_PATH/.tmp_update-old 2>/dev/null
 	
 	# Unzip update
-	unzip -o "$UPDATE_PATH" -d "$SDCARD_PATH"
+	unzip -o "$UPDATE_PATH" -d "$SDCARD_PATH" 2>&1 | tee -a "$LOG_FILE"
 	UNZIP_RESULT=$?
-	echo "unzip exited with code: $UNZIP_RESULT"
-	sync
+	log "unzip exited with code: $UNZIP_RESULT"
 	
 	if [ -f "$SDCARD_PATH/Cannelloni.zip" ] && [ "$UPDATE_PATH" != "$SDCARD_PATH/Cannelloni.zip" ]; then
-		echo "Found nested Cannelloni.zip, extracting..."
-		unzip -o "$SDCARD_PATH/Cannelloni.zip" -d "$SDCARD_PATH"
+		log "Found nested Cannelloni.zip, extracting..."
+		unzip -o "$SDCARD_PATH/Cannelloni.zip" -d "$SDCARD_PATH" 2>&1 | tee -a "$LOG_FILE"
+		log "nested Cannelloni.zip unzip exited with code: $?"
 	fi
 	
-	echo "Cleaning up archive..."
+	log "Cleaning up archive..."
 	rm -f "$UPDATE_PATH"
 	rm -f "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null
 	rm -rf $SDCARD_PATH/.tmp_update-old 2>/dev/null
 	
 	# Verify extracted binaries
-	echo "Binaries in $SYSTEM_PATH/$PLATFORM/bin/:"
-	ls -la "$SYSTEM_PATH/$PLATFORM/bin/"
-	sync
+	log "Binaries in $SYSTEM_PATH/$PLATFORM/bin/:"
+	ls -la "$SYSTEM_PATH/$PLATFORM/bin/" >> "$LOG_FILE" 2>&1
+	
+	# Set library and binary search paths for installer tools
+	export LD_LIBRARY_PATH="$SYSTEM_PATH/$PLATFORM/lib:/customer/lib:/config/lib:/lib:$LD_LIBRARY_PATH"
+	export PATH="$SYSTEM_PATH/$PLATFORM/bin:$PATH"
+	log "Exported LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
+	log "Exported PATH: $PATH"
 	
 	# the updated system finishes the install/update
 	if [ -f "$SYSTEM_PATH/$PLATFORM/bin/install.sh" ]; then
-		echo "Running install.sh..."
+		log "Running install.sh..."
 		chmod +x "$SYSTEM_PATH/$PLATFORM/bin/install.sh" 2>/dev/null
-		"$SYSTEM_PATH/$PLATFORM/bin/install.sh"
-		echo "install.sh finished with code $?"
+		"$SYSTEM_PATH/$PLATFORM/bin/install.sh" >> "$LOG_FILE" 2>&1
+		log "install.sh finished with code $?"
 	fi
-	sync
 
 	# Prompt user to choose hardware model on installation if needed
 	DEV_SELECT="$SYSTEM_PATH/common/device_select.sh"
 	[ ! -f "$DEV_SELECT" ] && DEV_SELECT="$SYSTEM_PATH/bin/device_select.sh"
 	if [ -f "$DEV_SELECT" ]; then
+		log "Running device_select.sh..."
 		chmod +x "$DEV_SELECT" 2>/dev/null
-		"$DEV_SELECT"
+		"$DEV_SELECT" >> "$LOG_FILE" 2>&1
+		log "device_select.sh finished with code $?"
 	fi
-	sync
 
 	# Flash official Cannelloni boot logo to SPI flash if available
 	USERDATA_PATH="$SDCARD_PATH/.userdata/$PLATFORM"
@@ -96,47 +108,44 @@ if [ -f "$UPDATE_PATH" ]; then
 	BOOTLOGO_FLAG="$USERDATA_PATH/.bootlogo_flashed"
 	if [ ! -f "$BOOTLOGO_FLAG" ] && [ -e "/dev/mtd3" ]; then
 		if [ -f "$SYSTEM_PATH/$PLATFORM/dat/image1.jpg" ] && [ -x "$SYSTEM_PATH/$PLATFORM/bin/logowrite.elf" ]; then
-			echo "Flashing Cannelloni boot logo to SPI flash (/dev/mtd3)..."
+			log "Flashing Cannelloni boot logo to SPI flash (/dev/mtd3)..."
 			TMP_FLASH="/tmp/bootlogo_flash"
 			mkdir -p "$TMP_FLASH"
 			cd "$TMP_FLASH"
-			"$SYSTEM_PATH/$PLATFORM/bin/logoread.elf" >/dev/null 2>&1
+			"$SYSTEM_PATH/$PLATFORM/bin/logoread.elf" >> "$LOG_FILE" 2>&1
 			cp -f "$SYSTEM_PATH/$PLATFORM/dat/image1.jpg" ./image1.jpg 2>/dev/null
-			if "$SYSTEM_PATH/$PLATFORM/bin/logomake.elf" >/dev/null 2>&1 && "$SYSTEM_PATH/$PLATFORM/bin/logowrite.elf" >/dev/null 2>&1; then
-				echo "Cannelloni boot logo flashed successfully!"
+			if "$SYSTEM_PATH/$PLATFORM/bin/logomake.elf" >> "$LOG_FILE" 2>&1 && "$SYSTEM_PATH/$PLATFORM/bin/logowrite.elf" >> "$LOG_FILE" 2>&1; then
+				log "Cannelloni boot logo flashed successfully!"
 				touch "$BOOTLOGO_FLAG"
 			fi
 			cd "$SDCARD_PATH"
 			rm -rf "$TMP_FLASH"
 		fi
 	fi
-	sync
 fi
+
+export LD_LIBRARY_PATH="$SYSTEM_PATH/$PLATFORM/lib:/customer/lib:/config/lib:/lib:$LD_LIBRARY_PATH"
+export PATH="$SYSTEM_PATH/$PLATFORM/bin:$PATH"
 
 # or launch (and keep launched)
 LAUNCH_PATH="$SYSTEM_PATH/$PLATFORM/paks/Cannelloni.pak/launch.sh"
-echo "Checking LAUNCH_PATH: $LAUNCH_PATH"
-echo "LAUNCH_PATH exists: $([ -f "$LAUNCH_PATH" ] && echo YES || echo NO)"
-sync
+log "Checking LAUNCH_PATH: $LAUNCH_PATH"
+log "LAUNCH_PATH exists: $([ -f "$LAUNCH_PATH" ] && echo YES || echo NO)"
 
 if [ -f "$LAUNCH_PATH" ]; then
 	chmod +x "$LAUNCH_PATH" 2>/dev/null
 	chmod +x "$SYSTEM_PATH/$PLATFORM/bin/"* 2>/dev/null
-	echo "Launching Cannelloni main loop..."
-	sync
+	log "Launching Cannelloni main loop..."
 	while [ -f "$LAUNCH_PATH" ] ; do
-		"$LAUNCH_PATH"
+		"$LAUNCH_PATH" >> "$LOG_FILE" 2>&1
 		LAUNCH_EXIT=$?
-		echo "LAUNCH_PATH exited with code: $LAUNCH_EXIT"
-		sync
+		log "LAUNCH_PATH exited with code: $LAUNCH_EXIT"
 		sleep 1
 	done
 else
-	echo "ERROR: LAUNCH_PATH not found! Expected at $LAUNCH_PATH"
-	sync
+	log "ERROR: LAUNCH_PATH not found! Expected at $LAUNCH_PATH"
 fi
 
-echo "miyoomini.sh loop ended. System will reboot in 3 seconds."
-sync
+log "miyoomini.sh loop ended. System will reboot in 3 seconds."
 sleep 3
 reboot

@@ -10,6 +10,20 @@ if [ -z "$PLATFORM" ]; then
 fi
 [ -z "$PLATFORM" ] && PLATFORM="miyoomini"
 
+LOG_FILE="$SDCARD_PATH/cannelloni_install.log"
+log() {
+    echo "$@"
+    echo "$@" >> "$LOG_FILE" 2>/dev/null
+    sync
+}
+
+log "=== [$(date +'%Y-%m-%d %H:%M:%S')] device_select.sh wizard started ==="
+log "PLATFORM: $PLATFORM, SDCARD_PATH: $SDCARD_PATH"
+
+export LD_LIBRARY_PATH="$SDCARD_PATH/.system/$PLATFORM/lib:/customer/lib:/config/lib:/lib:$LD_LIBRARY_PATH"
+export PATH="$SDCARD_PATH/.system/$PLATFORM/bin:$PATH"
+log "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
+
 SHARED_DIR="$SDCARD_PATH/.userdata/shared/.cannelloni"
 mkdir -p "$SHARED_DIR"
 
@@ -33,6 +47,7 @@ for loc in \
         break
     fi
 done
+log "Resolved LIST_BIN: '$LIST_BIN' (executable: $([ -x "$LIST_BIN" ] && echo YES || echo NO))"
 
 MODE="$1"
 
@@ -68,6 +83,7 @@ EOF
             esac
         fi
     fi
+    log "Step 1 (Language) resolved to '$SELECTED_LANG'"
     echo "$SELECTED_LANG" > "$LANG_TXT"
 else
     [ -f "$LANG_TXT" ] && SELECTED_LANG=$(cat "$LANG_TXT" | head -n1 | tr -d '\r\n')
@@ -159,6 +175,7 @@ EOF
             esac
         fi
     fi
+    log "Step 2 (Accent Color) resolved to '$SELECTED_HEX'"
     echo "$SELECTED_HEX" > "$COLOR_TXT"
 
     # Immediately apply accent color assets so step 3 renders with user's selected accent theme
@@ -243,6 +260,7 @@ if [ -z "$SELECTED" ]; then
     esac
 fi
 
+log "Step 3 (Device Model) resolved to '$SELECTED'"
 echo "$SELECTED" > "$DEVICE_TXT"
 
 TARGET_PLATFORM="miyoomini"
@@ -312,18 +330,22 @@ esac
 
 echo "$TARGET_PLATFORM" > "$SHARED_DIR/platform.txt"
 [ -n "$TARGET_DEVICE" ] && echo "$TARGET_DEVICE" > "$SHARED_DIR/device.txt"
+log "Configured platform='$TARGET_PLATFORM', device='$TARGET_DEVICE'"
 
 # Configure boot splash and dat assets for the selected hardware
 BOOT_DIR="$SDCARD_PATH/.system/$TARGET_PLATFORM/dat"
 if [ -d "$BOOT_DIR" ]; then
     mkdir -p "$SDCARD_PATH/.system/dat"
     cp -f "$BOOT_DIR/"* "$SDCARD_PATH/.system/dat/" 2>/dev/null
+    log "Copied boot splash assets from $BOOT_DIR"
 fi
 
 # Run platform install finish script if available
 if [ -f "$SDCARD_PATH/.system/$TARGET_PLATFORM/bin/install.sh" ]; then
     chmod +x "$SDCARD_PATH/.system/$TARGET_PLATFORM/bin/install.sh" 2>/dev/null
-    "$SDCARD_PATH/.system/$TARGET_PLATFORM/bin/install.sh" 2>/dev/null
+    log "Executing $SDCARD_PATH/.system/$TARGET_PLATFORM/bin/install.sh..."
+    "$SDCARD_PATH/.system/$TARGET_PLATFORM/bin/install.sh" >> "$LOG_FILE" 2>&1
+    log "install.sh finished with code $?"
 fi
 
 # Apply accent color binaries to newly selected target platform
@@ -333,15 +355,24 @@ APPLY_SH="$SDCARD_PATH/.system/bin/apply_accent_color.sh"
 [ ! -f "$APPLY_SH" ] && APPLY_SH="$SDCARD_PATH/.system/common/apply_accent_color.sh"
 if [ -f "$APPLY_SH" ]; then
     chmod +x "$APPLY_SH" 2>/dev/null
-    "$APPLY_SH" "$CURR_COLOR" >/dev/null 2>&1
+    log "Applying accent color '$CURR_COLOR'..."
+    "$APPLY_SH" "$CURR_COLOR" >> "$LOG_FILE" 2>&1
 fi
 
-sync
+log "Wizard configuration complete: Device='$SELECTED', Language='$SELECTED_LANG', Accent='$CURR_COLOR'"
+
 SAY="$SDCARD_PATH/.system/$TARGET_PLATFORM/bin/say.elf"
 [ ! -x "$SAY" ] && SAY="say.elf"
-$SAY "$MSG_CONF
+if [ -x "$SAY" ] || command -v say.elf >/dev/null 2>&1; then
+    log "Displaying completion confirmation screen..."
+    $SAY "$MSG_CONF
 Device: $SELECTED
 $MSG_LANG_LABEL
 Accent: $CURR_COLOR
-Starting Cannelloni..."
-sync
+Starting Cannelloni..." &
+    SAY_PID=$!
+    sleep 3
+    kill -9 $SAY_PID 2>/dev/null
+fi
+
+log "=== device_select.sh finished successfully ==="

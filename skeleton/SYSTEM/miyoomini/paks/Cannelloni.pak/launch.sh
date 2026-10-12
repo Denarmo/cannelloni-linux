@@ -46,39 +46,61 @@ mkdir -p "$USERDATA_PATH"
 mkdir -p "$LOGS_PATH"
 mkdir -p "$SHARED_USERDATA_PATH/.cannelloni"
 
+LOG_FILE="/mnt/SDCARD/cannelloni_install.log"
+log() {
+	echo "$@"
+	echo "$@" >> "$LOG_FILE" 2>/dev/null
+	sync
+}
+
+log "=== [$(date +'%Y-%m-%d %H:%M:%S')] miyoomini launch.sh entered ==="
+log "IS_PLUS: $IS_PLUS, PLATFORM: $PLATFORM, SYSTEM_PATH: $SYSTEM_PATH"
+
+export LD_LIBRARY_PATH="$SYSTEM_PATH/lib:/customer/lib:/config/lib:/lib:$LD_LIBRARY_PATH"
+export PATH="$SYSTEM_PATH/bin:$PATH"
+log "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
+log "PATH: $PATH"
+
 # Universal Zip Auto-Installer: detect dropped release zip, unpack, and cleanup
 FOUND_ZIP=$(ls "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null | head -n1)
 if [ -n "$FOUND_ZIP" ] && [ -f "$FOUND_ZIP" ]; then
-    echo "Update archive detected at $FOUND_ZIP"
+    log "Update archive detected at $FOUND_ZIP"
     [ -x "$SYSTEM_PATH/bin/show.elf" ] && [ -f "$SYSTEM_PATH/res/updating.png" ] && "$SYSTEM_PATH/bin/show.elf" "$SYSTEM_PATH/res/updating.png" 2>/dev/null &
     
-    unzip -o "$FOUND_ZIP" -d "$SDCARD_PATH"
+    log "Extracting $FOUND_ZIP to $SDCARD_PATH..."
+    unzip -o "$FOUND_ZIP" -d "$SDCARD_PATH" >> "$LOG_FILE" 2>&1
+    log "Unzip result: $?"
     
     if [ -f "$SDCARD_PATH/Cannelloni.zip" ] && [ "$FOUND_ZIP" != "$SDCARD_PATH/Cannelloni.zip" ]; then
-        unzip -o "$SDCARD_PATH/Cannelloni.zip" -d "$SDCARD_PATH"
+        log "Found nested Cannelloni.zip, extracting..."
+        unzip -o "$SDCARD_PATH/Cannelloni.zip" -d "$SDCARD_PATH" >> "$LOG_FILE" 2>&1
+        log "Nested unzip result: $?"
     fi
     
+    log "Cleaning up archive..."
     rm -f "$FOUND_ZIP"
     rm -f "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null
-    sync
     
     DEV_SELECT="$SDCARD_PATH/.system/common/device_select.sh"
     [ ! -f "$DEV_SELECT" ] && DEV_SELECT="$SDCARD_PATH/.system/bin/device_select.sh"
     if [ -f "$DEV_SELECT" ]; then
+        log "Running device_select.sh after auto-install..."
         chmod +x "$DEV_SELECT" 2>/dev/null
-        "$DEV_SELECT"
+        "$DEV_SELECT" >> "$LOG_FILE" 2>&1
+        log "device_select.sh finished with code $?"
     fi
-    sync
 fi
 
 # On first boot / install, prompt user to select their device model if not yet configured
 DEVICE_MODEL_TXT="$SHARED_USERDATA_PATH/.cannelloni/device_model.txt"
 if [ ! -f "$DEVICE_MODEL_TXT" ]; then
+    log "First boot detected (device_model.txt absent), running device_select.sh..."
     DEV_SELECT="$SDCARD_PATH/.system/common/device_select.sh"
     [ ! -f "$DEV_SELECT" ] && DEV_SELECT="$SDCARD_PATH/.system/bin/device_select.sh"
     if [ -f "$DEV_SELECT" ]; then
         chmod +x "$DEV_SELECT" 2>/dev/null
-        "$DEV_SELECT"
+        "$DEV_SELECT" >> "$LOG_FILE" 2>&1
+        log "device_select.sh finished with code $?"
     fi
 fi
 
@@ -191,20 +213,33 @@ fi
 
 while [ -f "$EXEC_PATH" ]; do
 	overclock.elf $CPU_SPEED_PERF
+	log "Launching UI binary..."
 	if command -v cannelloni.elf >/dev/null 2>&1; then
-		cannelloni.elf > "$LOGS_PATH/cannelloni.txt" 2>&1
+		log "Running cannelloni.elf from PATH..."
+		cannelloni.elf 2>&1 | tee -a "$LOG_FILE" > "$LOGS_PATH/cannelloni.txt"
 	elif [ -f "$SYSTEM_PATH/bin/cannelloni.elf" ]; then
-		"$SYSTEM_PATH/bin/cannelloni.elf" > "$LOGS_PATH/cannelloni.txt" 2>&1
+		log "Running $SYSTEM_PATH/bin/cannelloni.elf..."
+		"$SYSTEM_PATH/bin/cannelloni.elf" 2>&1 | tee -a "$LOG_FILE" > "$LOGS_PATH/cannelloni.txt"
+	elif command -v minui.elf >/dev/null 2>&1; then
+		log "Running minui.elf from PATH..."
+		minui.elf 2>&1 | tee -a "$LOG_FILE" > "$LOGS_PATH/cannelloni.txt"
+	elif [ -f "$SYSTEM_PATH/bin/minui.elf" ]; then
+		log "Running $SYSTEM_PATH/bin/minui.elf..."
+		"$SYSTEM_PATH/bin/minui.elf" 2>&1 | tee -a "$LOG_FILE" > "$LOGS_PATH/cannelloni.txt"
 	else
+		log "CRITICAL: No UI executable found in $SYSTEM_PATH/bin/!"
+		ls -la "$SYSTEM_PATH/bin/" >> "$LOG_FILE" 2>&1
 		break
 	fi
+	UI_CODE=$?
+	log "UI binary exited with code: $UI_CODE"
 	
 	echo `date +'%F %T'` > "$DATETIME_PATH"
 	sync
 	
 	if [ -f $NEXT_PATH ]; then
 		CMD=`cat $NEXT_PATH`
-		echo "Processing NEXT_PATH command: $CMD"
+		log "Processing NEXT_PATH command: $CMD"
 		eval $CMD
 		rm -f $NEXT_PATH
 		if [ -f "/tmp/using-swap" ]; then
@@ -218,7 +253,6 @@ while [ -f "$EXEC_PATH" ]; do
 	fi
 done
 
-echo "Cannelloni.pak/launch.sh loop terminated. Shutting down in 3s..."
-sync
+log "Cannelloni.pak/launch.sh loop terminated. Shutting down in 3s..."
 sleep 3
 shutdown # just in case
