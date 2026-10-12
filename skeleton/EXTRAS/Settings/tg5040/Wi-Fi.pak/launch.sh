@@ -30,6 +30,150 @@ export HOME="$USERDATA_PATH/$PAK_NAME"
 export LD_LIBRARY_PATH="$PAK_DIR/lib/$PLATFORM:$PAK_DIR/lib:$LD_LIBRARY_PATH"
 export PATH="$PAK_DIR/bin/$architecture:$PAK_DIR/bin/$PLATFORM:$PAK_DIR/bin:$PATH"
 
+# --- Cannelloni Secure Network Storage ---
+SECURE_NET_DIR="$SDCARD_PATH/.userdata/shared/.cannelloni"
+SECURE_NET_CONF="$SECURE_NET_DIR/network.conf"
+
+SRC_SET='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='
+DST_SET='NOPQRSTUVWXYZABCDEFGHIJKLMnopqrstuvwxyzabcdefghijklm9876543210+/_'
+
+encode_cred() {
+    printf "%s" "$1" | base64 | tr -d '\r\n' | tr "$SRC_SET" "$DST_SET"
+}
+
+decode_cred() {
+    printf "%s" "$1" | tr "$DST_SET" "$SRC_SET" | base64 -d 2>/dev/null
+}
+
+migrate_legacy_wifi_txt() {
+    OLD_TXT="$SDCARD_PATH/wifi.txt"
+    if [ -f "$OLD_TXT" ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+            line=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            case "$line" in
+                \#*|"") continue ;;
+                *:*)
+                    s=$(echo "$line" | cut -d: -f1 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+                    p=$(echo "$line" | cut -d: -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+                    if [ -n "$s" ]; then
+                        save_network_credential "$s" "$p"
+                    fi
+                    ;;
+            esac
+        done < "$OLD_TXT"
+        rm -f "$OLD_TXT"
+        sync
+    fi
+    if [ -f "$PAK_DIR/wifi.txt" ]; then
+        rm -f "$PAK_DIR/wifi.txt"
+    fi
+}
+
+save_network_credential() {
+    save_s="$1"
+    save_p="$2"
+    mkdir -p "$SECURE_NET_DIR"
+    chmod 700 "$SECURE_NET_DIR" 2>/dev/null
+    TMP_CONF="/tmp/netconf.tmp"
+    rm -f "$TMP_CONF"
+    touch "$TMP_CONF"
+    if [ -f "$SECURE_NET_CONF" ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+            case "$line" in
+                NET:*)
+                    enc_s=$(echo "$line" | cut -d: -f2)
+                    s=$(decode_cred "$enc_s")
+                    if [ "$s" != "$save_s" ]; then
+                        echo "$line" >> "$TMP_CONF"
+                    fi
+                    ;;
+                *)
+                    echo "$line" >> "$TMP_CONF"
+                    ;;
+            esac
+        done < "$SECURE_NET_CONF"
+    else
+        echo "# Cannelloni Secure Network Storage" >> "$TMP_CONF"
+    fi
+    enc_s=$(encode_cred "$save_s")
+    enc_p=$(encode_cred "$save_p")
+    echo "NET:${enc_s}:${enc_p}" >> "$TMP_CONF"
+    mv "$TMP_CONF" "$SECURE_NET_CONF"
+    chmod 600 "$SECURE_NET_CONF" 2>/dev/null
+    sync
+}
+
+delete_network_credential() {
+    del_s="$1"
+    [ ! -f "$SECURE_NET_CONF" ] && return
+    TMP_CONF="/tmp/netconf.tmp"
+    rm -f "$TMP_CONF"
+    touch "$TMP_CONF"
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            NET:*)
+                enc_s=$(echo "$line" | cut -d: -f2)
+                s=$(decode_cred "$enc_s")
+                if [ "$s" != "$del_s" ]; then
+                    echo "$line" >> "$TMP_CONF"
+                fi
+                ;;
+            *)
+                echo "$line" >> "$TMP_CONF"
+                ;;
+        esac
+    done < "$SECURE_NET_CONF"
+    mv "$TMP_CONF" "$SECURE_NET_CONF"
+    chmod 600 "$SECURE_NET_CONF" 2>/dev/null
+    sync
+}
+
+get_network_password() {
+    target_s="$1"
+    [ ! -f "$SECURE_NET_CONF" ] && return
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            NET:*)
+                enc_s=$(echo "$line" | cut -d: -f2)
+                s=$(decode_cred "$enc_s")
+                if [ "$s" = "$target_s" ]; then
+                    enc_p=$(echo "$line" | cut -d: -f3)
+                    decode_cred "$enc_p"
+                    return
+                fi
+                ;;
+        esac
+    done < "$SECURE_NET_CONF"
+}
+
+get_all_saved_networks() {
+    migrate_legacy_wifi_txt
+    [ ! -f "$SECURE_NET_CONF" ] && return
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            NET:*)
+                enc_s=$(echo "$line" | cut -d: -f2)
+                decode_cred "$enc_s"
+                echo ""
+                ;;
+        esac
+    done < "$SECURE_NET_CONF"
+}
+
+has_saved_networks() {
+    migrate_legacy_wifi_txt
+    [ ! -s "$SECURE_NET_CONF" ] && return 1
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            NET:*)
+                return 0
+                ;;
+        esac
+    done < "$SECURE_NET_CONF"
+    return 1
+}
+
+
 get_ssid_and_ip() {
     enabled="$(cat /sys/class/net/wlan0/operstate)"
     if [ "$enabled" != "up" ]; then
@@ -147,12 +291,7 @@ saved_networks_screen() {
     rm -f "$cannelloni_list_file" "/tmp/cannelloni-output"
     touch "$cannelloni_list_file"
 
-    if [ ! -f "$SDCARD_PATH/wifi.txt" ]; then
-        show_message "No wifi.txt file found" 2
-        return 1
-    fi
-
-    sed '/^#/d; /^$/d; s/:.*//' "$SDCARD_PATH/wifi.txt" >"$cannelloni_list_file"
+    get_all_saved_networks | sed '/^$/d' >"$cannelloni_list_file"
 
     if [ ! -s "$cannelloni_list_file" ]; then
         show_message "No saved networks found" 2
@@ -167,12 +306,7 @@ password_screen() {
     SSID="$1"
 
     rm -f "/tmp/cannelloni-output"
-    touch "$SDCARD_PATH/wifi.txt"
-
-    initial_password=""
-    if grep -q "^$SSID:" "$SDCARD_PATH/wifi.txt" 2>/dev/null; then
-        initial_password="$(grep "^$SSID:" "$SDCARD_PATH/wifi.txt" | cut -d':' -f2- | xargs)"
-    fi
+    initial_password="$(get_network_password "$SSID")"
 
     killall cannelloni-presenter >/dev/null 2>&1 || true
     cannelloni-keyboard --title "Enter Password" --initial-value "$initial_password" --write-location /tmp/cannelloni-output
@@ -194,15 +328,7 @@ password_screen() {
         return 1
     fi
 
-    touch "$SDCARD_PATH/wifi.txt"
-
-    if grep -q "^$SSID:" "$SDCARD_PATH/wifi.txt" 2>/dev/null; then
-        sed -i "/^$SSID:/d" "$SDCARD_PATH/wifi.txt"
-    fi
-
-    echo "$SSID:$password" >"$SDCARD_PATH/wifi.txt.tmp"
-    cat "$SDCARD_PATH/wifi.txt" >>"$SDCARD_PATH/wifi.txt.tmp"
-    mv "$SDCARD_PATH/wifi.txt.tmp" "$SDCARD_PATH/wifi.txt"
+    save_network_credential "$SSID" "$password"
     return 0
 }
 
@@ -278,66 +404,46 @@ write_config() {
         cp "$PAK_DIR/res/netplan.yaml.tmpl" "$PAK_DIR/res/netplan.yaml"
     fi
 
-    if [ ! -f "$SDCARD_PATH/wifi.txt" ] && [ -f "$PAK_DIR/wifi.txt" ]; then
-        mv "$PAK_DIR/wifi.txt" "$SDCARD_PATH/wifi.txt"
-    fi
-
-    touch "$SDCARD_PATH/wifi.txt"
-    sed -i '/^$/d' "$SDCARD_PATH/wifi.txt"
-    # exit non-zero if no wifi.txt file or empty
-    if [ ! -s "$SDCARD_PATH/wifi.txt" ]; then
-        echo "No credentials found in wifi.txt"
-    fi
+    migrate_legacy_wifi_txt
 
     if [ "$ENABLING_WIFI" = "true" ]; then
         has_passwords=false
         priority_used=false
-        echo "" >>"$SDCARD_PATH/wifi.txt"
-        while read -r line; do
-            line="$(echo "$line" | xargs)"
-            if [ -z "$line" ]; then
-                continue
-            fi
 
-            # skip if line starts with a comment
-            if echo "$line" | grep -q "^#"; then
-                continue
-            fi
-
-            # skip if line is not in the format "ssid:psk"
-            if ! echo "$line" | grep -q ":"; then
-                continue
-            fi
-
-            ssid="$(echo "$line" | cut -d: -f1 | xargs)"
-            psk="$(echo "$line" | cut -d: -f2- | xargs)"
-            if [ -z "$ssid" ]; then
-                continue
-            fi
-
-            has_passwords=true
-
-            {
-                echo "network={"
-                echo "    ssid=\"$ssid\""
-                if [ "$priority_used" = false ]; then
-                    echo "    priority=1"
-                    priority_used=true
-                fi
-                if [ -z "$psk" ]; then
-                    echo "    key_mgmt=NONE"
-                else
-                    echo "    psk=\"$psk\""
-                fi
-                echo "}"
-            } >>"$PAK_DIR/res/wpa_supplicant.conf"
-            if [ "$PLATFORM" = "rg35xxplus" ]; then
-                {
-                    echo "                \"$ssid\":"
-                    echo "                    password: \"$psk\""
-                } >>"$PAK_DIR/res/netplan.yaml"
-            fi
-        done <"$SDCARD_PATH/wifi.txt"
+        if [ -f "$SECURE_NET_CONF" ]; then
+            while IFS= read -r line || [ -n "$line" ]; do
+                case "$line" in
+                    NET:*)
+                        enc_s=$(echo "$line" | cut -d: -f2)
+                        enc_p=$(echo "$line" | cut -d: -f3)
+                        ssid=$(decode_cred "$enc_s")
+                        psk=$(decode_cred "$enc_p")
+                        [ -z "$ssid" ] && continue
+                        has_passwords=true
+                        {
+                            echo "network={"
+                            echo "    ssid=\"$ssid\""
+                            if [ "$priority_used" = false ]; then
+                                echo "    priority=1"
+                                priority_used=true
+                            fi
+                            if [ -z "$psk" ]; then
+                                echo "    key_mgmt=NONE"
+                            else
+                                echo "    psk=\"$psk\""
+                            fi
+                            echo "}"
+                        } >>"$PAK_DIR/res/wpa_supplicant.conf"
+                        if [ "$PLATFORM" = "rg35xxplus" ]; then
+                            {
+                                echo "                \"$ssid\":"
+                                echo "                    password: \"$psk\""
+                            } >>"$PAK_DIR/res/netplan.yaml"
+                        fi
+                        ;;
+                esac
+            done < "$SECURE_NET_CONF"
+        fi
     fi
 
     if [ "$PLATFORM" = "miyoomini" ]; then
@@ -363,35 +469,7 @@ write_config() {
 }
 
 has_credentials() {
-    if [ ! -s "$SDCARD_PATH/wifi.txt" ]; then
-        return 1
-    fi
-
-    while read -r line; do
-        line="$(echo "$line" | xargs)"
-        if [ -z "$line" ]; then
-            continue
-        fi
-
-        # skip if line starts with a comment
-        if echo "$line" | grep -q "^#"; then
-            continue
-        fi
-
-        # skip if line is not in the format "ssid:psk"
-        if ! echo "$line" | grep -q ":"; then
-            continue
-        fi
-
-        ssid="$(echo "$line" | cut -d: -f1 | xargs)"
-        if [ -z "$ssid" ]; then
-            continue
-        fi
-
-        return 0
-    done <"$SDCARD_PATH/wifi.txt"
-
-    return 1
+    has_saved_networks
 }
 
 wifi_off() {
@@ -419,7 +497,7 @@ wifi_on() {
     fi
 
     if ! has_credentials; then
-        show_message "No credentials found in wifi.txt" 2
+        show_message "No saved Wi-Fi networks found" 2
         return 0
     fi
 
@@ -460,8 +538,8 @@ forget_network_loop() {
         fi
 
         SSID="$(cat /tmp/cannelloni-output)"
-        # remove the SSID from the wifi.txt file
-        sed -i "/^$SSID:/d" "$SDCARD_PATH/wifi.txt"
+        # remove the SSID from the secure network config
+        delete_network_credential "$SSID"
         if ! write_config "true"; then
             show_message "Failed to write wireless config" 2
             break

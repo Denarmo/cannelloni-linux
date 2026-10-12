@@ -19,7 +19,9 @@ fi
 
 # If not connected yet, try bringing Wi-Fi up cleanly
 if [ -z "$IP" ] || [ "$IP" = "127.0.0.1" ]; then
-	WIFI_ON="/mnt/SDCARD/Settings/miyoomini/Wi-Fi.pak/bin/service-on"
+	WIFI_ON="/mnt/SDCARD/Settings/$PLATFORM/Wi-Fi.pak/bin/service-on"
+	[ ! -f "$WIFI_ON" ] && WIFI_ON="/mnt/SDCARD/Settings/miyoomini/Wi-Fi.pak/bin/service-on"
+	[ ! -f "$WIFI_ON" ] && WIFI_ON="/mnt/SDCARD/Tools/$PLATFORM/Wi-Fi.pak/bin/service-on"
 	[ ! -f "$WIFI_ON" ] && WIFI_ON="/mnt/SDCARD/Tools/miyoomini/Wi-Fi.pak/bin/service-on"
 	if [ -f "$WIFI_ON" ]; then
 		/bin/sh "$WIFI_ON" >/dev/null 2>&1

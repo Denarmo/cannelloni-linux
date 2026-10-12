@@ -250,15 +250,9 @@ def build_release():
         name = item.filename
         data = in_minui_zip.read(name)
 
-        # Rename MinUI.pak -> Cannelloni.pak
+        # Skip MinUI.pak entries from upstream as they are superseded by skeleton Cannelloni.pak
         if "paks/MinUI.pak" in name:
-            name = name.replace("paks/MinUI.pak", "paks/Cannelloni.pak")
-            if name.endswith("launch.sh"):
-                content = data.decode("utf-8", errors="ignore")
-                content = content.replace("minui.elf", "cannelloni.elf")
-                content = content.replace("/tmp/minui_exec", "/tmp/cannelloni_exec")
-                content = content.replace(".minui", ".cannelloni")
-                data = content.encode("utf-8")
+            continue
 
         # Update any minui references in scripts
         if (name.endswith(".sh") or name.endswith(".txt")) and name != ".system/version.txt":
@@ -447,11 +441,57 @@ def build_release():
             zinfo_pa.external_attr = 0o755 << 16
             out_cannelloni_zip.writestr(zinfo_pa, accent_sh_bytes)
 
-    # Default accent color and emulator configurations in Cannelloni.zip
+    # Add common shaders into .system/common/shaders/
+    shaders_dir = "skeleton/SYSTEM/common/shaders"
+    if os.path.isdir(shaders_dir):
+        add_dir_to_zip(out_cannelloni_zip, shaders_dir, ".system/common/shaders", set())
+
+    # Add network_store.sh across common and platforms
+    net_sh_path = "skeleton/SYSTEM/common/network_store.sh"
+    if os.path.isfile(net_sh_path):
+        with open(net_sh_path, "rb") as f:
+            net_sh_bytes = f.read()
+        for dest in [".system/common/network_store.sh", ".system/bin/network_store.sh"] + [f".system/{p}/bin/network_store.sh" for p in platforms]:
+            zi_net = zipfile.ZipInfo(dest)
+            zi_net.compress_type = zipfile.ZIP_DEFLATED
+            zi_net.external_attr = 0o755 << 16
+            out_cannelloni_zip.writestr(zi_net, net_sh_bytes)
+
+    # Add device_select.sh across common and platforms
+    dev_sh_path = "skeleton/SYSTEM/common/device_select.sh"
+    if os.path.isfile(dev_sh_path):
+        with open(dev_sh_path, "rb") as f:
+            dev_sh_bytes = f.read()
+        for dest in [".system/common/device_select.sh", ".system/bin/device_select.sh"] + [f".system/{p}/bin/device_select.sh" for p in platforms]:
+            zi_dev = zipfile.ZipInfo(dest)
+            zi_dev.compress_type = zipfile.ZIP_DEFLATED
+            zi_dev.external_attr = 0o755 << 16
+            out_cannelloni_zip.writestr(zi_dev, dev_sh_bytes)
+
+    # Add updated Cannelloni.pak across all platforms from skeleton
+    for p in platforms:
+        pak_dir = f"skeleton/SYSTEM/{p}/paks/Cannelloni.pak"
+        if os.path.isdir(pak_dir):
+            add_dir_to_zip(out_cannelloni_zip, pak_dir, f".system/{p}/paks/Cannelloni.pak", set())
+
+    # Add cannelloni-list across all platforms from skeleton if present
+    for p in platforms:
+        list_file = f"skeleton/SYSTEM/{p}/bin/cannelloni-list"
+        if os.path.isfile(list_file):
+            with open(list_file, "rb") as f:
+                l_bytes = f.read()
+            zi_l = zipfile.ZipInfo(f".system/{p}/bin/cannelloni-list")
+            zi_l.compress_type = zipfile.ZIP_DEFLATED
+            zi_l.external_attr = 0o755 << 16
+            out_cannelloni_zip.writestr(zi_l, l_bytes)
+
+    # Default accent color, emulator, and shader configurations in Cannelloni.zip
     out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/accent_color.txt", b"#f1c40f\n")
     out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/.current_accent", b"#f1c40f\n")
     out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/emu_nds.txt", b"libretro\n")
     out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/button_swap.txt", b"default\n")
+    out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/shader_preset.txt", b"crt-cannelloni\n")
+    out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/shader_scope.txt", b"all\n")
 
     in_minui_zip.close()
     out_cannelloni_zip.close()
@@ -615,6 +655,19 @@ def build_release():
         written_entries.add(".userdata/shared/.cannelloni/emu_nds.txt")
         out_zip.writestr(".userdata/shared/.cannelloni/button_swap.txt", b"default\n")
         written_entries.add(".userdata/shared/.cannelloni/button_swap.txt")
+        out_zip.writestr(".userdata/shared/.cannelloni/shader_preset.txt", b"crt-cannelloni\n")
+        written_entries.add(".userdata/shared/.cannelloni/shader_preset.txt")
+        out_zip.writestr(".userdata/shared/.cannelloni/shader_scope.txt", b"all\n")
+        written_entries.add(".userdata/shared/.cannelloni/shader_scope.txt")
+
+        # 6b. Add dmenu.bin directly to root of unified archive for RG35XX Plus/H/SP TF1 cards
+        if "dmenu.bin" not in written_entries:
+            dmenu_bytes = build_dmenu_rg35xxplus()
+            zinfo_dm = zipfile.ZipInfo("dmenu.bin")
+            zinfo_dm.compress_type = zipfile.ZIP_DEFLATED
+            zinfo_dm.external_attr = 0o755 << 16
+            out_zip.writestr(zinfo_dm, dmenu_bytes)
+            written_entries.add("dmenu.bin")
 
         # 7. Add Nonna's Kitchen tool pak across all platforms
         for p in platforms:

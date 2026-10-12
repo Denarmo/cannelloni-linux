@@ -41,14 +41,9 @@ To exit Splore.pak, press start. In-game select "EXIT TO SPLORE". With a cart se
 Please note that Splore.pak and P8-NATIVE.pak don't/can't implement Cannelloni's uniform features like the in-game menu (including save states), faux sleep, and quicksave/auto-resume.
 
 ----------------------------------------
-Wi-Fi.pak (RGB30-only)
+Wi-Fi.pak
 
-Open "wifi.txt" in a plain text editor and enter your network name and password on two separate lines and save, eg.
-
-  cannelloni
-  lessismore
-
-Copy "Wi-Fi.pak" to "/Tools/rgb30/" on your SD card. The first time you open the pak (or any time you change the contents of "wifi.txt") it will update the network name and password then connect. Subsequent launches will toggle wi-fi on and off. Wi-fi will drain the battery so it's best to only enable it when you plan to use it and disable it when you're done. Your Wi-fi state persists across reboots.
+Network credentials are encrypted and stored safely at `.userdata/shared/.cannelloni/network.conf` rather than plain text in the SD card root. Configure and save Wi-Fi networks directly using the Settings > Wi-Fi application. Your Wi-Fi state persists across reboots.
 
 ----------------------------------------
 Remove Loading.pak (Miyoo A30)

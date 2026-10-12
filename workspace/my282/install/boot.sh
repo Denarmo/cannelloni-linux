@@ -4,6 +4,12 @@
 PLATFORM="my282"
 SDCARD_PATH="/mnt/SDCARD"
 UPDATE_PATH="$SDCARD_PATH/Cannelloni.zip"
+if [ ! -f "$UPDATE_PATH" ]; then
+	FOUND_ZIP=$(ls "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip 2>/dev/null | head -n1)
+	if [ -n "$FOUND_ZIP" ] && [ -f "$FOUND_ZIP" ]; then
+		UPDATE_PATH="$FOUND_ZIP"
+	fi
+fi
 SYSTEM_PATH="$SDCARD_PATH/.system"
 
 CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor

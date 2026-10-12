@@ -6,93 +6,45 @@ https://github.com/Denarmo/cannelloni-linux
 ----------------------------------------
 Installing
 
-PREFACE
+UNIVERSAL ONE-ZIP INSTALLATION
 
-Cannelloni has two essential parts: an installer/updater zip archive named "Cannelloni.zip" and a bootstrap file or folder with names that vary by platform.
+Cannelloni features a universal single-zip installation method. You are no longer required to identify or manually copy device-specific folders!
 
-On devices that support two SD cards (eg. RG35XX) I will use the name "TF1" to refer to the card that goes into slot one of the device. All other instances of "SD card" or "primary card" refer to the card that goes into the second slot or to the sole SD card of devices that only support a single card. To be able to use Cannelloni from a single SD card on multiple devices you must install it on the second card of devices that support two SD cards.
+1. Format your SD card as FAT32 (MBR).
+2. Simply extract the unified Cannelloni release zip (or copy the release zip / Cannelloni.zip) directly to the root of your SD card.
+   - All bootstrap files (.tmp_update, miyoo, trimui, dmenu.bin, etc.) and system packages are bundled together.
+3. Insert the SD card into your device and power it on.
+4. On initial boot, Cannelloni presents an interactive on-screen Device Selector.
+   - Use the D-pad to highlight your console model and press A (INSTALL).
+   - Cannelloni will automatically configure the exact hardware drivers, display settings, and platform files.
+5. If you ever want to reconfigure your hardware or switch devices, simply navigate to Settings -> Device Model.
 
-The primary card should be a reputable brand and freshly formatted as FAT32 (MBR).
+SUPPORTED HARDWARE:
+- Miyoo Mini (v1 / v2 / v3)
+- Miyoo Mini Plus (v4 / Wi-Fi)
+- Miyoo A30 (my282)
+- Miyoo Flip (my355)
+- TrimUI Smart
+- TrimUI Smart Pro
+- TrimUI Brick
+- Anbernic RG35XX (Original)
+- Anbernic RG35XX Plus / H / SP / CubeXX / 28XX
+- Powkiddy RGB30
+- MagicX XU Mini M
+- MagicX Mini Zero 28
+- GKD Pixel
+- M17
 
-CAVEATS
+TWO-CARD DEVICES (RG35XX / RGB30 / MagicX):
+- For devices using two SD cards, the primary Cannelloni installation goes on the TF2 card.
+- For RG35XX Plus/H/SP, dmenu.bin is included in the root of the archive and can be placed on the TF1 card.
 
-While Cannelloni can be updated from any device once installed, some devices require (minor) changes to NAND or TF1 (via the aforementioned bootstrap file or folder) and therefore need to be installed from the specific device before using. The same is true when trying to use an existing card in a new device of the same type. When in doubt, follow the installation instructions; if all the necessary bits are already installed, the installer will just act as an updater instead.
-
-ALL
-
-Preload the "Bios" and "Roms" folders then copy both to the root of your primary card.
-
-RGB30
-
-Cannelloni is meant to be used with Moss installed on the SD card that goes into the left slot (labeled TF-OS) of the RGB30. Download and flash the latest version:
-
-	https://github.com/shauninman/Moss/releases
-
-Copy "Cannelloni.zip" (without unzipping) to the root of the SD card that goes into the right slot (labeled TFGAME) of the RGB30.
-
-MAGICX XU MINI M
-
-Cannelloni is meant to be used with a heavily modified stock SD card that goes into the left slot (labeled TF1/INT). Download and flash the latest version:
-
-	https://github.com/shauninman/Moss-magicmini/releases
-
-Copy "Cannelloni.zip" (without unzipping) to the root of the SD card that goes into the right slot (labeled TF2/EXT).
-
-MAGICX MINI ZERO 28
-
-Cannelloni is meant to be used with Moss installed on the SD card that goes into the left slot (labeled TF1/INT). Download and flash the latest version:
-
-	https://github.com/shauninman/Moss-zero28/releases
-
-Copy the "magicx" folder and "Cannelloni.zip" (without unzipping) to the root of the SD card that goes into the right slot (labeled TF2/EXT).
-
-TRIMUI SMART / TRIMUI SMART PRO / TRIMUI BRICK
-
-Copy the "trimui" folder and "Cannelloni.zip" (without unzipping) to the root of the SD card.
-
-MIYOO MINI / MIYOO A30
-
-Copy the "miyoo" folder and "Cannelloni.zip" (without unzipping) to the root of the SD card.
-
-MIYOO MINI PLUS
-
-Copy the "miyoo354" folder and "Cannelloni.zip" (without unzipping) to the root of the SD card.
-
-If you have a device with working RTC, you can enable it by creating an empty file named "enable-rtc" (no extension) in "/.userdata/miyoomini/".
-
-MIYOO FLIP
-
-Copy the "miyoo355" folder and "Cannelloni.zip" (without unzipping) to the root of the SD card. Put the SD card into the right slot (beneath the power button).
-
-MIYOO MINI FLIP
-
-Copy the "miyoo285" folder and "Cannelloni.zip" (without unzipping) to the root of the SD card.
-
-M17
-
-Copy the "em_ui.sh" file and "Cannelloni.zip" (without unzipping) to the root of the SD card.
-
-RG35XX PLUS / RG35XX H / RG35XX 2024 / RG28XX / RG35XXSP / RG40XXH / RGCUBEXX / RG34XX / RG34XXSP
-
-Cannelloni is meant to be installed over a fresh copy of the stock Anbernic firmware. You can use the stock TF1 card, reports of its poor quality are greatly exaggerated and, as long as you are using the recommended two card setup, no userdata is stored on it. (Note that the PLUS/H/2024/SP stock TF1 is not compatible with the 28XX/40XXH and vice versa.)
-
-Copy "/rg35xxplus/dmenu.bin" (just the file) to the root of the "NO NAME" partition (FAT32 with an "anbernic" folder) of the TF1 card. Copy "Cannelloni.zip" (without unzipping) to the root of the TF2 card.
-
-GKD PIXEL / GKD MINI
-
-An important caveat: this device is not cross-compatible with other Cannelloni-supported devices because its firmware lives on the SD card and its presence trips up all the other devices.
-
-Backup your stock SD card (not just the "ROMS" partition but the entire thing). If you like to live on the edge just create a folder named "stock" on the "ROMS" partition and copy everything into that folder.
-
-Copy the "gkdpixel" folder and "Cannelloni.zip" (without unzipping) to the root of the "ROMS" partition of the SD card. (On the GKD Mini should be TF1.)
-
-Boot stock, navigate to the "APP" folder and launch "file manager". Then use the d-pad and A button to navigate to "/media/roms/gkdpixel". Highlight the "install.sh" file and press A to open a menu and select "Execute" to install Cannelloni.
-
-RG35XX (original)
-
-Cannelloni is meant to be installed over a fresh copy of the stock Anbernic firmware. You can use the stock TF1 card, reports of its poor quality are greatly exaggerated and, as long as you are using the recommended two card setup, no userdata is stored on it.
-
-Copy "/rg35xx/dmenu.bin" (just the file) to the root of the MISC partition of the TF1 card. Copy "Cannelloni.zip" (without unzipping) to the root of the TF2 card.
+FEATURES & SETTINGS:
+- Shaders: 12 high-performance CRT, scanline, and LCD shaders from Denarmo/cannelloni, configurable under Settings -> Shaders.
+- Secure Wi-Fi: Network credentials are obfuscated and stored securely in .userdata/shared/.cannelloni/network.conf with 0600 permissions.
+- Theme Accents: Solid accent colors configurable under Settings -> Accent Color.
+- Emulators: Choose between Libretro core and DraStic for NDS under Settings -> Emulators.
+- Button Swapping: Swap A/B and X/Y under Settings -> Button Mapping.
 
 ----------------------------------------
 Updating

@@ -7,6 +7,12 @@ SYSTEM_FRAG=/.system/magicmini
 UPDATE_FRAG=/Cannelloni.zip
 SYSTEM_PATH=${SDCARD_PATH}${SYSTEM_FRAG}
 UPDATE_PATH=${SDCARD_PATH}${UPDATE_FRAG}
+if [ ! -f "$UPDATE_PATH" ]; then
+	FOUND_ZIP=$(ls "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip 2>/dev/null | head -n1)
+	if [ -n "$FOUND_ZIP" ] && [ -f "$FOUND_ZIP" ]; then
+		UPDATE_PATH="$FOUND_ZIP"
+	fi
+fi
 
 # is there an update available?
 if [ -f $UPDATE_PATH ]; then

@@ -6,6 +6,13 @@ echo "=== [$(date +'%Y-%m-%d %H:%M:%S')] .tmp_update/miyoomini.sh triggered ==="
 PLATFORM="miyoomini"
 SDCARD_PATH="/mnt/SDCARD"
 UPDATE_PATH="$SDCARD_PATH/Cannelloni.zip"
+if [ ! -f "$UPDATE_PATH" ]; then
+	FOUND_ZIP=$(ls "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip 2>/dev/null | head -n1)
+	if [ -n "$FOUND_ZIP" ] && [ -f "$FOUND_ZIP" ]; then
+		echo "Found update package: $FOUND_ZIP"
+		UPDATE_PATH="$FOUND_ZIP"
+	fi
+fi
 SYSTEM_PATH="$SDCARD_PATH/.system"
 
 echo "UPDATE_PATH: $UPDATE_PATH (exists: $([ -f "$UPDATE_PATH" ] && echo YES || echo NO))"
@@ -69,6 +76,15 @@ if [ -f "$UPDATE_PATH" ]; then
 		chmod +x "$SYSTEM_PATH/$PLATFORM/bin/install.sh" 2>/dev/null
 		"$SYSTEM_PATH/$PLATFORM/bin/install.sh"
 		echo "install.sh finished with code $?"
+	fi
+	sync
+
+	# Prompt user to choose hardware model on installation if needed
+	DEV_SELECT="$SYSTEM_PATH/common/device_select.sh"
+	[ ! -f "$DEV_SELECT" ] && DEV_SELECT="$SYSTEM_PATH/bin/device_select.sh"
+	if [ -f "$DEV_SELECT" ]; then
+		chmod +x "$DEV_SELECT" 2>/dev/null
+		"$DEV_SELECT"
 	fi
 	sync
 

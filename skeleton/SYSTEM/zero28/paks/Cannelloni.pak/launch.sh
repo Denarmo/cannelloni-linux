@@ -22,6 +22,18 @@ mkdir -p "$USERDATA_PATH"
 mkdir -p "$LOGS_PATH"
 mkdir -p "$SHARED_USERDATA_PATH/.cannelloni"
 
+# On first boot / install, prompt user to select their device model if not yet configured
+DEVICE_MODEL_TXT="$SHARED_USERDATA_PATH/.cannelloni/device_model.txt"
+if [ ! -f "$DEVICE_MODEL_TXT" ]; then
+    DEV_SELECT="$SDCARD_PATH/.system/common/device_select.sh"
+    [ ! -f "$DEV_SELECT" ] && DEV_SELECT="$SDCARD_PATH/.system/bin/device_select.sh"
+    if [ -f "$DEV_SELECT" ]; then
+        chmod +x "$DEV_SELECT" 2>/dev/null
+        "$DEV_SELECT"
+    fi
+fi
+
+
 #######################################
 
 export LD_LIBRARY_PATH=$SYSTEM_PATH/lib:$LD_LIBRARY_PATH
