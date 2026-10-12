@@ -21,8 +21,8 @@ def make_bootlogo(w, h, logo_h=None, rotate_deg=0, mode="RGB", quantize_colors=N
     lw = int(logo_cropped.width * (lh / logo_cropped.height))
     scaled = logo_cropped.resize((lw, lh), Image.Resampling.LANCZOS)
     
-    title_text = "Canneloni"
-    sub_text = "A fork of MinUI and Cannoli"
+    title_text = "Cannelloni"
+    sub_text = "forked from MinUI/Cannoli"
     
     title_size = max(8, int(28 * scale))
     sub_size = max(6, int(15 * scale))

@@ -71,6 +71,28 @@ if [ -f "$UPDATE_PATH" ]; then
 		echo "install.sh finished with code $?"
 	fi
 	sync
+
+	# Flash official Cannelloni boot logo to SPI flash if available
+	USERDATA_PATH="$SDCARD_PATH/.userdata/$PLATFORM"
+	mkdir -p "$USERDATA_PATH"
+	BOOTLOGO_FLAG="$USERDATA_PATH/.bootlogo_flashed"
+	if [ ! -f "$BOOTLOGO_FLAG" ] && [ -e "/dev/mtd3" ]; then
+		if [ -f "$SYSTEM_PATH/$PLATFORM/dat/image1.jpg" ] && [ -x "$SYSTEM_PATH/$PLATFORM/bin/logowrite.elf" ]; then
+			echo "Flashing Cannelloni boot logo to SPI flash (/dev/mtd3)..."
+			TMP_FLASH="/tmp/bootlogo_flash"
+			mkdir -p "$TMP_FLASH"
+			cd "$TMP_FLASH"
+			"$SYSTEM_PATH/$PLATFORM/bin/logoread.elf" >/dev/null 2>&1
+			cp -f "$SYSTEM_PATH/$PLATFORM/dat/image1.jpg" ./image1.jpg 2>/dev/null
+			if "$SYSTEM_PATH/$PLATFORM/bin/logomake.elf" >/dev/null 2>&1 && "$SYSTEM_PATH/$PLATFORM/bin/logowrite.elf" >/dev/null 2>&1; then
+				echo "Cannelloni boot logo flashed successfully!"
+				touch "$BOOTLOGO_FLAG"
+			fi
+			cd "$SDCARD_PATH"
+			rm -rf "$TMP_FLASH"
+		fi
+	fi
+	sync
 fi
 
 # or launch (and keep launched)

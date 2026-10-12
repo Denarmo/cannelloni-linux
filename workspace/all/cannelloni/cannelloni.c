@@ -1707,7 +1707,7 @@ int main (int argc, char *argv[]) {
 				}
 
 				char* labels[] = {
-					"Canneloni",
+					"Cannelloni",
 					"Nonna's Kitchen",
 					"Wi-Fi",
 					"Accent Color",
@@ -1716,7 +1716,7 @@ int main (int argc, char *argv[]) {
 				};
 
 				char* values[] = {
-					"A fork of MinUI and Cannoli",
+					"forked from MinUI/Cannoli",
 					kitchen_info,
 					wifi_info,
 					(char*)accent_name,

@@ -49,27 +49,88 @@ def add_dir_to_zip(zout, src_dir, zip_prefix, written_entries):
             zout.writestr(zinfo, data)
             written_entries.add(dest)
 
-def patch_arm32_gold(data):
-    """Patches ARM32 ELF binaries so RGB_WHITE is initialized to #f1c40f (Cannelloni Gold).
-    This ensures SDL_FillRect in GFX_blitPill and GFX_blitBar renders 100% solid gold
+def patch_binary_accent_color(data, r=0xf1, g=0xc4, b=0x0f):
+    """Patches ARM32, AArch64, and MIPS ELF binaries so RGB_WHITE is initialized to (r, g, b).
+    This ensures SDL_FillRect in GFX_blitPill and GFX_blitBar renders 100% solid accent color
     in the center rather than white."""
-    b = bytearray(data)
-    for i in range(0, len(b) - 48, 4):
-        w1 = struct.unpack('<I', b[i:i+4])[0]
-        if w1 == 0xe3a030ff:  # MOV r3, #0xff
-            w2_off = -1
-            w3_off = -1
-            for j in range(i+4, min(i+48, len(b)-4), 4):
-                w = struct.unpack('<I', b[j:j+4])[0]
-                if w == 0xe1a02003:  # MOV r2, r3
-                    w2_off = j
-                elif w == 0xe1a01003:  # MOV r1, r3
-                    w3_off = j
-            if w2_off != -1 and w3_off != -1:
-                b[i:i+4] = struct.pack('<I', 0xe3a0300f)      # MOV r3, #0x0f (Blue = 15)
-                b[w2_off:w2_off+4] = struct.pack('<I', 0xe3a020c4)  # MOV r2, #0xc4 (Green = 196)
-                b[w3_off:w3_off+4] = struct.pack('<I', 0xe3a010f1)  # MOV r1, #0xf1 (Red = 241)
-    return bytes(b)
+    if not data.startswith(b'\x7fELF') or len(data) < 52:
+        return data
+    barr = bytearray(data)
+    e_machine = struct.unpack('<H', barr[18:20])[0]
+    
+    # ARM32 (EM_ARM = 40 = 0x28)
+    if e_machine == 40:
+        pos = 0
+        while True:
+            idx_gray = barr.find(b'\x7f\x30\xa0\xe3', pos)
+            if idx_gray == -1:
+                break
+            pos = idx_gray + 4
+            for off in range(max(0, idx_gray - 140), idx_gray, 4):
+                w = struct.unpack('<I', barr[off:off+4])[0]
+                if (w & 0xffffff00) == 0xe3a03000:
+                    w2_off, w3_off = -1, -1
+                    for j in range(off+4, min(off+48, idx_gray), 4):
+                        wj = struct.unpack('<I', barr[j:j+4])[0]
+                        if wj == 0xe1a02003 or (wj & 0xffffff00) == 0xe3a02000:
+                            w2_off = j
+                        elif wj == 0xe1a01003 or (wj & 0xffffff00) == 0xe3a01000:
+                            w3_off = j
+                    if w2_off != -1 and w3_off != -1:
+                        barr[off:off+4] = struct.pack('<I', 0xe3a03000 | b)
+                        barr[w2_off:w2_off+4] = struct.pack('<I', 0xe3a02000 | g)
+                        barr[w3_off:w3_off+4] = struct.pack('<I', 0xe3a01000 | r)
+                        break
+
+    # AArch64 (EM_AARCH64 = 183 = 0xb7)
+    elif e_machine == 183:
+        pos = 0
+        while True:
+            idx_gray = barr.find(struct.pack('<I', 0x52800fe3), pos)
+            if idx_gray == -1:
+                break
+            pos = idx_gray + 4
+            for off in range(max(0, idx_gray - 140), idx_gray, 4):
+                w = struct.unpack('<I', barr[off:off+4])[0]
+                if w == 0x12800003 or (w & 0xffe0001f) == 0x52800003:
+                    w2_off, w3_off = -1, -1
+                    for j in range(off+4, min(off+48, idx_gray), 4):
+                        wj = struct.unpack('<I', barr[j:j+4])[0]
+                        if wj == 0x2a0303e2 or (wj & 0xffe0001f) == 0x52800002:
+                            w2_off = j
+                        elif wj == 0x2a0303e1 or (wj & 0xffe0001f) == 0x52800001:
+                            w3_off = j
+                    if w2_off != -1 and w3_off != -1:
+                        barr[off:off+4] = struct.pack('<I', 0x52800003 | (b << 5))
+                        barr[w2_off:w2_off+4] = struct.pack('<I', 0x52800002 | (g << 5))
+                        barr[w3_off:w3_off+4] = struct.pack('<I', 0x52800001 | (r << 5))
+                        break
+
+    # MIPS (EM_MIPS = 8)
+    elif e_machine == 8:
+        pos = 0
+        while True:
+            idx_gray = barr.find(struct.pack('<I', 0x2405007f), pos)
+            if idx_gray == -1:
+                break
+            pos = idx_gray + 4
+            for off in range(max(0, idx_gray - 140), idx_gray, 4):
+                w1 = struct.unpack('<I', barr[off:off+4])[0]
+                if (w1 & 0xffff0000) == 0x24050000:
+                    w2_off, w3_off = -1, -1
+                    for j in range(off+4, min(off+32, idx_gray), 4):
+                        wj = struct.unpack('<I', barr[j:j+4])[0]
+                        if (wj & 0xffff0000) == 0x24060000 and w2_off == -1:
+                            w2_off = j
+                        elif (wj & 0xffff0000) == 0x24070000 and w3_off == -1:
+                            w3_off = j
+                    if w2_off != -1 and w3_off != -1:
+                        barr[off:off+4] = struct.pack('<I', 0x24050000 | r)
+                        barr[w2_off:w2_off+4] = struct.pack('<I', 0x24060000 | g)
+                        barr[w3_off:w3_off+4] = struct.pack('<I', 0x24070000 | b)
+                        break
+
+    return bytes(barr)
 
 def patch_minui_settings(data, platform):
     """Patches minui.elf so that /mnt/SDCARD/Settings/<platform> is discovered and
@@ -91,20 +152,15 @@ def patch_minui_settings(data, platform):
     return bytes(b)
 
 def patch_about_page(data, name):
-    """Patches minui.elf to display Canneloni and 'A fork of MinUI and Cannoli' on the About page."""
+    """Patches minui.elf to display About and Fork labels on the About page.
+    Leaves the version.txt path completely untouched to prevent any crash."""
     b = bytearray(data)
-    idx = b.find(b"Release\x00Commit")
+    idx = b.find(b"Release\x00Commit\x00\x00")
     if idx != -1:
-        if "miyoomini" in name and b[idx-4:idx] == b"\x00\x00\x00\x00":
-            # Miyoo Mini: change "Release" pointer from 0xb1a0 to 0xb19c, write Canneloni\0\0\0Version\0
-            b[idx-4 : idx+8] = b"Canneloni\x00\x00\x00"
-            b[idx+8 : idx+16] = b"Version\x00"
-            if b[0x3470:0x3474] == struct.pack('<I', 0xe30b11a0):
-                b[0x3470:0x3474] = struct.pack('<I', 0xe30b119c)
-        else:
-            b[idx : idx+8] = b"About\x00\x00\x00"
-            b[idx+8 : idx+16] = b"Version\x00"
+        b[idx : idx+8] = b"About\x00\x00\x00"
+        b[idx+8 : idx+16] = b"Fork\x00\x00\x00\x00"
     return bytes(b)
+
 
 def build_dmenu_rg35xxplus():
     """Builds RG35XX Plus/H/SP/CubeXX/28XX dmenu.bin with official Cannelloni assets."""
@@ -219,11 +275,23 @@ def build_release():
 
         # Update version.txt
         if name == ".system/version.txt":
-            data = f"A fork of MinUI and Cannoli\n{RELEASE_NAME}\n".encode("utf-8")
+            data = b"Cannelloni\nforked from MinUI/Cannoli\n"
 
-        # Patch ARM32 binaries to bake in Cannelloni Gold (#f1c40f) for selection pills and slider bars
+        # Update dat boot logo files with official Cannelloni assets
+        if name == ".system/miyoomini/dat/image1.jpg":
+            img1_path = "skeleton/SYSTEM/miyoomini/dat/image1.jpg"
+            if os.path.isfile(img1_path):
+                with open(img1_path, "rb") as fp:
+                    data = fp.read()
+        elif name == ".system/trimuismart/dat/logo.bmp":
+            l_path = "skeleton/SYSTEM/trimuismart/dat/logo.bmp"
+            if os.path.isfile(l_path):
+                with open(l_path, "rb") as fp:
+                    data = fp.read()
+
+        # Patch ELF binaries to bake in Cannelloni Gold (#f1c40f) for selection pills and slider bars
         if name.endswith("/bin/minui.elf") or name.endswith("/bin/minarch.elf"):
-            data = patch_arm32_gold(data)
+            data = patch_binary_accent_color(data, 241, 196, 15)
 
         # Patch About page and Settings menu hook into ELF
         if name.endswith("/bin/minui.elf"):
@@ -291,6 +359,79 @@ def build_release():
     if os.path.isdir(themes_dir):
         add_dir_to_zip(out_cannelloni_zip, themes_dir, ".system/res/themes", set())
 
+    # Pre-generate pre-patched theme binaries for each theme in .system/res/themes/{hex}/bin/{p}/
+    print("Pre-generating theme binaries for all accent colors...")
+    THEME_COLORS = [
+        ("#f1c40f", 241, 196, 15),
+        ("#e74c3c", 231, 76, 60),
+        ("#2ecc71", 46, 204, 113),
+        ("#3498db", 52, 152, 219),
+        ("#9b59b6", 155, 89, 182),
+        ("#e67e22", 230, 126, 34),
+        ("#ffffff", 255, 255, 255),
+    ]
+    for p in platforms:
+        minui_path = f".system/{p}/bin/minui.elf"
+        minarch_path = f".system/{p}/bin/minarch.elf"
+        if minui_path in in_minui_zip.namelist() and minarch_path in in_minui_zip.namelist():
+            raw_minui = in_minui_zip.read(minui_path)
+            raw_minarch = in_minui_zip.read(minarch_path)
+            base_minui = patch_about_page(raw_minui, minui_path)
+            if p == "miyoomini":
+                base_minui = patch_minui_settings(base_minui, "miyoomini")
+            base_minarch = raw_minarch
+
+            raw_list = None
+            list_path = f"skeleton/EXTRAS/Settings/{p}/Wi-Fi.pak/bin/{p}/cannelloni-list"
+            if not os.path.isfile(list_path):
+                list_path = f"skeleton/EXTRAS/Settings/miyoomini/Wi-Fi.pak/bin/{p}/cannelloni-list"
+            if os.path.isfile(list_path):
+                with open(list_path, "rb") as fp:
+                    raw_list = fp.read()
+
+            for hex_code, tr, tg, tb in THEME_COLORS:
+                thm_minui = patch_binary_accent_color(base_minui, tr, tg, tb)
+                thm_minarch = patch_binary_accent_color(base_minarch, tr, tg, tb)
+
+                zi = zipfile.ZipInfo(f".system/res/themes/{hex_code}/bin/{p}/cannelloni.elf")
+                zi.compress_type = zipfile.ZIP_DEFLATED
+                zi.external_attr = 0o755 << 16
+                out_cannelloni_zip.writestr(zi, thm_minui)
+
+                zi = zipfile.ZipInfo(f".system/res/themes/{hex_code}/bin/{p}/minui.elf")
+                zi.compress_type = zipfile.ZIP_DEFLATED
+                zi.external_attr = 0o755 << 16
+                out_cannelloni_zip.writestr(zi, thm_minui)
+
+                zi = zipfile.ZipInfo(f".system/res/themes/{hex_code}/bin/{p}/minarch.elf")
+                zi.compress_type = zipfile.ZIP_DEFLATED
+                zi.external_attr = 0o755 << 16
+                out_cannelloni_zip.writestr(zi, thm_minarch)
+
+                if raw_list:
+                    thm_list = patch_binary_accent_color(raw_list, tr, tg, tb)
+                    zi = zipfile.ZipInfo(f".system/res/themes/{hex_code}/bin/{p}/cannelloni-list")
+                    zi.compress_type = zipfile.ZIP_DEFLATED
+                    zi.external_attr = 0o755 << 16
+                    out_cannelloni_zip.writestr(zi, thm_list)
+
+                    zi = zipfile.ZipInfo(f".system/res/themes/{hex_code}/bin/{p}/minui-list")
+                    zi.compress_type = zipfile.ZIP_DEFLATED
+                    zi.external_attr = 0o755 << 16
+                    out_cannelloni_zip.writestr(zi, thm_list)
+
+    # Bundle bootlogo flashing tools and image into .system/miyoomini/
+    for lf in ["logoread.elf", "logomake.elf", "logowrite.elf"]:
+        lp = f"skeleton/SYSTEM/miyoomini/bin/{lf}"
+        if os.path.isfile(lp):
+            with open(lp, "rb") as f:
+                l_bytes = f.read()
+            zi = zipfile.ZipInfo(f".system/miyoomini/bin/{lf}")
+            zi.compress_type = zipfile.ZIP_DEFLATED
+            zi.external_attr = 0o755 << 16
+            out_cannelloni_zip.writestr(zi, l_bytes)
+
+
     # Add apply_accent_color.sh script across all platforms
     accent_sh_path = "skeleton/SYSTEM/common/apply_accent_color.sh"
     if os.path.isfile(accent_sh_path):
@@ -322,7 +463,7 @@ def build_release():
     print(f"Writing {OUT_UNIFIED_ZIP}...")
     written_entries = set()
 
-    allowed_tools = {"Clock.pak", "Files.pak", "Input.pak", "IP.pak", "Nonna's Kitchen.pak"}
+    allowed_tools = {"Clock.pak", "Files.pak", "Input.pak", "IP.pak", "Nonna's Kitchen.pak", "Bootlogo.pak"}
 
     with zipfile.ZipFile(SRC_BASE_ZIP, "r") as base_in, \
          zipfile.ZipFile(SRC_EXTRAS_ZIP, "r") as ext_in, \
@@ -440,8 +581,22 @@ def build_release():
             except UnicodeDecodeError:
                 pass
 
-            out_zip.writestr(item, data)
+            if name.endswith(".elf"):
+                data = patch_binary_accent_color(data, 241, 196, 15)
+
+            zinfo = zipfile.ZipInfo(name)
+            zinfo.compress_type = zipfile.ZIP_DEFLATED
+            if name.endswith(".sh") or name.endswith(".elf") or name.endswith(".bin"):
+                zinfo.external_attr = 0o755 << 16
+            else:
+                zinfo.external_attr = 0o644 << 16
+            out_zip.writestr(zinfo, data)
             written_entries.add(name)
+
+        # 4b. Add Bootlogo.pak for miyoomini from skeleton
+        blogo_dir = "skeleton/EXTRAS/Tools/miyoomini/Bootlogo.pak"
+        if os.path.isdir(blogo_dir):
+            add_dir_to_zip(out_zip, blogo_dir, "Tools/miyoomini/Bootlogo.pak", written_entries)
 
         # 5. Add Nintendo DS ROM & Bios folders
         if "Roms/Nintendo DS (NDS)/.keep" not in written_entries:

@@ -25,8 +25,9 @@ BODY = """# Cannelloni v20261012-0
 Welcome to Cannelloni for Linux handhelds (Anbernic, Miyoo, TrimUI, Powkiddy, MagicX, and GKD).
 
 ## What's New in this Release:
-- **Official Boot Logo**: Boot logo now reads **"Canneloni"** with subtitle **"A fork of MinUI and Cannoli"** across all handheld platforms.
-- **Attribution on About Page**: Pressing the Home (`MENU`) button opens the About page displaying **"Canneloni" - "A fork of MinUI and Cannoli"**.
+- **Official Boot Logo**: Centered cannelloni drawing with title **"Cannelloni"** and subtitle **"forked from MinUI/Cannoli"** across all handheld platforms, with automatic SPI flash programming on Miyoo Mini / Plus hardware.
+- **Attribution on About Page**: Pressing the Home (`MENU`) button displays **"Cannelloni"** and **"forked from MinUI/Cannoli"** cleanly without crashing.
+- **Seamless Accent Color Theming**: Pre-generated theme binary suites and spritesheets for 7 vibrant presets (Cannelloni Gold `#f1c40f`, Tomato Red, Basil Green, Sky Blue, and more) with solid matching selection pills across launcher, in-game menus, settings, and tools, completely eliminating re-boot lockups.
 - **Permissive Licensing**: Explicit licensing terms establishing that upstream code is copyright Shaun Inman / MinUI contributors, while all Cannelloni additions and modifications are licensed under the permissive MIT License for anyone to freely use.
 - **Unified Single-Zip Distribution**: All core systems, emulators, tools, and platform installers delivered in one unified archive (`Cannelloni-20261012-0.zip`).
 - **New Top-Level Settings Menu**: Direct access from the main screen to:

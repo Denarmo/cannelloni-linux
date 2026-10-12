@@ -9,6 +9,7 @@ SAY="/mnt/SDCARD/.system/$PLATFORM/bin/say.elf"
 
 # Locate cannelloni-list binary
 LIST_BIN="$SDCARD_PATH/Settings/$PLATFORM/Wi-Fi.pak/bin/$PLATFORM/cannelloni-list"
+[ ! -x "$LIST_BIN" ] && LIST_BIN="$SDCARD_PATH/.system/$PLATFORM/bin/cannelloni-list"
 [ ! -x "$LIST_BIN" ] && LIST_BIN="$SDCARD_PATH/Tools/$PLATFORM/Wi-Fi.pak/bin/$PLATFORM/cannelloni-list"
 [ ! -x "$LIST_BIN" ] && LIST_BIN="$PAK_DIR/../Wi-Fi.pak/bin/$PLATFORM/cannelloni-list"
 
@@ -58,39 +59,32 @@ esac
 
 echo "$HEX" > "$COLOR_FILE"
 
-# Apply theme assets and patch binaries
+# Apply theme assets safely
 APPLY_SH="$SDCARD_PATH/.system/bin/apply_accent_color.sh"
 if [ -f "$APPLY_SH" ]; then
     chmod +x "$APPLY_SH" 2>/dev/null
     "$APPLY_SH" "$HEX"
 else
-    # Inlined fallback
     THEME_DIR="$SDCARD_PATH/.system/res/themes/$HEX"
     RES_DIR="$SDCARD_PATH/.system/res"
     if [ -d "$THEME_DIR" ] && [ -d "$RES_DIR" ]; then
         cp -f "$THEME_DIR/assets@"*.png "$RES_DIR/" 2>/dev/null
     fi
-    case "$HEX" in
-        *"#e74c3c"*) R=231; G=76;  B=60  ;;
-        *"#2ecc71"*) R=46;  G=204; B=113 ;;
-        *"#3498db"*) R=52;  G=152; B=219 ;;
-        *"#9b59b6"*) R=155; G=89;  B=182 ;;
-        *"#e67e22"*) R=230; G=126; B=34  ;;
-        *"#ffffff"*) R=255; G=255; B=255 ;;
-        *)           R=241; G=196; B=15  ;;
-    esac
-    BIN_DIR="$SDCARD_PATH/.system/$PLATFORM/bin"
-    for b in "$BIN_DIR/cannelloni.elf" "$BIN_DIR/minui.elf"; do
-        if [ -f "$b" ]; then
-            printf "$(printf '\\x%02x\\x30\\xa0\\xe3' $B)" | dd of="$b" bs=1 seek=100424 count=4 conv=notrunc 2>/dev/null
-            printf "$(printf '\\x%02x\\x20\\xa0\\xe3' $G)" | dd of="$b" bs=1 seek=100432 count=4 conv=notrunc 2>/dev/null
-            printf "$(printf '\\x%02x\\x10\\xa0\\xe3' $R)" | dd of="$b" bs=1 seek=100436 count=4 conv=notrunc 2>/dev/null
-        fi
-    done
+    BIN_SRC="$THEME_DIR/bin/$PLATFORM"
+    BIN_DST="$SDCARD_PATH/.system/$PLATFORM/bin"
+    if [ -d "$BIN_SRC" ] && [ -d "$BIN_DST" ]; then
+        cp -f "$BIN_SRC/"* "$BIN_DST/" 2>/dev/null
+        chmod +x "$BIN_DST/"* 2>/dev/null
+    fi
+    WIFI_BIN="$SDCARD_PATH/Settings/$PLATFORM/Wi-Fi.pak/bin/$PLATFORM"
+    if [ -d "$BIN_SRC" ] && [ -d "$WIFI_BIN" ]; then
+        [ -f "$BIN_SRC/cannelloni-list" ] && cp -f "$BIN_SRC/cannelloni-list" "$WIFI_BIN/" 2>/dev/null
+        [ -f "$BIN_SRC/minui-list" ] && cp -f "$BIN_SRC/minui-list" "$WIFI_BIN/" 2>/dev/null
+        chmod +x "$WIFI_BIN/"* 2>/dev/null
+    fi
+    echo "$HEX" > "$CURRENT_FILE"
+    sync
 fi
-
-echo "$HEX" > "$CURRENT_FILE"
-sync
 
 $SAY "Accent Color set to $HEX!
 Restarting interface..."

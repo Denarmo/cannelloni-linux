@@ -59,6 +59,23 @@ export MY_MODEL=`strings -n 5 /customer/app/MainUI | grep MY` # 0.13s
 MIYOO_VERSION=`/etc/fw_printenv miyoo_version`
 export MIYOO_VERSION=${MIYOO_VERSION#miyoo_version=}
 
+# Auto-flash official Cannelloni boot logo to SPI flash (/dev/mtd3) if not yet flashed
+BOOTLOGO_FLAG="$USERDATA_PATH/.bootlogo_flashed"
+if [ ! -f "$BOOTLOGO_FLAG" ] && [ -e "/dev/mtd3" ]; then
+	if [ -f "$SYSTEM_PATH/dat/image1.jpg" ] && [ -x "$SYSTEM_PATH/bin/logowrite.elf" ]; then
+		TMP_FLASH="/tmp/bootlogo_flash"
+		mkdir -p "$TMP_FLASH"
+		cd "$TMP_FLASH"
+		"$SYSTEM_PATH/bin/logoread.elf" >/dev/null 2>&1
+		cp -f "$SYSTEM_PATH/dat/image1.jpg" ./image1.jpg 2>/dev/null
+		if "$SYSTEM_PATH/bin/logomake.elf" >/dev/null 2>&1 && "$SYSTEM_PATH/bin/logowrite.elf" >/dev/null 2>&1; then
+			touch "$BOOTLOGO_FLAG"
+		fi
+		cd "$SYSTEM_PATH"
+		rm -rf "$TMP_FLASH"
+	fi
+fi
+
 #######################################
 
 # killall tee # NOTE: killing tee is somehow responsible for audioserver crashes
