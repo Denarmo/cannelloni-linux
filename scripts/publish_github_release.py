@@ -25,8 +25,9 @@ BODY = """# Cannelloni v20261012-0
 Welcome to Cannelloni for Linux handhelds (Anbernic, Miyoo, TrimUI, Powkiddy, MagicX, and GKD).
 
 ## What's New in this Release:
-- **Official Cannelloni Boot Logo**: Integrated the official Cannelloni logo across all handheld boot sequences, startup logos, and action screens.
-- **Full Brand Replacement**: Cleaned and replaced all mentions of MinUI with Cannelloni across code, scripts, binaries (`cannelloni-list`, `cannelloni-keyboard`, `cannelloni-presenter`), and documentation.
+- **Official Boot Logo**: Boot logo now reads **"Canneloni"** with subtitle **"A fork of MinUI and Cannoli"** across all handheld platforms.
+- **Attribution on About Page**: Pressing the Home (`MENU`) button opens the About page displaying **"Canneloni" - "A fork of MinUI and Cannoli"**.
+- **Permissive Licensing**: Explicit licensing terms establishing that upstream code is copyright Shaun Inman / MinUI contributors, while all Cannelloni additions and modifications are licensed under the permissive MIT License for anyone to freely use.
 - **Unified Single-Zip Distribution**: All core systems, emulators, tools, and platform installers delivered in one unified archive (`Cannelloni-20261012-0.zip`).
 - **New Top-Level Settings Menu**: Direct access from the main screen to:
   - **Wi-Fi**: Connect to wireless networks, view IP, and toggle auto-start on boot directly on-device.
@@ -35,9 +36,8 @@ Welcome to Cannelloni for Linux handhelds (Anbernic, Miyoo, TrimUI, Powkiddy, Ma
   - **Emulators**: Choose preferred emulators per console (e.g. Libretro DeSmuME vs standalone DraStic for Nintendo DS).
 - **Nonna's Kitchen (Web Dashboard)**: Wireless HTTP management service on port `1091` matching Android Cannelloni. Connect with any web browser to view storage, browse files, and drag-and-drop upload ROMs, BIOS, and Saves.
 - **Curated Tools Section**: Focused strictly on essential utilities: `Clock`, `Files`, `Input`, `IP`, and `Nonna's Kitchen`.
-- **Full Cannelloni Gold UI (#f1c40f)**: Uniform gold accent theming across all UI components, button badges `(A)`/`(B)`, battery fill and charging bolt, Wi-Fi icon, volume and brightness indicators, and selection pills across all screen scales (1x through 4x).
+- **Full Cannelloni Gold UI (#f1c40f)**: Uniform gold accent theming across all UI components, button badges `(A)`/`(B)`, battery fill and charging bolt, Wi-Fi icon, volume and brightness indicators, and solid gold selection pills across all screen scales (1x through 4x).
 - **Nintendo DS Emulation**: Libretro core implementation with in-game menu (`MENU` button) and save state support, alongside optional standalone DraStic.
-- **Clean Installer**: Cleaned up production installation scripts.
 
 ## Installation:
 1. Download **`Cannelloni-20261012-0.zip`**.

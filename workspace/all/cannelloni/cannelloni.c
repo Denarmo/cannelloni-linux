@@ -128,12 +128,12 @@ static void cycle_accent(int direction) {
 }
 
 enum {
-	SETTING_KITCHEN = 0,
+	SETTING_ABOUT = 0,
+	SETTING_KITCHEN,
 	SETTING_WIFI,
 	SETTING_ACCENT,
 	SETTING_MODEL,
 	SETTING_RELEASE,
-	SETTING_COMMIT,
 	SETTING_COUNT
 };
 static int setting_selected = 0;
@@ -1707,21 +1707,21 @@ int main (int argc, char *argv[]) {
 				}
 
 				char* labels[] = {
-					"Nonna's Kitchen (FTP)",
+					"Canneloni",
+					"Nonna's Kitchen",
 					"Wi-Fi",
 					"Accent Color",
 					"Model",
-					"Release",
-					"Commit"
+					"Release"
 				};
 
 				char* values[] = {
+					"A fork of MinUI and Cannoli",
 					kitchen_info,
 					wifi_info,
 					(char*)accent_name,
 					PLAT_getModel(),
-					release_str,
-					commit_str
+					release_str
 				};
 
 				for (int j = 0; j < SETTING_COUNT; j++) {

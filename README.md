@@ -8,11 +8,10 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL%20v3-blue.svg?style=for-the-badge&labelColor=E8C896&color=555555" height="28" alt="License: GPLv3"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT%20/%20Permissive-blue.svg?style=for-the-badge&labelColor=E8C896&color=555555" height="28" alt="License: MIT"></a>
   <a href="https://github.com/Denarmo/cannelloni-linux/releases"><img src="https://img.shields.io/badge/Release-v20261012--0-orange.svg?style=for-the-badge&labelColor=E8C896&color=555555" height="28" alt="Latest Release"></a>
   <a href="LEGAL.md"><img src="https://img.shields.io/badge/Legal-Notices-green.svg?style=for-the-badge&labelColor=E8C896&color=555555" height="28" alt="Legal Notices"></a>
   <a href="#-supported-devices"><img src="https://img.shields.io/badge/Platform-Linux%20Handhelds-brightgreen.svg?style=for-the-badge&labelColor=E8C896&color=555555" height="28" alt="Linux Handhelds"></a>
-  <a href="https://ko-fi.com/denarmo"><img src="https://img.shields.io/badge/Ko--fi-Support-F1C40F.svg?style=for-the-badge&logo=kofi&logoColor=black" height="28" alt="Support on Ko-fi"></a>
   <a href="https://discord.com"><img src="https://img.shields.io/badge/Discord-@denarmo-5865F2.svg?style=for-the-badge&logo=discord&logoColor=white" height="28" alt="Discord @denarmo"></a>
 </p>
 
@@ -185,13 +184,18 @@ For an itemized list of licenses and attributions, see [credits.json](credits.js
 
 ---
 
-## ☕ Support & 💬 Contact
+## 💬 Contact & Community
 
-- **Support on Ko-fi:** If you enjoy Cannelloni and want to support ongoing development, consider buying me a coffee on **[Ko-fi (ko-fi.com/denarmo)](https://ko-fi.com/denarmo)**.
 - **Discord:** For questions, feedback, or general contact, reach out directly on Discord at **`@denarmo`**.
+- **GitHub Issues:** Report bugs or suggest feature enhancements via the [Issues tracker](https://github.com/Denarmo/cannelloni-linux/issues).
 
 ---
 
-## 📄 License
+## 📄 License & Attribution
 
-Cannelloni is distributed as free, open-source software under the terms of the **[GNU General Public License v3.0 (GPL-3.0)](LICENSE)**.
+Cannelloni is a fork and continuation of **MinUI** (by Shaun Inman) with inspiration from **Cannoli** (by CannoliHQ). 
+
+- **Upstream Ownership**: The maintainer (Denarmo) is not the original owner of the upstream MinUI codebase or bundled emulators. All rights and copyrights in the original MinUI code are retained by Shaun Inman and upstream contributors. Bundled Libretro cores and third-party libraries remain under their respective original licenses.
+- **Cannelloni Additions & Modifications**: All new code, tools, web services, themes, documentation, and enhancements created for Cannelloni by Denarmo and contributors are licensed under the **[MIT License](LICENSE)** and may be freely used, modified, and incorporated by others.
+
+For complete details, please refer to the **[LICENSE](LICENSE)** file.

@@ -11,22 +11,70 @@ bbox = logo.getbbox()
 logo_cropped = logo.crop(bbox)
 
 def make_bootlogo(w, h, logo_h=None, rotate_deg=0, mode="RGB", quantize_colors=None):
-    """Generates a boot logo image centered on a black background."""
-    if logo_h is None:
-        logo_h = int(min(w, h) * 0.32)
-    logo_w = int(logo_cropped.width * (logo_h / logo_cropped.height))
-    scaled = logo_cropped.resize((logo_w, logo_h), Image.Resampling.LANCZOS)
-    if quantize_colors:
-        scaled = scaled.quantize(colors=quantize_colors).convert("RGBA")
-    
+    """Generates a boot logo image centered on a black background reading 'Canneloni' and 'A fork of MinUI and Cannoli'."""
     canvas_w = w if rotate_deg in (0, 180) else h
     canvas_h = h if rotate_deg in (0, 180) else w
+    
+    scale = min(canvas_w / 640.0, canvas_h / 480.0)
+    base_h = logo_h if logo_h is not None else int(min(canvas_w, canvas_h) * 0.32)
+    lh = max(16, int(base_h * 0.75))
+    lw = int(logo_cropped.width * (lh / logo_cropped.height))
+    scaled = logo_cropped.resize((lw, lh), Image.Resampling.LANCZOS)
+    
+    title_text = "Canneloni"
+    sub_text = "A fork of MinUI and Cannoli"
+    
+    title_size = max(8, int(28 * scale))
+    sub_size = max(6, int(15 * scale))
+    
+    font_title = ImageFont.truetype(FONT_PATH, title_size)
+    font_sub = ImageFont.truetype(FONT_PATH, sub_size)
+    
+    # Ensure subtitle fits within 92% of canvas width
+    while sub_size > 5:
+        tb = font_sub.getbbox(sub_text)
+        if (tb[2] - tb[0]) <= canvas_w * 0.92:
+            break
+        sub_size -= 1
+        font_sub = ImageFont.truetype(FONT_PATH, sub_size)
+        
+    while title_size > 6:
+        tb = font_title.getbbox(title_text)
+        if (tb[2] - tb[0]) <= canvas_w * 0.92:
+            break
+        title_size -= 1
+        font_title = ImageFont.truetype(FONT_PATH, title_size)
+
+    tb_t = font_title.getbbox(title_text)
+    tw_t = tb_t[2] - tb_t[0]
+    th_t = tb_t[3] - tb_t[1]
+
+    tb_s = font_sub.getbbox(sub_text)
+    tw_s = tb_s[2] - tb_s[0]
+    th_s = tb_s[3] - tb_s[1]
+
+    gap1 = max(2, int(10 * scale))
+    gap2 = max(2, int(6 * scale))
+
+    total_h = lh + gap1 + th_t + gap2 + th_s
+    start_y = max(0, (canvas_h - total_h) // 2)
+
     bg = Image.new(mode, (canvas_w, canvas_h), (0, 0, 0, 255) if mode == "RGBA" else (0, 0, 0))
-    
-    lx = (bg.width - scaled.width) // 2
-    ly = (bg.height - scaled.height) // 2
-    bg.paste(scaled, (lx, ly), scaled)
-    
+    lx = (canvas_w - lw) // 2
+    bg.paste(scaled, (lx, start_y), scaled)
+
+    draw = ImageDraw.Draw(bg)
+    tx_t = (canvas_w - tw_t) // 2 - tb_t[0]
+    ty_t = start_y + lh + gap1 - tb_t[1]
+    draw.text((tx_t, ty_t), title_text, font=font_title, fill=(255, 255, 255))
+
+    tx_s = (canvas_w - tw_s) // 2 - tb_s[0]
+    ty_s = start_y + lh + gap1 + th_t + gap2 - tb_s[1]
+    draw.text((tx_s, ty_s), sub_text, font=font_sub, fill=(205, 205, 205))
+
+    if quantize_colors:
+        bg = bg.quantize(colors=quantize_colors).convert("RGBA")
+
     if rotate_deg != 0:
         bg = bg.rotate(rotate_deg, expand=True)
     return bg

@@ -90,6 +90,22 @@ def patch_minui_settings(data, platform):
             print("Patched Settings menu hook into miyoomini ELF!")
     return bytes(b)
 
+def patch_about_page(data, name):
+    """Patches minui.elf to display Canneloni and 'A fork of MinUI and Cannoli' on the About page."""
+    b = bytearray(data)
+    idx = b.find(b"Release\x00Commit")
+    if idx != -1:
+        if "miyoomini" in name and b[idx-4:idx] == b"\x00\x00\x00\x00":
+            # Miyoo Mini: change "Release" pointer from 0xb1a0 to 0xb19c, write Canneloni\0\0\0Version\0
+            b[idx-4 : idx+8] = b"Canneloni\x00\x00\x00"
+            b[idx+8 : idx+16] = b"Version\x00"
+            if b[0x3470:0x3474] == struct.pack('<I', 0xe30b11a0):
+                b[0x3470:0x3474] = struct.pack('<I', 0xe30b119c)
+        else:
+            b[idx : idx+8] = b"About\x00\x00\x00"
+            b[idx+8 : idx+16] = b"Version\x00"
+    return bytes(b)
+
 def build_dmenu_rg35xxplus():
     """Builds RG35XX Plus/H/SP/CubeXX/28XX dmenu.bin with official Cannelloni assets."""
     with zipfile.ZipFile(SRC_BASE_ZIP) as z:
@@ -188,40 +204,8 @@ def build_release():
                 content = content.replace(".minui", ".cannelloni")
                 data = content.encode("utf-8")
 
-        # Update version.txt
-        if name == ".system/version.txt":
-            data = f"{RELEASE_NAME}\n{COMMIT_HASH}\n".encode("utf-8")
-
-        # Update .tmp_update/miyoomini.sh with updated boot script
-        if name == ".tmp_update/miyoomini.sh":
-            with open("workspace/miyoomini/install/boot.sh", "rb") as f:
-                data = f.read()
-
-        # Update platform Cannelloni.pak launch.sh from skeleton
-        for p in platforms:
-            if name == f".system/{p}/paks/Cannelloni.pak/launch.sh":
-                plat_launch = f"skeleton/SYSTEM/{p}/paks/Cannelloni.pak/launch.sh"
-                if os.path.isfile(plat_launch):
-                    with open(plat_launch, "rb") as f:
-                        data = f.read()
-
-        # Overwrite assets@*.png with our tinted Cannelloni gold #f1c40f spritesheet
-        if name.startswith(".system/res/assets@") and name.endswith(".png"):
-            local_res = os.path.join("skeleton/SYSTEM/res", os.path.basename(name))
-            if os.path.isfile(local_res):
-                with open(local_res, "rb") as f:
-                    data = f.read()
-
-        # Inject Cannelloni boot logo assets into Cannelloni.zip
-        if name == ".system/miyoomini/dat/image1.jpg":
-            with open("skeleton/SYSTEM/miyoomini/dat/image1.jpg", "rb") as f:
-                data = f.read()
-        if name == ".system/trimuismart/dat/logo.bmp":
-            with open("skeleton/SYSTEM/trimuismart/dat/logo.bmp", "rb") as f:
-                data = f.read()
-
         # Update any minui references in scripts
-        if name.endswith(".sh") or name.endswith(".txt"):
+        if (name.endswith(".sh") or name.endswith(".txt")) and name != ".system/version.txt":
             try:
                 content = data.decode("utf-8")
                 content = content.replace("MinUI.pak", "Cannelloni.pak")
@@ -233,13 +217,19 @@ def build_release():
             except UnicodeDecodeError:
                 pass
 
+        # Update version.txt
+        if name == ".system/version.txt":
+            data = f"A fork of MinUI and Cannoli\n{RELEASE_NAME}\n".encode("utf-8")
+
         # Patch ARM32 binaries to bake in Cannelloni Gold (#f1c40f) for selection pills and slider bars
         if name.endswith("/bin/minui.elf") or name.endswith("/bin/minarch.elf"):
             data = patch_arm32_gold(data)
 
-        # Patch Settings menu hook into miyoomini ELF
-        if name == ".system/miyoomini/bin/minui.elf":
-            data = patch_minui_settings(data, "miyoomini")
+        # Patch About page and Settings menu hook into ELF
+        if name.endswith("/bin/minui.elf"):
+            data = patch_about_page(data, name)
+            if name == ".system/miyoomini/bin/minui.elf":
+                data = patch_minui_settings(data, "miyoomini")
 
         # Ensure cannelloni.elf exists alongside minui.elf
         if name.endswith("/bin/minui.elf"):

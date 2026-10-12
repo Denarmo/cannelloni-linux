@@ -1,0 +1,57 @@
+# Cannelloni License & Terms of Use
+
+Cannelloni is an open-source, lightweight retro gaming launcher and libretro frontend designed for Linux handheld devices.
+
+---
+
+## 1. Upstream Code & Original Ownership
+
+Cannelloni is a fork and continuation of **MinUI** (originally developed by Shaun Inman) and draws conceptual inspiration from **Cannoli** (developed by CannoliHQ).
+
+The maintainer of this fork (Denarmo) is **not** the original owner or creator of the underlying upstream codebase. All original rights, copyrights, and intellectual property from upstream projects belong to their respective creators:
+
+- **MinUI Frontend & Framework**:
+  Copyright (c) Shaun Inman and MinUI Contributors.
+  Original Repository: https://github.com/shauninman/MinUI
+  All original MinUI code remains credited to Shaun Inman and contributors.
+
+- **Cannoli Frontend Inspiration**:
+  Copyright (c) CannoliHQ and Cannoli Contributors.
+  Original Repository: https://github.com/CannoliHQ/cannoli
+
+- **Third-Party Cores, Toolchains, and Libraries**:
+  All bundled emulators, Libretro cores (including melonDS, DeSmuME, PCSX ReARMed, Snes9x, mGBA, Nestopia, Gambatte, Genesis Plus GX, FBNeo, etc.), SDL, FreeType, libpng, and device-specific utilities are copyrighted by their respective authors and licensed under their original licenses (GPL-2.0, GPL-3.0, LGPL, MIT, or custom permissive licenses as noted in their source trees).
+
+---
+
+## 2. Cannelloni Modifications & New Contributions
+
+All new modifications, enhancements, bug fixes, scripts, assets, web services (including Nonna's Kitchen), dynamic theming engines, and packaging authored specifically for **Cannelloni** by Denarmo are provided under the permissive terms of the **MIT License**:
+
+Copyright (c) 2026 Denarmo and Cannelloni Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## 3. Summary of Rights for Downstream Users and Developers
+
+- **Freedom to Use & Modify**: You are free to inspect, run, modify, fork, and distribute this software and my contributions without artificial restrictions.
+- **Attribution**: You must preserve original copyright notices and credit Shaun Inman and respective contributors for their foundational work.
+- **No Claim of Upstream Ownership**: Neither this fork nor its maintainers claim exclusive ownership over upstream MinUI or third-party emulator components.
