@@ -58,6 +58,8 @@ extern uint32_t RGB_BLACK;
 extern uint32_t RGB_LIGHT_GRAY;
 extern uint32_t RGB_GRAY;
 extern uint32_t RGB_DARK_GRAY;
+extern uint32_t RGB_ACCENT;
+extern SDL_Color COLOR_ACCENT_CURRENT;
 
 enum {
 	ASSET_WHITE_PILL,
@@ -181,6 +183,9 @@ int GFX_wrapText(TTF_Font* font, char* str, int max_width, int max_lines);
 
 scaler_t GFX_getAAScaler(GFX_Renderer* renderer);
 void GFX_freeAAScaler(void);
+
+void GFX_setAccentColor(uint8_t r, uint8_t g, uint8_t b);
+void GFX_loadAccentColor(void);
 
 // NOTE: all dimensions should be pre-scaled
 void GFX_blitAsset(int asset, SDL_Rect* src_rect, SDL_Surface* dst, SDL_Rect* dst_rect);

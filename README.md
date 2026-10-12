@@ -7,7 +7,9 @@ Cannelloni is a focused, custom launcher and libretro frontend for [a variety of
 ## Features
 
 - Simple launcher, simple SD card
-- No settings or configuration
+- Default #f1c40f Gold accent color with customizable themes
+- Nonna's Kitchen wireless FTP file transfer solution
+- Interactive settings menu with Wi-Fi status and configuration
 - No boxart, themes, or distractions
 - Automatically hides hidden files
   and extension and region/version 
@@ -46,6 +48,7 @@ Base:
 - Game Boy Advance
 - Nintendo Entertainment System
 - Super Nintendo Entertainment System
+- Nintendo DS (melonDS)
 - Sega Genesis
 - PlayStation
 

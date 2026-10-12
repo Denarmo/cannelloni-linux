@@ -54,6 +54,8 @@ system:
 	cp ./workspace/all/say/build/$(PLATFORM)/say.elf ./build/SYSTEM/$(PLATFORM)/bin/
 	cp ./workspace/all/clock/build/$(PLATFORM)/clock.elf ./build/EXTRAS/Tools/$(PLATFORM)/Clock.pak/
 	cp ./workspace/all/minput/build/$(PLATFORM)/minput.elf ./build/EXTRAS/Tools/$(PLATFORM)/Input.pak/
+	cp ./workspace/all/kitchen/build/$(PLATFORM)/kitchen.elf ./build/SYSTEM/$(PLATFORM)/bin/
+	cp ./workspace/all/kitchen/build/$(PLATFORM)/kitchen.elf ./build/EXTRAS/Tools/$(PLATFORM)/Nonna\'s\ Kitchen.pak/
 
 cores: # TODO: can't assume every platform will have the same stock cores (platform should be responsible for copy too)
 	# stock cores
@@ -63,6 +65,7 @@ cores: # TODO: can't assume every platform will have the same stock cores (platf
 	cp ./workspace/$(PLATFORM)/cores/output/picodrive_libretro.so ./build/SYSTEM/$(PLATFORM)/cores
 	cp ./workspace/$(PLATFORM)/cores/output/snes9x2005_plus_libretro.so ./build/SYSTEM/$(PLATFORM)/cores
 	cp ./workspace/$(PLATFORM)/cores/output/pcsx_rearmed_libretro.so ./build/SYSTEM/$(PLATFORM)/cores
+	cp ./workspace/$(PLATFORM)/cores/output/melonds_libretro.so ./build/SYSTEM/$(PLATFORM)/cores
 	
 	# extras
 ifeq ($(PLATFORM), trimuismart)

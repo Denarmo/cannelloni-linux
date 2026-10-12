@@ -31,11 +31,14 @@
 #define RESUME_SLOT_PATH "/tmp/resume_slot.txt"
 #define NOUI_PATH "/tmp/noui"
 
+#define ACCENT_COLOR_PATH SHARED_USERDATA_PATH "/.cannelloni/accent_color.txt"
+
 #define TRIAD_WHITE 		0xff,0xff,0xff
 #define TRIAD_BLACK 		0x00,0x00,0x00
 #define TRIAD_LIGHT_GRAY 	0x7f,0x7f,0x7f
 #define TRIAD_GRAY 			0x99,0x99,0x99
 #define TRIAD_DARK_GRAY 	0x26,0x26,0x26
+#define TRIAD_ACCENT 		0xf1,0xc4,0x0f
 
 #define TRIAD_LIGHT_TEXT 	0xcc,0xcc,0xcc
 #define TRIAD_DARK_TEXT 	0x66,0x66,0x66
@@ -46,6 +49,7 @@
 #define COLOR_LIGHT_TEXT	(SDL_Color){TRIAD_LIGHT_TEXT}
 #define COLOR_DARK_TEXT		(SDL_Color){TRIAD_DARK_TEXT}
 #define COLOR_BUTTON_TEXT	(SDL_Color){TRIAD_GRAY}
+#define COLOR_ACCENT		(SDL_Color){TRIAD_ACCENT}
 
 // all before scale
 #define PILL_SIZE 30

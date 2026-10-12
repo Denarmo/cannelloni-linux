@@ -54,10 +54,13 @@ uint32_t RGB_BLACK;
 uint32_t RGB_LIGHT_GRAY;
 uint32_t RGB_GRAY;
 uint32_t RGB_DARK_GRAY;
+uint32_t RGB_ACCENT;
+SDL_Color COLOR_ACCENT_CURRENT = (SDL_Color){TRIAD_ACCENT};
 
 static struct GFX_Context {
 	SDL_Surface* screen;
 	SDL_Surface* assets;
+	SDL_Surface* assets_orig;
 
 	int mode;
 	int vsync;
@@ -89,6 +92,72 @@ static struct PWR_Context {
 ///////////////////////////////
 
 static int _;
+
+static void GFX_tintAssetRect(SDL_Rect rect, uint8_t r, uint8_t g, uint8_t b) {
+	if (!gfx.assets) return;
+	SDL_PixelFormat* fmt = gfx.assets->format;
+	SDL_LockSurface(gfx.assets);
+	for (int y = rect.y; y < rect.y + rect.h; y++) {
+		for (int x = rect.x; x < rect.x + rect.w; x++) {
+			uint8_t* p = (uint8_t*)gfx.assets->pixels + y * gfx.assets->pitch + x * fmt->BytesPerPixel;
+			uint8_t pr, pg, pb, pa;
+			uint32_t pixel = 0;
+			if (fmt->BytesPerPixel == 4) {
+				pixel = *(uint32_t*)p;
+			} else if (fmt->BytesPerPixel == 2) {
+				pixel = *(uint16_t*)p;
+			} else {
+				continue;
+			}
+			SDL_GetRGBA(pixel, fmt, &pr, &pg, &pb, &pa);
+			if (pa > 0) {
+				pr = (uint8_t)(((uint32_t)pr * r) / 255);
+				pg = (uint8_t)(((uint32_t)pg * g) / 255);
+				pb = (uint8_t)(((uint32_t)pb * b) / 255);
+				uint32_t new_pixel = SDL_MapRGBA(fmt, pr, pg, pb, pa);
+				if (fmt->BytesPerPixel == 4) {
+					*(uint32_t*)p = new_pixel;
+				} else if (fmt->BytesPerPixel == 2) {
+					*(uint16_t*)p = (uint16_t)new_pixel;
+				}
+			}
+		}
+	}
+	SDL_UnlockSurface(gfx.assets);
+}
+
+void GFX_setAccentColor(uint8_t r, uint8_t g, uint8_t b) {
+	COLOR_ACCENT_CURRENT = (SDL_Color){r, g, b};
+	if (gfx.screen) {
+		RGB_ACCENT = SDL_MapRGB(gfx.screen->format, r, g, b);
+		asset_rgbs[ASSET_WHITE_PILL] = RGB_ACCENT;
+		asset_rgbs[ASSET_BAR] = RGB_ACCENT;
+		asset_rgbs[ASSET_BUTTON] = RGB_ACCENT;
+	}
+	if (gfx.assets && gfx.assets_orig) {
+		SDL_BlitSurface(gfx.assets_orig, NULL, gfx.assets, NULL);
+		GFX_tintAssetRect(asset_rects[ASSET_WHITE_PILL], r, g, b);
+		GFX_tintAssetRect(asset_rects[ASSET_BAR], r, g, b);
+		GFX_tintAssetRect(asset_rects[ASSET_BUTTON], r, g, b);
+	}
+}
+
+void GFX_loadAccentColor(void) {
+	uint8_t r = 0xf1, g = 0xc4, b = 0x0f; // Default Cannelloni gold #f1c40f
+	if (exists(ACCENT_COLOR_PATH)) {
+		char hex[32] = {0};
+		getFile(ACCENT_COLOR_PATH, hex, sizeof(hex));
+		int tr, tg, tb;
+		if (sscanf(hex, "#%02x%02x%02x", &tr, &tg, &tb) == 3 ||
+		    sscanf(hex, "%02x%02x%02x", &tr, &tg, &tb) == 3 ||
+		    sscanf(hex, "%d,%d,%d", &tr, &tg, &tb) == 3) {
+			r = (uint8_t)tr;
+			g = (uint8_t)tg;
+			b = (uint8_t)tb;
+		}
+	}
+	GFX_setAccentColor(r, g, b);
+}
 
 SDL_Surface* GFX_init(int mode) {
 	// TODO: this doesn't really belong here...
@@ -150,6 +219,10 @@ SDL_Surface* GFX_init(int mode) {
 	sprintf(asset_path, RES_PATH "/assets@%ix.png", FIXED_SCALE);
 	if (!exists(asset_path)) LOG_info("missing assets, you're about to segfault dummy!\n");
 	gfx.assets = IMG_Load(asset_path);
+	if (gfx.assets) {
+		gfx.assets_orig = SDL_ConvertSurface(gfx.assets, gfx.assets->format, 0);
+	}
+	GFX_loadAccentColor();
 	
 	TTF_Init();
 	font.large 	= TTF_OpenFont(FONT_PATH, SCALE1(FONT_LARGE));
@@ -170,6 +243,7 @@ void GFX_quit(void) {
 	TTF_CloseFont(font.small);
 	TTF_CloseFont(font.tiny);
 	
+	if (gfx.assets_orig) SDL_FreeSurface(gfx.assets_orig);
 	SDL_FreeSurface(gfx.assets);
 	
 	GFX_freeAAScaler();

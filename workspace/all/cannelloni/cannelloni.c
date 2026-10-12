@@ -6,10 +6,137 @@
 #include <ctype.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 
 #include "defines.h"
 #include "api.h"
 #include "utils.h"
+
+///////////////////////////////////////
+
+#define KITCHEN_STATUS_PATH "/tmp/kitchen.status"
+
+static int is_kitchen_running(char* out_info, size_t max_len) {
+	if (exists(KITCHEN_STATUS_PATH)) {
+		char content[256] = {0};
+		getFile(KITCHEN_STATUS_PATH, content, sizeof(content));
+		char* ip_line = strstr(content, "ip=");
+		char* port_line = strstr(content, "port=");
+		char ip[64] = "127.0.0.1";
+		char port[16] = "2121";
+		if (ip_line) {
+			sscanf(ip_line, "ip=%63s", ip);
+		}
+		if (port_line) {
+			sscanf(port_line, "port=%15s", port);
+		}
+		if (out_info) {
+			snprintf(out_info, max_len, "Running (ftp://%s:%s)", ip, port);
+		}
+		return 1;
+	}
+	if (out_info) {
+		snprintf(out_info, max_len, "Stopped");
+	}
+	return 0;
+}
+
+static void toggle_kitchen(void) {
+	if (exists(KITCHEN_STATUS_PATH)) {
+		system("kitchen.elf --stop &");
+		unlink(KITCHEN_STATUS_PATH);
+	} else {
+		system("kitchen.elf --daemon &");
+	}
+}
+
+static int has_wifi_hardware(void) {
+	return exists("/sys/class/net/wlan0") || exists("/sys/class/net/wlan1") || PLAT_isOnline();
+}
+
+static void get_wifi_status(char* out_info, size_t max_len) {
+	if (!has_wifi_hardware()) {
+		snprintf(out_info, max_len, "Not Available");
+		return;
+	}
+	if (PLAT_isOnline()) {
+		char status[32] = {0};
+		getFile("/sys/class/net/wlan0/operstate", status, sizeof(status));
+		trimTrailingNewlines(status);
+		snprintf(out_info, max_len, "Connected (%s)", strlen(status) > 0 ? status : "Online");
+	} else {
+		snprintf(out_info, max_len, "Disconnected");
+	}
+}
+
+static void toggle_wifi(void) {
+	if (!has_wifi_hardware()) return;
+	if (PLAT_isOnline()) {
+		system("ifconfig wlan0 down 2>/dev/null || wifictl disable 2>/dev/null &");
+	} else {
+		system("ifconfig wlan0 up 2>/dev/null || wifictl enable 2>/dev/null &");
+	}
+}
+
+typedef struct {
+	const char* name;
+	const char* hex;
+	uint8_t r, g, b;
+} AccentPreset;
+
+static AccentPreset accent_presets[] = {
+	{"Gold",       "#f1c40f", 0xf1, 0xc4, 0x0f},
+	{"Cannoli",    "#6fb8de", 0x6f, 0xb8, 0xde},
+	{"Coral Red",  "#e57373", 0xe5, 0x73, 0x73},
+	{"Emerald",    "#81c784", 0x81, 0xc7, 0x84},
+	{"Purple",     "#ba68c8", 0xba, 0x68, 0xc8},
+	{"Amber",      "#ffb74d", 0xff, 0xb7, 0x4d},
+	{"White",      "#ffffff", 0xff, 0xff, 0xff},
+};
+#define ACCENT_PRESET_COUNT (sizeof(accent_presets)/sizeof(accent_presets[0]))
+
+static int get_current_accent_index(void) {
+	for (size_t i = 0; i < ACCENT_PRESET_COUNT; i++) {
+		if (COLOR_ACCENT_CURRENT.r == accent_presets[i].r &&
+		    COLOR_ACCENT_CURRENT.g == accent_presets[i].g &&
+		    COLOR_ACCENT_CURRENT.b == accent_presets[i].b) {
+			return (int)i;
+		}
+	}
+	return 0; // Default Gold
+}
+
+static void cycle_accent(int direction) {
+	int idx = get_current_accent_index() + direction;
+	if (idx < 0) idx = ACCENT_PRESET_COUNT - 1;
+	if (idx >= (int)ACCENT_PRESET_COUNT) idx = 0;
+
+	GFX_setAccentColor(accent_presets[idx].r, accent_presets[idx].g, accent_presets[idx].b);
+
+	char dir[MAX_PATH];
+	strcpy(dir, ACCENT_COLOR_PATH);
+	char* slash = strrchr(dir, '/');
+	if (slash) {
+		*slash = '\0';
+		mkdir(dir, 0755);
+	}
+	FILE* f = fopen(ACCENT_COLOR_PATH, "w");
+	if (f) {
+		fprintf(f, "%s\n", accent_presets[idx].hex);
+		fclose(f);
+	}
+}
+
+enum {
+	SETTING_KITCHEN = 0,
+	SETTING_WIFI,
+	SETTING_ACCENT,
+	SETTING_MODEL,
+	SETTING_RELEASE,
+	SETTING_COMMIT,
+	SETTING_COUNT
+};
+static int setting_selected = 0;
 
 ///////////////////////////////////////
 
@@ -1319,8 +1446,6 @@ int main (int argc, char *argv[]) {
 	if (!HAS_POWER_BUTTON && !simple_mode) PWR_disableSleep();
 	// LOG_info("- power init: %lu\n", SDL_GetTicks() - main_begin);
 	
-	SDL_Surface* version = NULL;
-	
 	Menu_init();
 	// LOG_info("- menu init: %lu\n", SDL_GetTicks() - main_begin);
 	
@@ -1330,7 +1455,7 @@ int main (int argc, char *argv[]) {
 
 	PAD_reset();
 	int dirty = 1;
-	int show_version = 0;
+	int show_settings = 0;
 	int show_setting = 0; // 1=brightness,2=volume
 	int was_online = PLAT_isOnline();
 	
@@ -1350,16 +1475,52 @@ int main (int argc, char *argv[]) {
 		if (was_online!=is_online) dirty = 1;
 		was_online = is_online;
 		
-		if (show_version) {
+		if (show_settings) {
 			if (PAD_justPressed(BTN_B) || PAD_tappedMenu(now)) {
-				show_version = 0;
+				show_settings = 0;
 				dirty = 1;
 				if (!HAS_POWER_BUTTON && !simple_mode) PWR_disableSleep();
+			}
+			else if (PAD_justRepeated(BTN_UP)) {
+				setting_selected -= 1;
+				if (setting_selected < 0) setting_selected = SETTING_COUNT - 1;
+				dirty = 1;
+			}
+			else if (PAD_justRepeated(BTN_DOWN)) {
+				setting_selected += 1;
+				if (setting_selected >= SETTING_COUNT) setting_selected = 0;
+				dirty = 1;
+			}
+			else if (PAD_justRepeated(BTN_LEFT)) {
+				if (setting_selected == SETTING_ACCENT) {
+					cycle_accent(-1);
+					dirty = 1;
+				}
+			}
+			else if (PAD_justRepeated(BTN_RIGHT)) {
+				if (setting_selected == SETTING_ACCENT) {
+					cycle_accent(1);
+					dirty = 1;
+				}
+			}
+			else if (PAD_justPressed(BTN_A)) {
+				if (setting_selected == SETTING_KITCHEN) {
+					toggle_kitchen();
+					dirty = 1;
+				}
+				else if (setting_selected == SETTING_WIFI) {
+					toggle_wifi();
+					dirty = 1;
+				}
+				else if (setting_selected == SETTING_ACCENT) {
+					cycle_accent(1);
+					dirty = 1;
+				}
 			}
 		}
 		else {
 			if (PAD_tappedMenu(now)) {
-				show_version = 1;
+				show_settings = 1;
 				dirty = 1;
 				if (!HAS_POWER_BUTTON && !simple_mode) PWR_enableSleep();
 			}
@@ -1492,7 +1653,7 @@ int main (int argc, char *argv[]) {
 			// simple thumbnail support a thumbnail for a file or folder named NAME.EXT needs a corresponding /.res/NAME.EXT.png 
 			// that is no bigger than platform FIXED_HEIGHT x FIXED_HEIGHT
 			int had_thumb = 0;
-			if (!show_version && total>0) {
+			if (!show_settings && total>0) {
 				Entry* entry = top->entries->items[top->selected];
 				char res_path[MAX_PATH];
 				
@@ -1520,69 +1681,95 @@ int main (int argc, char *argv[]) {
 			
 			int ow = GFX_blitHardwareGroup(screen, show_setting);
 			
-			if (show_version) {
-				if (!version) {
-					char release[256];
-					getFile(ROOT_SYSTEM_PATH "/version.txt", release, 256);
-					
-					char *tmp,*commit;
-					commit = strrchr(release, '\n');
-					commit[0] = '\0';
-					commit = strrchr(release, '\n')+1;
-					tmp = strchr(release, '\n');
-					tmp[0] = '\0';
-					
-					// TODO: not sure if I want bare PLAT_* calls here
-					char* extra_key = "Model";
-					char* extra_val = PLAT_getModel(); 
-					
-					SDL_Surface* release_txt = TTF_RenderUTF8_Blended(font.large, "Release", COLOR_DARK_TEXT);
-					SDL_Surface* version_txt = TTF_RenderUTF8_Blended(font.large, release, COLOR_WHITE);
-					SDL_Surface* commit_txt = TTF_RenderUTF8_Blended(font.large, "Commit", COLOR_DARK_TEXT);
-					SDL_Surface* hash_txt = TTF_RenderUTF8_Blended(font.large, commit, COLOR_WHITE);
-					
-					SDL_Surface* key_txt = TTF_RenderUTF8_Blended(font.large, extra_key, COLOR_DARK_TEXT);
-					SDL_Surface* val_txt = TTF_RenderUTF8_Blended(font.large, extra_val, COLOR_WHITE);
-					
-					int l_width = 0;
-					int r_width = 0;
-					
-					if (release_txt->w>l_width) l_width = release_txt->w;
-					if (commit_txt->w>l_width) l_width = commit_txt->w;
-					if (key_txt->w>l_width) l_width = commit_txt->w;
+			if (show_settings) {
+				char kitchen_info[128];
+				is_kitchen_running(kitchen_info, sizeof(kitchen_info));
 
-					if (version_txt->w>r_width) r_width = version_txt->w;
-					if (hash_txt->w>r_width) r_width = hash_txt->w;
-					if (val_txt->w>r_width) r_width = val_txt->w;
-					
-					#define VERSION_LINE_HEIGHT 24
-					int x = l_width + SCALE1(8);
-					int w = x + r_width;
-					int h = SCALE1(VERSION_LINE_HEIGHT*4);
-					version = SDL_CreateRGBSurface(0,w,h,16,0,0,0,0);
-					
-					SDL_BlitSurface(release_txt, NULL, version, &(SDL_Rect){0, 0});
-					SDL_BlitSurface(version_txt, NULL, version, &(SDL_Rect){x,0});
-					SDL_BlitSurface(commit_txt, NULL, version, &(SDL_Rect){0,SCALE1(VERSION_LINE_HEIGHT)});
-					SDL_BlitSurface(hash_txt, NULL, version, &(SDL_Rect){x,SCALE1(VERSION_LINE_HEIGHT)});
-					
-					SDL_BlitSurface(key_txt, NULL, version, &(SDL_Rect){0,SCALE1(VERSION_LINE_HEIGHT*3)});
-					SDL_BlitSurface(val_txt, NULL, version, &(SDL_Rect){x,SCALE1(VERSION_LINE_HEIGHT*3)});
-					
-					SDL_FreeSurface(release_txt);
-					SDL_FreeSurface(version_txt);
-					SDL_FreeSurface(commit_txt);
-					SDL_FreeSurface(hash_txt);
-					SDL_FreeSurface(key_txt);
-					SDL_FreeSurface(val_txt);
+				char wifi_info[128];
+				get_wifi_status(wifi_info, sizeof(wifi_info));
+
+				const char* accent_name = accent_presets[get_current_accent_index()].name;
+
+				char release_str[64] = "1.0.0";
+				char commit_str[64] = "latest";
+				char version_raw[256];
+				if (exists(ROOT_SYSTEM_PATH "/version.txt")) {
+					getFile(ROOT_SYSTEM_PATH "/version.txt", version_raw, sizeof(version_raw));
+					char* tmp = strchr(version_raw, '\n');
+					if (tmp) {
+						*tmp = '\0';
+						strncpy(release_str, version_raw, sizeof(release_str) - 1);
+						char* c = tmp + 1;
+						char* c2 = strchr(c, '\n');
+						if (c2) *c2 = '\0';
+						strncpy(commit_str, c, sizeof(commit_str) - 1);
+					}
 				}
-				SDL_BlitSurface(version, NULL, screen, &(SDL_Rect){(screen->w-version->w)/2,(screen->h-version->h)/2});
-				
-				// buttons (duped and trimmed from below)
+
+				char* labels[] = {
+					"Nonna's Kitchen (FTP)",
+					"Wi-Fi",
+					"Accent Color",
+					"Model",
+					"Release",
+					"Commit"
+				};
+
+				char* values[] = {
+					kitchen_info,
+					wifi_info,
+					(char*)accent_name,
+					PLAT_getModel(),
+					release_str,
+					commit_str
+				};
+
+				for (int j = 0; j < SETTING_COUNT; j++) {
+					int is_selected = (j == setting_selected);
+					int available_width = screen->w - SCALE1(PADDING * 2);
+					if (is_selected) {
+						GFX_blitPill(ASSET_WHITE_PILL, screen, &(SDL_Rect){
+							SCALE1(PADDING),
+							SCALE1(PADDING + (j * PILL_SIZE)),
+							available_width,
+							SCALE1(PILL_SIZE)
+						});
+					}
+
+					SDL_Color label_col = is_selected ? COLOR_BLACK : COLOR_WHITE;
+					SDL_Color val_col   = is_selected ? COLOR_DARK_TEXT : COLOR_GRAY;
+
+					SDL_Surface* lbl_s = TTF_RenderUTF8_Blended(font.large, labels[j], label_col);
+					if (lbl_s) {
+						SDL_BlitSurface(lbl_s, NULL, screen, &(SDL_Rect){
+							SCALE1(PADDING + BUTTON_PADDING),
+							SCALE1(PADDING + (j * PILL_SIZE) + 4)
+						});
+						SDL_FreeSurface(lbl_s);
+					}
+
+					SDL_Surface* val_s = TTF_RenderUTF8_Blended(font.medium, values[j], val_col);
+					if (val_s) {
+						SDL_BlitSurface(val_s, NULL, screen, &(SDL_Rect){
+							screen->w - SCALE1(PADDING + BUTTON_PADDING) - val_s->w,
+							SCALE1(PADDING + (j * PILL_SIZE) + 6)
+						});
+						SDL_FreeSurface(val_s);
+					}
+				}
+
 				if (show_setting && !GetHDMI()) GFX_blitHardwareHints(screen, show_setting);
-				else GFX_blitButtonGroup((char*[]){ BTN_SLEEP==BTN_POWER?"POWER":"MENU","SLEEP",  NULL }, 0, screen, 0);
-				
-				GFX_blitButtonGroup((char*[]){ "B","BACK",  NULL }, 0, screen, 1);
+				else GFX_blitButtonGroup((char*[]){ "MENU", "CLOSE", NULL }, 0, screen, 0);
+
+				if (setting_selected == SETTING_KITCHEN) {
+					GFX_blitButtonGroup((char*[]){ "B", "BACK", "A", "TOGGLE", NULL }, 1, screen, 1);
+				} else if (setting_selected == SETTING_WIFI) {
+					GFX_blitButtonGroup((char*[]){ "B", "BACK", "A", "TOGGLE", NULL }, 1, screen, 1);
+				} else if (setting_selected == SETTING_ACCENT) {
+					GFX_blitButtonGroup((char*[]){ "B", "BACK", "A", "CHANGE", NULL }, 1, screen, 1);
+				} else {
+					GFX_blitButtonGroup((char*[]){ "B", "BACK", NULL }, 0, screen, 1);
+				}
 			}
 			else {
 				// list
@@ -1694,8 +1881,6 @@ int main (int argc, char *argv[]) {
 			quit = 1;
 		}
 	}
-	
-	if (version) SDL_FreeSurface(version);
 
 	Menu_quit();
 	PWR_quit();

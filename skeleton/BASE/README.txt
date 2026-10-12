@@ -159,7 +159,36 @@ Bios file names are case-sensitive:
    MD: bios_CD_E.bin
        bios_CD_J.bin
        bios_CD_U.bin
+  NDS: bios7.bin
+       bios9.bin
+       firmware.bin
    PS: psxonpsp660.bin
+
+----------------------------------------
+Settings Menu, Wi-Fi & Accent Color
+
+Press the MENU button in the launcher to open the Settings menu. Here you can:
+- Toggle Nonna's Kitchen (FTP server) on or off
+- View Wi-Fi status and connect/reconnect on supported devices
+- Customize the accent color (default: #f1c40f Gold, Cannoli, Coral Red, Emerald, Purple, Amber, White)
+- View system hardware model, release, and commit info
+
+To manually set any hex accent color, place the hex code (eg. #f1c40f) in "/.userdata/shared/.cannelloni/accent_color.txt".
+
+----------------------------------------
+Nonna's Kitchen (Wireless FTP File Transfer)
+
+Nonna's Kitchen allows transferring ROMs, saves, states, and BIOS files wirelessly over your local Wi-Fi network without removing the SD card.
+
+To use:
+1. Ensure your device is connected to Wi-Fi.
+2. Launch "Nonna's Kitchen" from the Tools menu, or enable it from the Settings menu (press MENU).
+3. Connect from your computer, phone, or tablet using any FTP client (such as FileZilla, Cyberduck, or your operating system's native file manager) to the address shown on screen (eg. ftp://192.168.1.xxx:2121).
+   Username: cannelloni
+   Password: cannelloni
+   (Anonymous login is also supported)
+4. Transfer files directly to and from your SD card.
+
 
 ----------------------------------------
 Disc-based games
