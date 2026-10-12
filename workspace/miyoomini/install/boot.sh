@@ -93,16 +93,6 @@ if [ -f "$UPDATE_PATH" ] || [ "$FIRST_BOOT" = true ]; then
 		log "install.sh finished with code $?"
 	fi
 
-	# Prompt user to choose hardware model on installation if needed
-	DEV_SELECT="$SYSTEM_PATH/common/device_select.sh"
-	[ ! -f "$DEV_SELECT" ] && DEV_SELECT="$SYSTEM_PATH/bin/device_select.sh"
-	if [ -f "$DEV_SELECT" ]; then
-		log "Running device_select.sh..."
-		chmod +x "$DEV_SELECT" 2>/dev/null
-		"$DEV_SELECT" >> "$LOG_FILE" 2>&1
-		log "device_select.sh finished with code $?"
-	fi
-
 	# Flash official Cannelloni boot logo to SPI flash if available
 	USERDATA_PATH="$SDCARD_PATH/.userdata/$PLATFORM"
 	mkdir -p "$USERDATA_PATH"
@@ -127,6 +117,16 @@ if [ -f "$UPDATE_PATH" ] || [ "$FIRST_BOOT" = true ]; then
 			cd "$SDCARD_PATH"
 			rm -rf "$TMP_FLASH"
 		fi
+	fi
+
+	# Prompt user to choose hardware model on installation if needed
+	DEV_SELECT="$SYSTEM_PATH/common/device_select.sh"
+	[ ! -f "$DEV_SELECT" ] && DEV_SELECT="$SYSTEM_PATH/bin/device_select.sh"
+	if [ -f "$DEV_SELECT" ]; then
+		log "Running device_select.sh..."
+		chmod +x "$DEV_SELECT" 2>/dev/null
+		"$DEV_SELECT" >> "$LOG_FILE" 2>&1
+		log "device_select.sh finished with code $?"
 	fi
 fi
 

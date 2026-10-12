@@ -361,6 +361,16 @@ fi
 
 log "Wizard configuration complete: Device='$SELECTED', Language='$SELECTED_LANG', Accent='$CURR_COLOR'"
 
+# Apply selected language immediately to all Settings and Tools paks
+APPLY_LANG="$SDCARD_PATH/.system/common/apply_language.sh"
+[ ! -f "$APPLY_LANG" ] && APPLY_LANG="$SDCARD_PATH/.system/$TARGET_PLATFORM/bin/apply_language.sh"
+[ ! -f "$APPLY_LANG" ] && APPLY_LANG="$SDCARD_PATH/.tmp_update/apply_language.sh"
+if [ -f "$APPLY_LANG" ]; then
+    log "Applying selected language '$SELECTED_LANG' to system paks..."
+    chmod +x "$APPLY_LANG" 2>/dev/null
+    "$APPLY_LANG" "$SELECTED_LANG" >> "$LOG_FILE" 2>&1
+fi
+
 cleanup_bootstrap() {
     PLAT="$1"
     log "Performing post-installation cleanup for platform '$PLAT'..."
@@ -443,20 +453,20 @@ cleanup_bootstrap() {
 
 if [ "$MODE" != "--device-only" ]; then
     cleanup_bootstrap "$TARGET_PLATFORM"
-fi
 
-SAY="$SDCARD_PATH/.system/$TARGET_PLATFORM/bin/say.elf"
-[ ! -x "$SAY" ] && SAY="say.elf"
-if [ -x "$SAY" ] || command -v say.elf >/dev/null 2>&1; then
-    log "Displaying completion confirmation screen..."
-    $SAY "$MSG_CONF
+    SAY="$SDCARD_PATH/.system/$TARGET_PLATFORM/bin/say.elf"
+    [ ! -x "$SAY" ] && SAY="say.elf"
+    if [ -x "$SAY" ] || command -v say.elf >/dev/null 2>&1; then
+        log "Displaying completion confirmation screen..."
+        $SAY "$MSG_CONF
 Device: $SELECTED
 $MSG_LANG_LABEL
-Accent: $CURR_COLOR
-Starting Cannelloni..." &
-    SAY_PID=$!
-    sleep 3
-    kill -9 $SAY_PID 2>/dev/null
+Accent: $CURR_COLOR"
+    fi
+    log "Rebooting system cleanly to apply all changes and launch Cannelloni..."
+    sync
+    reboot
+    exit 0
 fi
 
 log "=== device_select.sh finished successfully ==="

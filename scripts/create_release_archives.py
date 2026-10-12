@@ -29,6 +29,9 @@ def add_dir_to_zip(zout, src_dir, zip_prefix, written_entries):
                 continue
             with open(full_path, "rb") as fp:
                 data = fp.read()
+            TEXT_EXTS = ('.sh', '.txt', '.json', '.cfg', '.ini', '.csv', '.pak_id', '.md')
+            if any(f.endswith(ext) for ext in TEXT_EXTS) or f in ('updater', 'MainUI', 'on-boot', 'service-on', 'service-off', 'wifi-enabled'):
+                data = data.replace(b'\r\n', b'\n')
             zinfo = zipfile.ZipInfo(dest)
             zinfo.compress_type = zipfile.ZIP_DEFLATED
             is_exec = (
@@ -258,25 +261,25 @@ def build_release():
         # Inject updated platform bootstrap and updater scripts
         if name.endswith(".tmp_update/updater") or name == ".tmp_update/updater":
             with open("skeleton/BOOT/common/updater", "rb") as f:
-                data = f.read()
+                data = f.read().replace(b"\r\n", b"\n")
         elif name.endswith(".tmp_update/miyoomini.sh") or name == ".tmp_update/miyoomini.sh":
             with open("workspace/miyoomini/install/boot.sh", "rb") as f:
-                data = f.read()
+                data = f.read().replace(b"\r\n", b"\n")
         elif name.endswith(".tmp_update/my282.sh") or name == ".tmp_update/my282.sh":
             with open("workspace/my282/install/boot.sh", "rb") as f:
-                data = f.read()
+                data = f.read().replace(b"\r\n", b"\n")
         elif name.endswith(".tmp_update/my355.sh") or name == ".tmp_update/my355.sh":
             with open("workspace/my355/install/boot.sh", "rb") as f:
-                data = f.read()
+                data = f.read().replace(b"\r\n", b"\n")
         elif name.endswith(".tmp_update/tg5040.sh") or name == ".tmp_update/tg5040.sh":
             with open("workspace/tg5040/install/boot.sh", "rb") as f:
-                data = f.read()
+                data = f.read().replace(b"\r\n", b"\n")
         elif name.endswith(".tmp_update/trimuismart.sh") or name == ".tmp_update/trimuismart.sh":
             with open("workspace/trimuismart/install/boot.sh", "rb") as f:
-                data = f.read()
+                data = f.read().replace(b"\r\n", b"\n")
         elif name.endswith(".tmp_update/zero28.sh") or name == ".tmp_update/zero28.sh":
             with open("workspace/zero28/install/boot.sh", "rb") as f:
-                data = f.read()
+                data = f.read().replace(b"\r\n", b"\n")
         # Update any minui references in scripts
         elif (name.endswith(".sh") or name.endswith(".txt")) and name != ".system/version.txt":
             try:
@@ -498,12 +501,24 @@ def build_release():
     dev_sh_path = "skeleton/SYSTEM/common/device_select.sh"
     if os.path.isfile(dev_sh_path):
         with open(dev_sh_path, "rb") as f:
-            dev_sh_bytes = f.read()
+            dev_sh_bytes = f.read().replace(b"\r\n", b"\n")
         for dest in [".system/common/device_select.sh", ".system/bin/device_select.sh"] + [f".system/{p}/bin/device_select.sh" for p in platforms]:
             zi_dev = zipfile.ZipInfo(dest)
             zi_dev.compress_type = zipfile.ZIP_DEFLATED
             zi_dev.external_attr = 0o755 << 16
             out_cannelloni_zip.writestr(zi_dev, dev_sh_bytes)
+
+    # Add apply_language.sh across common and platforms
+    lang_sh_path = "skeleton/SYSTEM/common/apply_language.sh"
+    if os.path.isfile(lang_sh_path):
+        with open(lang_sh_path, "rb") as f:
+            lang_sh_bytes = f.read().replace(b"\r\n", b"\n")
+        for dest in [".system/common/apply_language.sh", ".system/bin/apply_language.sh"] + [f".system/{p}/bin/apply_language.sh" for p in platforms]:
+            zi_lang = zipfile.ZipInfo(dest)
+            zi_lang.compress_type = zipfile.ZIP_DEFLATED
+            zi_lang.external_attr = 0o755 << 16
+            out_cannelloni_zip.writestr(zi_lang, lang_sh_bytes)
+            written_entries.add(dest)
 
     # Add updated Cannelloni.pak across all platforms from skeleton
     for p in platforms:
@@ -644,31 +659,31 @@ def build_release():
             data = base_in.read(name)
             if name.endswith("/app/MainUI") or name == "miyoo/app/MainUI":
                 with open("skeleton/BOOT/miyoo/app/MainUI", "rb") as f:
-                    data = f.read()
+                    data = f.read().replace(b"\r\n", b"\n")
             elif name.endswith("/app/miyoomini.sh"):
                 with open("skeleton/BOOT/miyoo/app/miyoomini.sh", "rb") as f:
-                    data = f.read()
+                    data = f.read().replace(b"\r\n", b"\n")
             elif name.endswith(".tmp_update/updater"):
                 with open("skeleton/BOOT/common/updater", "rb") as f:
-                    data = f.read()
+                    data = f.read().replace(b"\r\n", b"\n")
             elif name.endswith(".tmp_update/miyoomini.sh"):
                 with open("workspace/miyoomini/install/boot.sh", "rb") as f:
-                    data = f.read()
+                    data = f.read().replace(b"\r\n", b"\n")
             elif name.endswith(".tmp_update/my282.sh"):
                 with open("workspace/my282/install/boot.sh", "rb") as f:
-                    data = f.read()
+                    data = f.read().replace(b"\r\n", b"\n")
             elif name.endswith(".tmp_update/my355.sh"):
                 with open("workspace/my355/install/boot.sh", "rb") as f:
-                    data = f.read()
+                    data = f.read().replace(b"\r\n", b"\n")
             elif name.endswith(".tmp_update/tg5040.sh"):
                 with open("workspace/tg5040/install/boot.sh", "rb") as f:
-                    data = f.read()
+                    data = f.read().replace(b"\r\n", b"\n")
             elif name.endswith(".tmp_update/trimuismart.sh"):
                 with open("workspace/trimuismart/install/boot.sh", "rb") as f:
-                    data = f.read()
+                    data = f.read().replace(b"\r\n", b"\n")
             elif name.endswith(".tmp_update/zero28.sh"):
                 with open("workspace/zero28/install/boot.sh", "rb") as f:
-                    data = f.read()
+                    data = f.read().replace(b"\r\n", b"\n")
             elif name == "rg35xxplus/dmenu.bin":
                 data = build_dmenu_rg35xxplus()
             elif name == "rg35xx/dmenu.bin":
@@ -688,9 +703,9 @@ def build_release():
                 else:
                     data = open("workspace/miyoomini/install/updating.png", "rb").read()
             elif name == "gkdpixel/install.sh":
-                data = open("workspace/gkdpixel/boot/install.sh", "rb").read()
+                data = open("workspace/gkdpixel/boot/install.sh", "rb").read().replace(b"\r\n", b"\n")
             elif name == "gkdpixel/boot.sh":
-                data = open("workspace/gkdpixel/boot/boot.sh", "rb").read()
+                data = open("workspace/gkdpixel/boot/boot.sh", "rb").read().replace(b"\r\n", b"\n")
             elif name == "gkdpixel/installing.bmp":
                 data = open("workspace/gkdpixel/boot/installing.bmp", "rb").read()
             elif name.endswith(".sh") or name.endswith(".txt"):
@@ -701,7 +716,7 @@ def build_release():
                     content = content.replace("MinUI", "Cannelloni")
                     content = content.replace("/tmp/minui_exec", "/tmp/cannelloni_exec")
                     content = content.replace(".minui", ".cannelloni")
-                    data = content.encode("utf-8")
+                    data = content.encode("utf-8").replace(b"\r\n", b"\n")
                 except UnicodeDecodeError:
                     pass
 
@@ -727,12 +742,21 @@ def build_release():
     # 5. Inject device_select.sh directly into .tmp_update/ for initial setup wizard
     if ".tmp_update/device_select.sh" not in written_entries:
         with open("skeleton/SYSTEM/common/device_select.sh", "rb") as f:
-            dev_sh_bytes = f.read()
+            dev_sh_bytes = f.read().replace(b"\r\n", b"\n")
         zinfo_dev = zipfile.ZipInfo(".tmp_update/device_select.sh")
         zinfo_dev.compress_type = zipfile.ZIP_DEFLATED
         zinfo_dev.external_attr = 0o755 << 16
         out_cannelloni_zip.writestr(zinfo_dev, dev_sh_bytes)
         written_entries.add(".tmp_update/device_select.sh")
+
+    if ".tmp_update/apply_language.sh" not in written_entries:
+        with open("skeleton/SYSTEM/common/apply_language.sh", "rb") as f:
+            lang_sh_bytes = f.read().replace(b"\r\n", b"\n")
+        zinfo_lang = zipfile.ZipInfo(".tmp_update/apply_language.sh")
+        zinfo_lang.compress_type = zipfile.ZIP_DEFLATED
+        zinfo_lang.external_attr = 0o755 << 16
+        out_cannelloni_zip.writestr(zinfo_lang, lang_sh_bytes)
+        written_entries.add(".tmp_update/apply_language.sh")
 
     out_cannelloni_zip.close()
 

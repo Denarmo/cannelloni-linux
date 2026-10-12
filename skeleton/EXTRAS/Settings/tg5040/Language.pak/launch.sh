@@ -38,8 +38,17 @@ Deutsch (German)
 Italiano (Italian)
 EOF
 
+CONFIRM_BTN="SELECT"
+case "$CURRENT_LANG" in
+    "es") CONFIRM_BTN="SELECCIONAR" ;;
+    "fr") CONFIRM_BTN="SÉLECTIONNER" ;;
+    "de") CONFIRM_BTN="AUSWÄHLEN" ;;
+    "it") CONFIRM_BTN="SELEZIONA" ;;
+    "pt_BR") CONFIRM_BTN="SELECIONAR" ;;
+esac
+
 if [ -x "$LIST_BIN" ]; then
-    "$LIST_BIN" --disable-auto-sleep --file "$LIST_FILE" --format text --confirm-text "SELECT" --title "Language / Idioma" --write-location "$OUT_FILE"
+    "$LIST_BIN" --disable-auto-sleep --file "$LIST_FILE" --format text --confirm-text "$CONFIRM_BTN" --title "Language / Idioma" --write-location "$OUT_FILE"
     RET=$?
     if [ $RET -ne 0 ] || [ ! -f "$OUT_FILE" ]; then
         exit 0
@@ -50,44 +59,48 @@ else
 fi
 
 CODE="en"
-MSG="Language set to English!
-Restarting interface..."
+MSG="Language set to English!"
 
 case "$CHOICE" in
     *"Español"*)
         CODE="es"
-        MSG="¡Idioma configurado a Español!
-Reiniciando interfaz..."
+        MSG="¡Idioma configurado a Español!"
         ;;
     *"Français"*)
         CODE="fr"
-        MSG="Langue définie sur Français !
-Redémarrage de l'interface..."
+        MSG="Langue configurée sur Français !"
         ;;
     *"Português"*)
         CODE="pt_BR"
-        MSG="Idioma definido para Português (Brasil)!
-Reiniciando interface..."
+        MSG="Idioma definido para Português (Brasil)!"
         ;;
     *"Deutsch"*)
         CODE="de"
-        MSG="Sprache auf Deutsch eingestellt!
-Benutzeroberfläche wird neu gestartet..."
+        MSG="Sprache auf Deutsch eingestellt!"
         ;;
     *"Italiano"*)
         CODE="it"
-        MSG="Lingua impostata su Italiano!
-Riavvio dell'interfaccia..."
+        MSG="Lingua impostata su Italiano!"
         ;;
     *)
         CODE="en"
-        MSG="Language set to English!
-Restarting interface..."
+        MSG="Language set to English!"
         ;;
 esac
 
 echo "$CODE" > "$LANG_TXT"
 sync
 
-$SAY "$MSG"
+# Dynamically apply language and rename paks immediately
+APPLY_LANG="$SDCARD_PATH/.system/common/apply_language.sh"
+[ ! -f "$APPLY_LANG" ] && APPLY_LANG="$SDCARD_PATH/.system/$PLATFORM/bin/apply_language.sh"
+if [ -f "$APPLY_LANG" ]; then
+    chmod +x "$APPLY_LANG" 2>/dev/null
+    "$APPLY_LANG" "$CODE"
+fi
+sync
+
+if [ -x "$SAY" ]; then
+    $SAY "$MSG"
+fi
 sync

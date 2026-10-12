@@ -117,6 +117,17 @@ if [ -f "$COLOR_FILE" ]; then
 	fi
 fi
 
+# Ensure language map is applied on boot
+LANG_FILE="$SHARED_USERDATA_PATH/.cannelloni/language.txt"
+if [ -f "$LANG_FILE" ]; then
+	LANG_VAL=$(cat "$LANG_FILE" | head -n1 | tr -d '\r\n')
+	APPLY_LANG="$SDCARD_PATH/.system/common/apply_language.sh"
+	[ ! -f "$APPLY_LANG" ] && APPLY_LANG="$SYSTEM_PATH/bin/apply_language.sh"
+	if [ -f "$APPLY_LANG" ] && [ ! -f "$SDCARD_PATH/Settings/$PLATFORM/map.txt" ]; then
+		"$APPLY_LANG" "$LANG_VAL" >/dev/null 2>&1
+	fi
+fi
+
 while [ -f "$EXEC_PATH" ]; do
 	cannelloni.elf > $LOGS_PATH/cannelloni.txt 2>&1
 	echo $CPU_SPEED_PERF > $CPU_PATH
