@@ -1,21 +1,45 @@
 #!/bin/sh
 
+LOG_FILE="/mnt/SDCARD/cannelloni_install.log"
+echo "=== [$(date +'%Y-%m-%d %H:%M:%S')] MainUI bootstrap triggered ===" >> "$LOG_FILE" 2>&1
+echo "Script path: $0" >> "$LOG_FILE" 2>&1
+echo "Current directory: $(pwd)" >> "$LOG_FILE" 2>&1
+
 cd $(dirname "$0")
+echo "Moved to: $(pwd)" >> "$LOG_FILE" 2>&1
 
 INFO=`cat /proc/cpuinfo 2> /dev/null`
+echo "CPU info snippet: $(echo "$INFO" | grep -iE 'hardware|model|processor|cortex|arm' | tr '\n' ' ')" >> "$LOG_FILE" 2>&1
+echo "axp_test present: $([ -f "/customer/app/axp_test" ] && echo YES || echo NO)" >> "$LOG_FILE" 2>&1
+sync
+
 case $INFO in
 *"0xd05"*)
-	./my355.sh
+	echo "Detected 0xd05 (Miyoo Flip), running ./my355.sh" >> "$LOG_FILE" 2>&1
+	sync
+	./my355.sh >> "$LOG_FILE" 2>&1
 	;;
 *"sun8i"*)
-	./my282.sh
+	echo "Detected sun8i (Miyoo A30), running ./my282.sh" >> "$LOG_FILE" 2>&1
+	sync
+	./my282.sh >> "$LOG_FILE" 2>&1
 	;;
 *"SStar"*|*"sstar"*|*"Sigmastar"*|*"SigmaStar"*|*"SSD20"*|*"infinity2"*|*"Infinity2"*|*"MStar"*)
-	./miyoomini.sh
+	echo "Detected SigmaStar SoC, running ./miyoomini.sh" >> "$LOG_FILE" 2>&1
+	sync
+	./miyoomini.sh >> "$LOG_FILE" 2>&1
 	;;
 *)
+	echo "Matching fallback for Miyoo Mini / Mini Plus..." >> "$LOG_FILE" 2>&1
 	if [ -f "/customer/app/axp_test" ] || [ -d "/customer/app" ]; then
-		./miyoomini.sh
+		echo "Found /customer/app, running ./miyoomini.sh" >> "$LOG_FILE" 2>&1
+		sync
+		./miyoomini.sh >> "$LOG_FILE" 2>&1
+	else
+		echo "ERROR: Unknown hardware in MainUI" >> "$LOG_FILE" 2>&1
 	fi
 	;;
 esac
+
+echo "MainUI exited with code: $?" >> "$LOG_FILE" 2>&1
+sync

@@ -2,7 +2,14 @@
 
 # NOTE: becomes .tmp_update/updater
 
+LOG_FILE="/mnt/SDCARD/cannelloni_install.log"
+echo "=== [$(date +'%Y-%m-%d %H:%M:%S')] .tmp_update/updater triggered ===" >> "$LOG_FILE" 2>&1
+echo "updater PWD: $(pwd)" >> "$LOG_FILE" 2>&1
+
 INFO=`cat /proc/cpuinfo 2> /dev/null`
+echo "updater CPU Info: $(echo "$INFO" | grep -iE 'hardware|model|processor|cortex|arm' | tr '\n' ' ')" >> "$LOG_FILE" 2>&1
+sync
+
 case $INFO in
 *"sun8i"*)
 	if [ -d /usr/miyoo ]; then
@@ -31,11 +38,22 @@ case $INFO in
 esac
 
 # fallback for tg5040 20240413 recovery firmware
-# TODO: doublecheck interaction with tg3040
-# might need/want to strings /usr/trimui/bin/MainUI during install/update
-# and store platform in a text file
 if [ -z "$PLATFORM" ] && [ -f /usr/trimui/bin/runtrimui.sh ]; then
 	PLATFORM="tg5040"
 fi
 
-exec "/mnt/SDCARD/.tmp_update/$PLATFORM.sh" # &> /mnt/SDCARD/boot.txt
+echo "updater resolved PLATFORM: '$PLATFORM'" >> "$LOG_FILE" 2>&1
+
+TARGET_SCRIPT="/mnt/SDCARD/.tmp_update/$PLATFORM.sh"
+echo "Checking target script: $TARGET_SCRIPT (exists: $([ -f "$TARGET_SCRIPT" ] && echo YES || echo NO))" >> "$LOG_FILE" 2>&1
+sync
+
+if [ -n "$PLATFORM" ] && [ -f "$TARGET_SCRIPT" ]; then
+	chmod +x "$TARGET_SCRIPT" 2>/dev/null
+	echo "Executing $TARGET_SCRIPT..." >> "$LOG_FILE" 2>&1
+	sync
+	exec "$TARGET_SCRIPT"
+else
+	echo "ERROR: Target script not found or PLATFORM is empty ('$PLATFORM')!" >> "$LOG_FILE" 2>&1
+	sync
+fi
