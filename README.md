@@ -128,8 +128,8 @@ Place your retro gaming collection on your SD card structured as follows:
 ```
 
 ### Installation
-1. Download the latest `Cannelloni-*-base.zip` (and optional `extras.zip`) from [GitHub Releases](https://github.com/Denarmo/cannelloni-linux/releases).
-2. Extract the device-specific boot files for your handheld to your SD card along with `Cannelloni.zip` (without unzipping `Cannelloni.zip`).
+1. Download the latest **`Cannelloni-*.zip`** unified release archive from [GitHub Releases](https://github.com/Denarmo/cannelloni-linux/releases).
+2. Extract the archive directly to the root of your freshly formatted FAT32 SD card.
 3. Power on your device and Cannelloni will self-install and launch automatically.
 
 ---

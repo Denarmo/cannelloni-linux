@@ -21,12 +21,11 @@ if not os.path.isfile(SRC_EXTRAS_ZIP):
     print("Downloading upstream extras release template...")
     urllib.request.urlretrieve("https://github.com/shauninman/MinUI/releases/download/v20251127-1/MinUI-20251127-1-extras.zip", SRC_EXTRAS_ZIP)
 
-OUT_BASE_ZIP = os.path.join(OUT_DIR, f"{RELEASE_NAME}-base.zip")
-OUT_EXTRAS_ZIP = os.path.join(OUT_DIR, f"{RELEASE_NAME}-extras.zip")
+OUT_UNIFIED_ZIP = os.path.join(OUT_DIR, f"{RELEASE_NAME}.zip")
 
-print(f"Building {RELEASE_NAME} releases...")
+print(f"Building unified release: {OUT_UNIFIED_ZIP}...")
 
-def add_dir_to_zip(zout, src_dir, zip_prefix):
+def add_dir_to_zip(zout, src_dir, zip_prefix, written_entries):
     """Recursively adds a local directory into a zip archive with proper permissions."""
     if not os.path.isdir(src_dir):
         return
@@ -35,6 +34,8 @@ def add_dir_to_zip(zout, src_dir, zip_prefix):
             full_path = os.path.join(root, f)
             rel = os.path.relpath(full_path, src_dir).replace("\\", "/")
             dest = f"{zip_prefix}/{rel}".strip("/")
+            if dest in written_entries:
+                continue
             with open(full_path, "rb") as fp:
                 data = fp.read()
             zinfo = zipfile.ZipInfo(dest)
@@ -53,6 +54,7 @@ def add_dir_to_zip(zout, src_dir, zip_prefix):
             else:
                 zinfo.external_attr = 0o644 << 16
             zout.writestr(zinfo, data)
+            written_entries.add(dest)
 
 # ----------------------------------------------------
 # 1. Process and rebuild Cannelloni.zip (from MinUI.zip)
@@ -160,7 +162,7 @@ for p in platforms:
 for p in platforms:
     nds_dir = f"skeleton/SYSTEM/{p}/paks/Emus/NDS.pak"
     if os.path.isdir(nds_dir):
-        add_dir_to_zip(out_cannelloni_zip, nds_dir, f".system/{p}/paks/Emus/NDS.pak")
+        add_dir_to_zip(out_cannelloni_zip, nds_dir, f".system/{p}/paks/Emus/NDS.pak", set())
 
 # Default accent color configuration in Cannelloni.zip
 out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/accent_color.txt", b"#f1c40f\n")
@@ -170,26 +172,31 @@ out_cannelloni_zip.close()
 cannelloni_zip_bytes = out_cannelloni_zip_buf.getvalue()
 
 # ----------------------------------------------------
-# 2. Rebuild base zip
+# 2. Build single unified release archive
 # ----------------------------------------------------
-print(f"Writing {OUT_BASE_ZIP}...")
-with zipfile.ZipFile(SRC_BASE_ZIP, "r") as base_in, \
-     zipfile.ZipFile(OUT_BASE_ZIP, "w", zipfile.ZIP_DEFLATED) as base_out:
+print(f"Writing {OUT_UNIFIED_ZIP}...")
+written_entries = set()
 
+with zipfile.ZipFile(SRC_BASE_ZIP, "r") as base_in, \
+     zipfile.ZipFile(SRC_EXTRAS_ZIP, "r") as ext_in, \
+     zipfile.ZipFile(OUT_UNIFIED_ZIP, "w", zipfile.ZIP_DEFLATED) as out_zip:
+
+    # 1. Cannelloni.zip into root
+    out_zip.writestr("Cannelloni.zip", cannelloni_zip_bytes)
+    written_entries.add("Cannelloni.zip")
+
+    # 2. README.txt into root
+    with open("skeleton/BASE/README.txt", "rb") as f:
+        out_zip.writestr("README.txt", f.read())
+    written_entries.add("README.txt")
+
+    # 3. Base zip entries (bootloaders, update scripts, platform dirs)
     for item in base_in.infolist():
         name = item.filename
-        if name == "MinUI.zip":
-            # Replace with Cannelloni.zip
-            base_out.writestr("Cannelloni.zip", cannelloni_zip_bytes)
-            continue
-        elif name == "README.txt":
-            # Replace with updated README.txt
-            with open("skeleton/BASE/README.txt", "rb") as f:
-                base_out.writestr("README.txt", f.read())
+        if name in ("MinUI.zip", "Cannelloni.zip", "README.txt") or name in written_entries:
             continue
 
         data = base_in.read(name)
-        # Process and adapt scripts inside installer directories (e.g. rg35xxplus, trimui, etc.)
         if name.endswith("/app/MainUI") or name == "miyoo/app/MainUI":
             with open("skeleton/BOOT/miyoo/app/MainUI", "rb") as f:
                 data = f.read()
@@ -219,89 +226,74 @@ with zipfile.ZipFile(SRC_BASE_ZIP, "r") as base_in, \
             zinfo.external_attr = 0o755 << 16
         else:
             zinfo.external_attr = 0o644 << 16
-        base_out.writestr(zinfo, data)
+        out_zip.writestr(zinfo, data)
+        written_entries.add(name)
 
-        # Also write .tmp_update directly to root of base archive for native Miyoo stock updater compatibility
+        # Write .tmp_update directly to root of archive for native Miyoo stock updater compatibility
         if name.startswith("miyoo354/app/.tmp_update/"):
             tmp_name = name.replace("miyoo354/app/.tmp_update/", ".tmp_update/")
-            zinfo_tmp = zipfile.ZipInfo(tmp_name)
-            zinfo_tmp.compress_type = zipfile.ZIP_DEFLATED
-            if tmp_name.endswith(".sh") or tmp_name.endswith("updater") or tmp_name.endswith(".elf"):
-                zinfo_tmp.external_attr = 0o755 << 16
-            else:
-                zinfo_tmp.external_attr = 0o644 << 16
-            base_out.writestr(zinfo_tmp, data)
+            if tmp_name not in written_entries:
+                zinfo_tmp = zipfile.ZipInfo(tmp_name)
+                zinfo_tmp.compress_type = zipfile.ZIP_DEFLATED
+                if tmp_name.endswith(".sh") or tmp_name.endswith("updater") or tmp_name.endswith(".elf"):
+                    zinfo_tmp.external_attr = 0o755 << 16
+                else:
+                    zinfo_tmp.external_attr = 0o644 << 16
+                out_zip.writestr(zinfo_tmp, data)
+                written_entries.add(tmp_name)
 
-    # Add Nintendo DS ROM folder
-    base_out.writestr("Roms/Nintendo DS (NDS)/.keep", b"# Nintendo DS ROMs (.nds, .zip)\n")
-    # Add Bios/NDS folder
-    base_out.writestr("Bios/NDS/.keep", b"# NDS Bios: bios7.bin, bios9.bin, firmware.bin\n")
-
-    # Default accent color setting
-    base_out.writestr(".userdata/shared/.cannelloni/accent_color.txt", b"#f1c40f\n")
-
-    # Add Essential Tools (Nonna's Kitchen & Wi-Fi) directly to Base package
-    for p in platforms:
-        k_dir = f"skeleton/EXTRAS/Tools/{p}/Nonna's Kitchen.pak"
-        if not os.path.isdir(k_dir):
-            k_dir = "skeleton/EXTRAS/Tools/miyoomini/Nonna's Kitchen.pak"
-        add_dir_to_zip(base_out, k_dir, f"Tools/{p}/Nonna's Kitchen.pak")
-
-        w_dir = f"skeleton/EXTRAS/Tools/{p}/Wi-Fi.pak"
-        if not os.path.isdir(w_dir):
-            w_dir = "skeleton/EXTRAS/Tools/miyoomini/Wi-Fi.pak"
-        add_dir_to_zip(base_out, w_dir, f"Tools/{p}/Wi-Fi.pak")
-
-        # Also include NDS.pak in Emus/ for Base package
-        nds_emu_dir = f"skeleton/SYSTEM/{p}/paks/Emus/NDS.pak"
-        if os.path.isdir(nds_emu_dir):
-            add_dir_to_zip(base_out, nds_emu_dir, f"Emus/{p}/NDS.pak")
-
-print(f"Base package completed: {os.path.getsize(OUT_BASE_ZIP)} bytes")
-
-# ----------------------------------------------------
-# 3. Rebuild extras zip
-# ----------------------------------------------------
-print(f"Writing {OUT_EXTRAS_ZIP}...")
-with zipfile.ZipFile(SRC_EXTRAS_ZIP, "r") as ext_in, \
-     zipfile.ZipFile(OUT_EXTRAS_ZIP, "w", zipfile.ZIP_DEFLATED) as ext_out:
-
+    # 4. Extras zip entries (extra emulators, tools, bios/rom placeholders)
     for item in ext_in.infolist():
         name = item.filename
-        # Avoid duplicating tools and emu paks that we are inserting freshly
+        if name in ("README.txt", "Cannelloni.zip", "MinUI.zip") or name in written_entries:
+            continue
+        # Skip tools and emu paks that we are inserting freshly
         if any(name.startswith(f"Tools/{p}/Wi-Fi.pak/") or name.startswith(f"Tools/{p}/Nonna's Kitchen.pak/") or name.startswith(f"Emus/{p}/NDS.pak/") for p in platforms):
             continue
 
         data = ext_in.read(name)
-        if name == "README.txt":
-            # Update README with Cannelloni branding
-            try:
-                content = data.decode("utf-8").replace("MinUI", "Cannelloni").replace("minui", "cannelloni")
-                data = content.encode("utf-8")
-            except UnicodeDecodeError:
-                pass
-        ext_out.writestr(item, data)
+        try:
+            content = data.decode("utf-8")
+            content = content.replace("MinUI", "Cannelloni").replace("minui", "cannelloni")
+            data = content.encode("utf-8")
+        except UnicodeDecodeError:
+            pass
 
-    # Add Nonna's Kitchen & Wi-Fi tool paks across all platforms
+        out_zip.writestr(item, data)
+        written_entries.add(name)
+
+    # 5. Add Nintendo DS ROM & Bios folders
+    if "Roms/Nintendo DS (NDS)/.keep" not in written_entries:
+        out_zip.writestr("Roms/Nintendo DS (NDS)/.keep", b"# Nintendo DS ROMs (.nds, .zip)\n")
+        written_entries.add("Roms/Nintendo DS (NDS)/.keep")
+    if "Bios/NDS/.keep" not in written_entries:
+        out_zip.writestr("Bios/NDS/.keep", b"# NDS Bios: bios7.bin, bios9.bin, firmware.bin\n")
+        written_entries.add("Bios/NDS/.keep")
+
+    # 6. Default accent color setting
+    out_zip.writestr(".userdata/shared/.cannelloni/accent_color.txt", b"#f1c40f\n")
+    written_entries.add(".userdata/shared/.cannelloni/accent_color.txt")
+
+    # 7. Add Nonna's Kitchen & Wi-Fi tool paks across all platforms
     for p in platforms:
         k_dir = f"skeleton/EXTRAS/Tools/{p}/Nonna's Kitchen.pak"
         if not os.path.isdir(k_dir):
             k_dir = "skeleton/EXTRAS/Tools/miyoomini/Nonna's Kitchen.pak"
-        add_dir_to_zip(ext_out, k_dir, f"Tools/{p}/Nonna's Kitchen.pak")
+        add_dir_to_zip(out_zip, k_dir, f"Tools/{p}/Nonna's Kitchen.pak", written_entries)
 
         w_dir = f"skeleton/EXTRAS/Tools/{p}/Wi-Fi.pak"
         if not os.path.isdir(w_dir):
             w_dir = "skeleton/EXTRAS/Tools/miyoomini/Wi-Fi.pak"
-        add_dir_to_zip(ext_out, w_dir, f"Tools/{p}/Wi-Fi.pak")
+        add_dir_to_zip(out_zip, w_dir, f"Tools/{p}/Wi-Fi.pak", written_entries)
 
         nds_emu_dir = f"skeleton/SYSTEM/{p}/paks/Emus/NDS.pak"
         if os.path.isdir(nds_emu_dir):
-            add_dir_to_zip(ext_out, nds_emu_dir, f"Emus/{p}/NDS.pak")
+            add_dir_to_zip(out_zip, nds_emu_dir, f"Emus/{p}/NDS.pak", written_entries)
 
-    # Include NDS-Drastic.pak in extras for users who also want standalone DraStic
+    # 8. Include NDS-Drastic.pak in Emus/miyoomini for users who also want standalone DraStic
     drastic_dir = "skeleton/EXTRAS/Emus/miyoomini/NDS-Drastic.pak"
     if os.path.isdir(drastic_dir):
-        add_dir_to_zip(ext_out, drastic_dir, "Emus/miyoomini/NDS-Drastic.pak")
+        add_dir_to_zip(out_zip, drastic_dir, "Emus/miyoomini/NDS-Drastic.pak", written_entries)
 
-print(f"Extras package completed: {os.path.getsize(OUT_EXTRAS_ZIP)} bytes")
-print("All release archives built successfully!")
+print(f"Unified package completed: {os.path.getsize(OUT_UNIFIED_ZIP)} bytes ({len(written_entries)} entries)")
+print("Release archive built successfully!")
