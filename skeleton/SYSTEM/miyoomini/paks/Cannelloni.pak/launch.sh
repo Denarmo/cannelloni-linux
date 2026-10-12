@@ -124,45 +124,26 @@ EXEC_PATH=/tmp/cannelloni_exec
 NEXT_PATH="/tmp/next"
 touch "$EXEC_PATH"  && sync
 
-LOG_FILE="/mnt/SDCARD/cannelloni_install.log"
-echo "=== [$(date +'%Y-%m-%d %H:%M:%S')] Cannelloni.pak/launch.sh loop starting ===" >> "$LOG_FILE" 2>&1
-echo "EXEC_PATH: $EXEC_PATH" >> "$LOG_FILE" 2>&1
-echo "PATH: $PATH" >> "$LOG_FILE" 2>&1
-echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH" >> "$LOG_FILE" 2>&1
-sync
-
 while [ -f "$EXEC_PATH" ]; do
 	overclock.elf $CPU_SPEED_PERF
-	echo "Attempting to launch UI binary..." >> "$LOG_FILE" 2>&1
-	sync
 	if command -v cannelloni.elf >/dev/null 2>&1; then
-		echo "Executing cannelloni.elf..." >> "$LOG_FILE" 2>&1
-		cannelloni.elf 2>&1 | tee -a "$LOG_FILE" > "$LOGS_PATH/cannelloni.txt"
+		cannelloni.elf > "$LOGS_PATH/cannelloni.txt" 2>&1
 	elif [ -f "$SYSTEM_PATH/bin/cannelloni.elf" ]; then
-		echo "Executing $SYSTEM_PATH/bin/cannelloni.elf..." >> "$LOG_FILE" 2>&1
-		"$SYSTEM_PATH/bin/cannelloni.elf" 2>&1 | tee -a "$LOG_FILE" > "$LOGS_PATH/cannelloni.txt"
+		"$SYSTEM_PATH/bin/cannelloni.elf" > "$LOGS_PATH/cannelloni.txt" 2>&1
 	elif command -v minui.elf >/dev/null 2>&1; then
-		echo "Executing minui.elf..." >> "$LOG_FILE" 2>&1
-		minui.elf 2>&1 | tee -a "$LOG_FILE" > "$LOGS_PATH/cannelloni.txt"
+		minui.elf > "$LOGS_PATH/cannelloni.txt" 2>&1
 	elif [ -f "$SYSTEM_PATH/bin/minui.elf" ]; then
-		echo "Executing $SYSTEM_PATH/bin/minui.elf..." >> "$LOG_FILE" 2>&1
-		"$SYSTEM_PATH/bin/minui.elf" 2>&1 | tee -a "$LOG_FILE" > "$LOGS_PATH/cannelloni.txt"
+		"$SYSTEM_PATH/bin/minui.elf" > "$LOGS_PATH/cannelloni.txt" 2>&1
 	else
-		echo "CRITICAL: No UI executable found!" >> "$LOG_FILE" 2>&1
-		ls -la "$SYSTEM_PATH/bin/" >> "$LOG_FILE" 2>&1
-		sync
 		break
 	fi
-	BIN_CODE=$?
-	echo "UI binary exited with code: $BIN_CODE" >> "$LOG_FILE" 2>&1
-	sync
 	
 	echo `date +'%F %T'` > "$DATETIME_PATH"
 	sync
 	
 	if [ -f $NEXT_PATH ]; then
 		CMD=`cat $NEXT_PATH`
-		echo "Processing NEXT_PATH command: $CMD" >> "$LOG_FILE" 2>&1
+		echo "Processing NEXT_PATH command: $CMD"
 		eval $CMD
 		rm -f $NEXT_PATH
 		if [ -f "/tmp/using-swap" ]; then
@@ -176,7 +157,7 @@ while [ -f "$EXEC_PATH" ]; do
 	fi
 done
 
-echo "Cannelloni.pak/launch.sh loop terminated. Shutting down in 3s..." >> "$LOG_FILE" 2>&1
+echo "Cannelloni.pak/launch.sh loop terminated. Shutting down in 3s..."
 sync
 sleep 3
 shutdown # just in case

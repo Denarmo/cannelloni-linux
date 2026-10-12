@@ -1,8 +1,7 @@
 #!/bin/sh
 # NOTE: becomes .tmp_update/miyoomini.sh
 
-LOG_FILE="/mnt/SDCARD/cannelloni_install.log"
-echo "=== [$(date +'%Y-%m-%d %H:%M:%S')] .tmp_update/miyoomini.sh triggered ===" >> "$LOG_FILE" 2>&1
+echo "=== [$(date +'%Y-%m-%d %H:%M:%S')] .tmp_update/miyoomini.sh triggered ==="
 
 PLATFORM="miyoomini"
 SDCARD_PATH="/mnt/SDCARD"
@@ -12,8 +11,8 @@ if [ ! -f "$UPDATE_PATH" ] && [ -f "$SDCARD_PATH/MinUI.zip" ]; then
 fi
 SYSTEM_PATH="$SDCARD_PATH/.system"
 
-echo "UPDATE_PATH: $UPDATE_PATH (exists: $([ -f "$UPDATE_PATH" ] && echo YES || echo NO))" >> "$LOG_FILE" 2>&1
-echo "SYSTEM_PATH: $SYSTEM_PATH (exists: $([ -d "$SYSTEM_PATH" ] && echo YES || echo NO))" >> "$LOG_FILE"
+echo "UPDATE_PATH: $UPDATE_PATH (exists: $([ -f "$UPDATE_PATH" ] && echo YES || echo NO))"
+echo "SYSTEM_PATH: $SYSTEM_PATH (exists: $([ -d "$SYSTEM_PATH" ] && echo YES || echo NO))"
 sync
 
 CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
@@ -21,7 +20,7 @@ echo performance > "$CPU_PATH" 2>/dev/null
 
 # install/update
 if [ -f "$UPDATE_PATH" ]; then 
-	echo "Install package detected at $UPDATE_PATH" >> "$LOG_FILE" 2>&1
+	echo "Install package detected at $UPDATE_PATH"
 	cd $(dirname "$0")/$PLATFORM
 	
 	# init backlight
@@ -37,70 +36,70 @@ if [ -f "$UPDATE_PATH" ]; then
 
 	chmod +x ./show.elf 2>/dev/null
 	if [ -d "$SYSTEM_PATH" ]; then
-		echo "Existing .system found, showing updating.png..." >> "$LOG_FILE" 2>&1
+		echo "Existing .system found, showing updating.png..."
 		./show.elf ./updating.png 2>/dev/null &
 	else
-		echo "Fresh install, showing installing.png..." >> "$LOG_FILE" 2>&1
+		echo "Fresh install, showing installing.png..."
 		./show.elf ./installing.png 2>/dev/null &
 	fi
 	sync
 	
-	echo "Unpacking update archive to $SDCARD_PATH/..." >> "$LOG_FILE" 2>&1
+	echo "Unpacking update archive to $SDCARD_PATH/..."
 	mv $SDCARD_PATH/.tmp_update $SDCARD_PATH/.tmp_update-old 2>/dev/null
 	
 	# Unzip update
-	unzip -o "$UPDATE_PATH" -d "$SDCARD_PATH" >> "$LOG_FILE" 2>&1
+	unzip -o "$UPDATE_PATH" -d "$SDCARD_PATH"
 	UNZIP_RESULT=$?
-	echo "unzip exited with code: $UNZIP_RESULT" >> "$LOG_FILE" 2>&1
+	echo "unzip exited with code: $UNZIP_RESULT"
 	sync
 	
 	if [ $UNZIP_RESULT -eq 0 ]; then
-		echo "Unpack succeeded, cleaning up archive..." >> "$LOG_FILE" 2>&1
+		echo "Unpack succeeded, cleaning up archive..."
 		rm -f "$UPDATE_PATH"
 		rm -rf $SDCARD_PATH/.tmp_update-old
 	else
-		echo "WARNING: unzip returned non-zero code $UNZIP_RESULT, keeping archive" >> "$LOG_FILE" 2>&1
+		echo "WARNING: unzip returned non-zero code $UNZIP_RESULT, keeping archive"
 	fi
 	
 	# Verify extracted binaries
-	echo "Binaries in $SYSTEM_PATH/$PLATFORM/bin/:" >> "$LOG_FILE" 2>&1
-	ls -la "$SYSTEM_PATH/$PLATFORM/bin/" >> "$LOG_FILE" 2>&1
+	echo "Binaries in $SYSTEM_PATH/$PLATFORM/bin/:"
+	ls -la "$SYSTEM_PATH/$PLATFORM/bin/"
 	sync
 	
 	# the updated system finishes the install/update
 	if [ -f "$SYSTEM_PATH/$PLATFORM/bin/install.sh" ]; then
-		echo "Running install.sh..." >> "$LOG_FILE" 2>&1
+		echo "Running install.sh..."
 		chmod +x "$SYSTEM_PATH/$PLATFORM/bin/install.sh" 2>/dev/null
-		"$SYSTEM_PATH/$PLATFORM/bin/install.sh" >> "$LOG_FILE" 2>&1
-		echo "install.sh finished with code $?" >> "$LOG_FILE" 2>&1
+		"$SYSTEM_PATH/$PLATFORM/bin/install.sh"
+		echo "install.sh finished with code $?"
 	fi
 	sync
 fi
 
 # or launch (and keep launched)
 LAUNCH_PATH="$SYSTEM_PATH/$PLATFORM/paks/Cannelloni.pak/launch.sh"
-echo "Checking LAUNCH_PATH: $LAUNCH_PATH" >> "$LOG_FILE" 2>&1
-echo "LAUNCH_PATH exists: $([ -f "$LAUNCH_PATH" ] && echo YES || echo NO)" >> "$LOG_FILE" 2>&1
+echo "Checking LAUNCH_PATH: $LAUNCH_PATH"
+echo "LAUNCH_PATH exists: $([ -f "$LAUNCH_PATH" ] && echo YES || echo NO)"
 sync
 
 if [ -f "$LAUNCH_PATH" ]; then
 	chmod +x "$LAUNCH_PATH" 2>/dev/null
 	chmod +x "$SYSTEM_PATH/$PLATFORM/bin/"* 2>/dev/null
-	echo "Launching Cannelloni main loop..." >> "$LOG_FILE" 2>&1
+	echo "Launching Cannelloni main loop..."
 	sync
 	while [ -f "$LAUNCH_PATH" ] ; do
-		"$LAUNCH_PATH" >> "$LOG_FILE" 2>&1
+		"$LAUNCH_PATH"
 		LAUNCH_EXIT=$?
-		echo "LAUNCH_PATH exited with code: $LAUNCH_EXIT" >> "$LOG_FILE" 2>&1
+		echo "LAUNCH_PATH exited with code: $LAUNCH_EXIT"
 		sync
 		sleep 1
 	done
 else
-	echo "ERROR: LAUNCH_PATH not found! Expected at $LAUNCH_PATH" >> "$LOG_FILE" 2>&1
+	echo "ERROR: LAUNCH_PATH not found! Expected at $LAUNCH_PATH"
 	sync
 fi
 
-echo "miyoomini.sh loop ended. System will reboot in 3 seconds." >> "$LOG_FILE" 2>&1
+echo "miyoomini.sh loop ended. System will reboot in 3 seconds."
 sync
 sleep 3
 reboot

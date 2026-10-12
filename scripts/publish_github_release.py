@@ -25,11 +25,17 @@ BODY = """# Cannelloni v20261012-0
 Welcome to Cannelloni for Linux handhelds (Anbernic, Miyoo, TrimUI, Powkiddy, MagicX, and GKD).
 
 ## What's New in this Release:
-- **Unified Single-Zip Distribution**: All core systems, extra emulators, tools, and installers delivered in one unified archive. No more separate base and extras packages!
-- **melonDS Libretro Core (Nintendo DS)**: Fully integrated NDS libretro core and `NDS.pak` across all 12 supported handheld platforms. Press `MENU` in-game to access native Cannelloni save states, settings, and quicksaves.
-- **Cannelloni Gold UI (#f1c40f)**: Native gold selection pills and slider bars baked into the core interface spritesheets for all screen resolutions.
-- **Interactive On-Device Wi-Fi Tool**: Scan wireless networks, type passwords directly via on-screen virtual keyboard (`minui-keyboard`), and connect directly without needing the stock OS.
-- **Nonna's Kitchen (FTP File Transfer)**: RFC 959 wireless file transfer server on port `2121`. Access your SD card wirelessly over local Wi-Fi with FileZilla, Cyberduck, or your computer's file manager.
+- **Unified Single-Zip Distribution**: All core systems, emulators, tools, and platform installers delivered in one unified archive (`Cannelloni-20261012-0.zip`).
+- **New Top-Level Settings Menu**: Direct access from the main screen to:
+  - **Wi-Fi**: Connect to wireless networks, view IP, and toggle auto-start on boot directly on-device.
+  - **Accent Color**: Customize interface colors (Cannelloni Gold `#f1c40f`, Tomato Red, Basil Green, Sky Blue, and more).
+  - **Button Mapping**: Swap A/B and X/Y button layouts.
+  - **Emulators**: Choose preferred emulators per console (e.g. Libretro DeSmuME vs standalone DraStic for Nintendo DS).
+- **Nonna's Kitchen (Web Dashboard)**: Wireless HTTP management service on port `1091` matching Android Cannelloni. Connect with any web browser to view storage, browse files, and drag-and-drop upload ROMs, BIOS, and Saves.
+- **Curated Tools Section**: Focused strictly on essential utilities: `Clock`, `Files`, `Input`, `IP`, and `Nonna's Kitchen`.
+- **Full Cannelloni Gold UI (#f1c40f)**: Uniform gold accent theming across all UI components, button badges `(A)`/`(B)`, battery fill and charging bolt, Wi-Fi icon, volume and brightness indicators, and selection pills across all screen scales (1x through 4x).
+- **Nintendo DS Emulation**: Libretro core implementation with in-game menu (`MENU` button) and save state support, alongside optional standalone DraStic.
+- **Clean Installer**: Cleaned up production installation scripts.
 
 ## Installation:
 1. Download **`Cannelloni-20261012-0.zip`**.
@@ -59,89 +65,88 @@ req = urllib.request.Request(
     }
 )
 
+release_id = None
 try:
     with urllib.request.urlopen(req) as resp:
-        release_data = json.loads(resp.read().decode('utf-8'))
-        release_id = release_data['id']
-        html_url = release_data['html_url']
-        print(f"Release created successfully! URL: {html_url}")
+        res = json.loads(resp.read().decode('utf-8'))
+        release_id = res['id']
+        print(f"Created new release: ID {release_id}")
 except urllib.error.HTTPError as e:
-    err_body = e.read().decode('utf-8')
-    print(f"Release exists, updating release {TAG} metadata...")
-    req_existing = urllib.request.Request(
-        f"https://api.github.com/repos/{REPO}/releases/tags/{TAG}",
-        headers={"Authorization": f"token {token}", "User-Agent": "Cannelloni"}
-    )
-    with urllib.request.urlopen(req_existing) as resp:
-        release_data = json.loads(resp.read().decode('utf-8'))
-        release_id = release_data['id']
-        html_url = release_data['html_url']
-        print(f"Using existing release: {html_url}")
+    if e.code == 422: # Already exists, fetch release ID
+        print("Release exists, fetching existing release ID...")
+        req_get = urllib.request.Request(
+            f"https://api.github.com/repos/{REPO}/releases/tags/{TAG}",
+            headers={
+                "Authorization": f"token {token}",
+                "User-Agent": "Cannelloni",
+                "Accept": "application/vnd.github.v3+json"
+            }
+        )
+        with urllib.request.urlopen(req_get) as resp_get:
+            res_get = json.loads(resp_get.read().decode('utf-8'))
+            release_id = res_get['id']
+            print(f"Found existing release ID {release_id}")
+            
+            # Update release body
+            req_patch = urllib.request.Request(
+                f"https://api.github.com/repos/{REPO}/releases/{release_id}",
+                data=release_payload,
+                headers={
+                    "Authorization": f"token {token}",
+                    "User-Agent": "Cannelloni",
+                    "Content-Type": "application/json",
+                    "Accept": "application/vnd.github.v3+json"
+                },
+                method='PATCH'
+            )
+            urllib.request.urlopen(req_patch)
+            print("Updated release notes.")
+    else:
+        raise
 
-    # Update release body
-    req_update = urllib.request.Request(
-        f"https://api.github.com/repos/{REPO}/releases/{release_id}",
-        data=json.dumps({"body": BODY, "name": RELEASE_TITLE}).encode('utf-8'),
-        headers={
-            "Authorization": f"token {token}",
-            "User-Agent": "Cannelloni",
-            "Content-Type": "application/json"
-        }
-    )
-    req_update.get_method = lambda: "PATCH"
-    with urllib.request.urlopen(req_update) as resp:
-        pass
+# 2. Upload asset
+asset_name = os.path.basename(UNIFIED_ZIP)
+print(f"Checking assets for {asset_name}...")
 
-# Delete old base and extras assets to maintain clean single-zip delivery
-print("Cleaning up older split assets if present...")
 req_assets = urllib.request.Request(
     f"https://api.github.com/repos/{REPO}/releases/{release_id}/assets",
-    headers={"Authorization": f"token {token}", "User-Agent": "Cannelloni"}
+    headers={
+        "Authorization": f"token {token}",
+        "User-Agent": "Cannelloni",
+        "Accept": "application/vnd.github.v3+json"
+    }
 )
-try:
-    with urllib.request.urlopen(req_assets) as resp:
-        existing_assets = json.loads(resp.read().decode('utf-8'))
-        for ea in existing_assets:
-            if ea['name'] in ("Cannelloni-20261012-0-base.zip", "Cannelloni-20261012-0-extras.zip", "Cannelloni-20261012-0.zip"):
-                print(f"Deleting older asset {ea['name']} (id {ea['id']})...")
-                del_req = urllib.request.Request(
-                    f"https://api.github.com/repos/{REPO}/releases/assets/{ea['id']}",
-                    headers={"Authorization": f"token {token}", "User-Agent": "Cannelloni"}
-                )
-                del_req.get_method = lambda: "DELETE"
-                urllib.request.urlopen(del_req)
-except Exception as e:
-    print(f"Warning during asset cleanup: {e}")
+with urllib.request.urlopen(req_assets) as resp:
+    assets = json.loads(resp.read().decode('utf-8'))
+    for a in assets:
+        if a['name'] == asset_name:
+            print(f"Deleting existing asset ID {a['id']} ({asset_name})...")
+            req_del = urllib.request.Request(
+                f"https://api.github.com/repos/{REPO}/releases/assets/{a['id']}",
+                headers={
+                    "Authorization": f"token {token}",
+                    "User-Agent": "Cannelloni",
+                    "Accept": "application/vnd.github.v3+json"
+                },
+                method='DELETE'
+            )
+            urllib.request.urlopen(req_del)
 
-# Upload unified asset
-if not os.path.isfile(UNIFIED_ZIP):
-    print(f"Error: Unified zip not found at {UNIFIED_ZIP}")
-    exit(1)
-
-asset_name = "Cannelloni-20261012-0.zip"
-print(f"Uploading unified release asset {asset_name} ({os.path.getsize(UNIFIED_ZIP)} bytes)...")
-upload_url = f"https://uploads.github.com/repos/{REPO}/releases/{release_id}/assets?name={asset_name}"
-
+print(f"Uploading {UNIFIED_ZIP} ({os.path.getsize(UNIFIED_ZIP)} bytes)...")
 with open(UNIFIED_ZIP, "rb") as f:
-    file_bytes = f.read()
+    zip_bytes = f.read()
 
-req_upload = urllib.request.Request(
-    upload_url,
-    data=file_bytes,
+req_up = urllib.request.Request(
+    f"https://uploads.github.com/repos/{REPO}/releases/{release_id}/assets?name={asset_name}",
+    data=zip_bytes,
     headers={
         "Authorization": f"token {token}",
         "User-Agent": "Cannelloni",
         "Content-Type": "application/zip",
-        "Content-Length": str(len(file_bytes))
+        "Accept": "application/vnd.github.v3+json"
     }
 )
+with urllib.request.urlopen(req_up) as resp:
+    print(f"Successfully uploaded {asset_name} to GitHub Release {TAG}!")
 
-try:
-    with urllib.request.urlopen(req_upload) as resp:
-        asset_data = json.loads(resp.read().decode('utf-8'))
-        print(f"Uploaded {asset_name}: {asset_data.get('browser_download_url')}")
-except urllib.error.HTTPError as e:
-    print(f"Upload error for {asset_name}: {e.code} {e.read().decode('utf-8')}")
-
-print("\nRelease publish process finished successfully!")
-print(f"Download Unified Release at: {html_url}")
+print(f"Release published: https://github.com/{REPO}/releases/tag/{TAG}")

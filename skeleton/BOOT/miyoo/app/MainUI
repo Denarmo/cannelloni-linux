@@ -1,45 +1,44 @@
 #!/bin/sh
 
-LOG_FILE="/mnt/SDCARD/cannelloni_install.log"
-echo "=== [$(date +'%Y-%m-%d %H:%M:%S')] MainUI bootstrap triggered ===" >> "$LOG_FILE" 2>&1
-echo "Script path: $0" >> "$LOG_FILE" 2>&1
-echo "Current directory: $(pwd)" >> "$LOG_FILE" 2>&1
+echo "=== [$(date +'%Y-%m-%d %H:%M:%S')] MainUI bootstrap triggered ==="
+echo "Script path: $0"
+echo "Current directory: $(pwd)"
 
 cd $(dirname "$0")
-echo "Moved to: $(pwd)" >> "$LOG_FILE" 2>&1
+echo "Moved to: $(pwd)"
 
 INFO=`cat /proc/cpuinfo 2> /dev/null`
-echo "CPU info snippet: $(echo "$INFO" | grep -iE 'hardware|model|processor|cortex|arm' | tr '\n' ' ')" >> "$LOG_FILE" 2>&1
-echo "axp_test present: $([ -f "/customer/app/axp_test" ] && echo YES || echo NO)" >> "$LOG_FILE" 2>&1
+echo "CPU info snippet: $(echo "$INFO" | grep -iE 'hardware|model|processor|cortex|arm' | tr '\n' ' ')"
+echo "axp_test present: $([ -f "/customer/app/axp_test" ] && echo YES || echo NO)"
 sync
 
 case $INFO in
 *"0xd05"*)
-	echo "Detected 0xd05 (Miyoo Flip), running ./my355.sh" >> "$LOG_FILE" 2>&1
+	echo "Detected 0xd05 (Miyoo Flip), running ./my355.sh"
 	sync
-	./my355.sh >> "$LOG_FILE" 2>&1
+	./my355.sh
 	;;
 *"sun8i"*)
-	echo "Detected sun8i (Miyoo A30), running ./my282.sh" >> "$LOG_FILE" 2>&1
+	echo "Detected sun8i (Miyoo A30), running ./my282.sh"
 	sync
-	./my282.sh >> "$LOG_FILE" 2>&1
+	./my282.sh
 	;;
 *"SStar"*|*"sstar"*|*"Sigmastar"*|*"SigmaStar"*|*"SSD20"*|*"infinity2"*|*"Infinity2"*|*"MStar"*)
-	echo "Detected SigmaStar SoC, running ./miyoomini.sh" >> "$LOG_FILE" 2>&1
+	echo "Detected SigmaStar SoC, running ./miyoomini.sh"
 	sync
-	./miyoomini.sh >> "$LOG_FILE" 2>&1
+	./miyoomini.sh
 	;;
 *)
-	echo "Matching fallback for Miyoo Mini / Mini Plus..." >> "$LOG_FILE" 2>&1
+	echo "Matching fallback for Miyoo Mini / Mini Plus..."
 	if [ -f "/customer/app/axp_test" ] || [ -d "/customer/app" ]; then
-		echo "Found /customer/app, running ./miyoomini.sh" >> "$LOG_FILE" 2>&1
+		echo "Found /customer/app, running ./miyoomini.sh"
 		sync
-		./miyoomini.sh >> "$LOG_FILE" 2>&1
+		./miyoomini.sh
 	else
-		echo "ERROR: Unknown hardware in MainUI" >> "$LOG_FILE" 2>&1
+		echo "ERROR: Unknown hardware in MainUI"
 	fi
 	;;
 esac
 
-echo "MainUI exited with code: $?" >> "$LOG_FILE" 2>&1
+echo "MainUI exited with code: $?"
 sync

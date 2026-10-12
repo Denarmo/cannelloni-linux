@@ -1,5 +1,7 @@
 #!/bin/sh
 
+PAK_DIR="$(dirname "$0")"
+
 # Check if Wi-Fi is already connected with a valid IP
 get_ip() {
 	ip -4 addr show dev wlan0 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1 | head -n1
@@ -15,9 +17,10 @@ if ! [ -x "$SAY" ]; then
 	SAY="say.elf"
 fi
 
-# If not connected yet, try bringing Wi-Fi up cleanly WITHOUT killing existing connections
+# If not connected yet, try bringing Wi-Fi up cleanly
 if [ -z "$IP" ] || [ "$IP" = "127.0.0.1" ]; then
-	WIFI_ON="/mnt/SDCARD/Tools/miyoomini/Wi-Fi.pak/bin/service-on"
+	WIFI_ON="/mnt/SDCARD/Settings/miyoomini/Wi-Fi.pak/bin/service-on"
+	[ ! -f "$WIFI_ON" ] && WIFI_ON="/mnt/SDCARD/Tools/miyoomini/Wi-Fi.pak/bin/service-on"
 	if [ -f "$WIFI_ON" ]; then
 		/bin/sh "$WIFI_ON" >/dev/null 2>&1
 	elif [ -f "/customer/app/axp_test" ]; then
@@ -29,8 +32,8 @@ if [ -z "$IP" ] || [ "$IP" = "127.0.0.1" ]; then
 		fi
 	fi
 
-	# Wait up to 10 seconds for IP address assignment
-	for i in 1 2 3 4 5 6 7 8 9 10; do
+	# Wait up to 8 seconds for IP address assignment
+	for i in 1 2 3 4 5 6 7 8; do
 		IP=$(get_ip)
 		[ -z "$IP" ] && IP=$(ifconfig wlan0 2>/dev/null | awk '/inet addr:/ {print $2}' | cut -d: -f2 | head -n1)
 		if [ -n "$IP" ] && [ "$IP" != "127.0.0.1" ]; then
@@ -42,21 +45,24 @@ fi
 
 if [ -z "$IP" ] || [ "$IP" = "127.0.0.1" ]; then
 	$SAY "Wi-Fi is not connected.
-Configure Wi-Fi in Tools > Wi-Fi first."
+Please configure Wi-Fi in Settings > Wi-Fi first."
 	exit 0
 fi
 
-# Start FTP server on port 2121
-killall tcpsvd ftpd 2>/dev/null
-tcpsvd -vE 0.0.0.0 2121 ftpd -w /mnt/SDCARD &
-FTP_PID=$!
+# Ensure CGI script is executable
+chmod +x "$PAK_DIR/web/cgi-bin/api.cgi" 2>/dev/null
 
-$SAY "Nonna's Kitchen FTP Active!
-Address: ftp://$IP:2121
-User: cannelloni | Pass: cannelloni
+# Start Nonna's Kitchen HTTP server on port 1091 (matching Android Cannelloni)
+killall httpd 2>/dev/null
+busybox httpd -p 1091 -h "$PAK_DIR/web" &
+HTTPD_PID=$!
 
-Press A to stop FTP."
+$SAY "Nonna's Kitchen is Serving!
+Open in browser on phone or PC:
+http://$IP:1091
 
-# Stop FTP when user closes (leaving Wi-Fi active!)
-kill $FTP_PID 2>/dev/null
-killall tcpsvd ftpd 2>/dev/null
+Press A to Stop & Exit."
+
+# Stop HTTP server when user exits (leaving Wi-Fi active!)
+kill $HTTPD_PID 2>/dev/null
+killall httpd 2>/dev/null

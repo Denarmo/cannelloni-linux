@@ -2,6 +2,8 @@ import os
 import io
 import zipfile
 import shutil
+import struct
+import urllib.request
 
 RELEASE_TAG = "v20261012-0"
 RELEASE_NAME = "Cannelloni-20261012-0"
@@ -13,7 +15,6 @@ OUT_DIR = "releases"
 os.makedirs("build_release/temp", exist_ok=True)
 os.makedirs(OUT_DIR, exist_ok=True)
 
-import urllib.request
 if not os.path.isfile(SRC_BASE_ZIP):
     print("Downloading upstream base release template...")
     urllib.request.urlretrieve("https://github.com/shauninman/MinUI/releases/download/v20251127-1/MinUI-20251127-1-base.zip", SRC_BASE_ZIP)
@@ -41,7 +42,7 @@ def add_dir_to_zip(zout, src_dir, zip_prefix, written_entries):
             zinfo = zipfile.ZipInfo(dest)
             zinfo.compress_type = zipfile.ZIP_DEFLATED
             is_exec = (
-                f.endswith((".sh", ".elf", "MainUI", "updater")) or
+                f.endswith((".sh", ".elf", "MainUI", "updater", ".cgi")) or
                 ("." not in f and not f.startswith(".")) or
                 f in (
                     "drastic", "cpuclock", "show_hotkeys", "minui-keyboard",
@@ -60,7 +61,6 @@ def patch_arm32_gold(data):
     """Patches ARM32 ELF binaries so RGB_WHITE is initialized to #f1c40f (Cannelloni Gold).
     This ensures SDL_FillRect in GFX_blitPill and GFX_blitBar renders 100% solid gold
     in the center rather than white."""
-    import struct
     b = bytearray(data)
     for i in range(0, len(b) - 48, 4):
         w1 = struct.unpack('<I', b[i:i+4])[0]
@@ -79,29 +79,24 @@ def patch_arm32_gold(data):
                 b[w3_off:w3_off+4] = struct.pack('<I', 0xe3a010f1)  # MOV r1, #0xf1 (Red)
     return bytes(b)
 
-def patch_core_glibc(data):
-    """Removes GLIBC_2.17 symbol version requirements from ARM cores so they load
-    on Miyoo Mini (glibc 2.4/2.15/2.27)."""
-    import struct
+def patch_minui_settings(data, platform):
+    """Patches minui.elf so that /mnt/SDCARD/Settings/<platform> is discovered and
+    added to root alongside Tools."""
+    if platform != 'miyoomini':
+        return data
     b = bytearray(data)
-    # 1. Replace hash of GLIBC_2.17 (0x6969197) with hash of GLIBC_2.4 (0xd696914)
-    old_hash = struct.pack('<I', 0x6969197)
-    new_hash = struct.pack('<I', 0xd696914)
-    idx = 0
-    while True:
-        idx = b.find(old_hash, idx)
-        if idx == -1:
-            break
-        b[idx:idx+4] = new_hash
-        idx += 4
-    # 2. Replace b'GLIBC_2.17' with b'GLIBC_2.4\x00\x00'
-    idx = 0
-    while True:
-        idx = b.find(b'GLIBC_2.17', idx)
-        if idx == -1:
-            break
-        b[idx:idx+10] = b'GLIBC_2.4\x00\x00'
-        idx += 10
+    hook_offset = 0x1bb98
+    jump_offset = 0x54ac
+    hook_bin_path = 'build_release/temp/hook_resolved.bin'
+    if os.path.isfile(hook_bin_path) and len(b) > hook_offset + 300:
+        if b[jump_offset:jump_offset+4] == b'\xb4\x00\x0b\xe3':
+            with open(hook_bin_path, 'rb') as f:
+                hook = f.read()
+            b[hook_offset : hook_offset + len(hook)] = hook
+            # b 0x2bb98 from 0x154ac: offset = 0x59b9
+            b_inst = 0xea000000 | 0x59b9
+            b[jump_offset : jump_offset + 4] = struct.pack('<I', b_inst)
+            print("Patched Settings menu hook into miyoomini ELF!")
     return bytes(b)
 
 # ----------------------------------------------------
@@ -129,7 +124,6 @@ for item in in_minui_zip.infolist():
     if "paks/MinUI.pak" in name:
         name = name.replace("paks/MinUI.pak", "paks/Cannelloni.pak")
         if name.endswith("launch.sh"):
-            # Update launch script to cannelloni.elf
             content = data.decode("utf-8", errors="ignore")
             content = content.replace("minui.elf", "cannelloni.elf")
             content = content.replace("/tmp/minui_exec", "/tmp/cannelloni_exec")
@@ -176,6 +170,10 @@ for item in in_minui_zip.infolist():
     if name.endswith("/bin/minui.elf") or name.endswith("/bin/minarch.elf"):
         data = patch_arm32_gold(data)
 
+    # Patch Settings menu hook into miyoomini ELF
+    if name == ".system/miyoomini/bin/minui.elf":
+        data = patch_minui_settings(data, "miyoomini")
+
     # Ensure cannelloni.elf exists alongside minui.elf
     if name.endswith("/bin/minui.elf"):
         cannelloni_name = name.replace("/bin/minui.elf", "/bin/cannelloni.elf")
@@ -193,26 +191,37 @@ for item in in_minui_zip.infolist():
     out_cannelloni_zip.writestr(zinfo, data)
 
 # Inject NDS Libretro cores across all platforms in Cannelloni.zip
-print("Injecting NDS libretro cores into Cannelloni.zip...")
-for p in platforms:
-    if p == 'rg35xxplus':
-        core_file = "build_release/temp/cores/melonds_libretro_aarch64.so"
-    else:
-        core_file = "build_release/temp/cores/melonds_libretro.so"
+print("Injecting clean NDS libretro cores into Cannelloni.zip...")
+core_file = "build_release/temp/cores/desmume2015_libretro.so"
+if os.path.isfile(core_file):
+    with open(core_file, "rb") as f:
+        core_bytes = f.read()
+    for p in platforms:
+        if p == 'rg35xxplus':
+            c_file = "build_release/temp/cores/melonds_libretro_aarch64.so"
+            c_bytes = open(c_file, "rb").read() if os.path.isfile(c_file) else core_bytes
+        else:
+            c_bytes = core_bytes
 
-    if os.path.isfile(core_file):
-        with open(core_file, "rb") as f:
-            core_bytes = f.read()
-        core_bytes = patch_core_glibc(core_bytes)
         zinfo_m = zipfile.ZipInfo(f".system/{p}/cores/melonds_libretro.so")
         zinfo_m.compress_type = zipfile.ZIP_DEFLATED
         zinfo_m.external_attr = 0o755 << 16
-        out_cannelloni_zip.writestr(zinfo_m, core_bytes)
+        out_cannelloni_zip.writestr(zinfo_m, c_bytes)
 
         zinfo_d = zipfile.ZipInfo(f".system/{p}/cores/desmume2015_libretro.so")
         zinfo_d.compress_type = zipfile.ZIP_DEFLATED
         zinfo_d.external_attr = 0o755 << 16
-        out_cannelloni_zip.writestr(zinfo_d, core_bytes)
+        out_cannelloni_zip.writestr(zinfo_d, c_bytes)
+
+# Bundle libstdc++.so.6 with GLIBCXX_3.4.21 for miyoomini
+libstdc_path = "build_release/temp/libstdc++.so.6"
+if os.path.isfile(libstdc_path):
+    with open(libstdc_path, "rb") as f:
+        libstdc_bytes = f.read()
+    zinfo_s = zipfile.ZipInfo(".system/miyoomini/lib/libstdc++.so.6")
+    zinfo_s.compress_type = zipfile.ZIP_DEFLATED
+    zinfo_s.external_attr = 0o755 << 16
+    out_cannelloni_zip.writestr(zinfo_s, libstdc_bytes)
 
 # Add NDS.pak across all platforms from skeleton
 for p in platforms:
@@ -220,8 +229,10 @@ for p in platforms:
     if os.path.isdir(nds_dir):
         add_dir_to_zip(out_cannelloni_zip, nds_dir, f".system/{p}/paks/Emus/NDS.pak", set())
 
-# Default accent color configuration in Cannelloni.zip
+# Default accent color and emulator configurations in Cannelloni.zip
 out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/accent_color.txt", b"#f1c40f\n")
+out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/emu_nds.txt", b"libretro\n")
+out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/button_swap.txt", b"default\n")
 
 in_minui_zip.close()
 out_cannelloni_zip.close()
@@ -232,6 +243,8 @@ cannelloni_zip_bytes = out_cannelloni_zip_buf.getvalue()
 # ----------------------------------------------------
 print(f"Writing {OUT_UNIFIED_ZIP}...")
 written_entries = set()
+
+allowed_tools = {"Clock.pak", "Files.pak", "Input.pak", "IP.pak", "Nonna's Kitchen.pak"}
 
 with zipfile.ZipFile(SRC_BASE_ZIP, "r") as base_in, \
      zipfile.ZipFile(SRC_EXTRAS_ZIP, "r") as ext_in, \
@@ -298,11 +311,20 @@ with zipfile.ZipFile(SRC_BASE_ZIP, "r") as base_in, \
                 out_zip.writestr(zinfo_tmp, data)
                 written_entries.add(tmp_name)
 
-    # 4. Extras zip entries (extra emulators, tools, bios/rom placeholders)
+    # 4. Extras zip entries (extra emulators, allowed tools, bios/rom placeholders)
     for item in ext_in.infolist():
         name = item.filename
         if name in ("README.txt", "Cannelloni.zip", "MinUI.zip") or name in written_entries:
             continue
+
+        # Filter Tools section: only allowed tools
+        if name.startswith("Tools/"):
+            parts = name.split("/")
+            if len(parts) >= 3:
+                pak_name = parts[2]
+                if pak_name not in allowed_tools:
+                    continue
+
         # Skip tools and emu paks that we are inserting freshly
         if any(name.startswith(f"Tools/{p}/Wi-Fi.pak/") or name.startswith(f"Tools/{p}/Nonna's Kitchen.pak/") or name.startswith(f"Emus/{p}/NDS.pak/") for p in platforms):
             continue
@@ -326,27 +348,35 @@ with zipfile.ZipFile(SRC_BASE_ZIP, "r") as base_in, \
         out_zip.writestr("Bios/NDS/.keep", b"# NDS Bios: bios7.bin, bios9.bin, firmware.bin\n")
         written_entries.add("Bios/NDS/.keep")
 
-    # 6. Default accent color setting
+    # 6. Default settings configurations in root
     out_zip.writestr(".userdata/shared/.cannelloni/accent_color.txt", b"#f1c40f\n")
     written_entries.add(".userdata/shared/.cannelloni/accent_color.txt")
+    out_zip.writestr(".userdata/shared/.cannelloni/emu_nds.txt", b"libretro\n")
+    written_entries.add(".userdata/shared/.cannelloni/emu_nds.txt")
+    out_zip.writestr(".userdata/shared/.cannelloni/button_swap.txt", b"default\n")
+    written_entries.add(".userdata/shared/.cannelloni/button_swap.txt")
 
-    # 7. Add Nonna's Kitchen & Wi-Fi tool paks across all platforms
+    # 7. Add Nonna's Kitchen tool pak across all platforms
     for p in platforms:
         k_dir = f"skeleton/EXTRAS/Tools/{p}/Nonna's Kitchen.pak"
         if not os.path.isdir(k_dir):
             k_dir = "skeleton/EXTRAS/Tools/miyoomini/Nonna's Kitchen.pak"
         add_dir_to_zip(out_zip, k_dir, f"Tools/{p}/Nonna's Kitchen.pak", written_entries)
 
-        w_dir = f"skeleton/EXTRAS/Tools/{p}/Wi-Fi.pak"
-        if not os.path.isdir(w_dir):
-            w_dir = "skeleton/EXTRAS/Tools/miyoomini/Wi-Fi.pak"
-        add_dir_to_zip(out_zip, w_dir, f"Tools/{p}/Wi-Fi.pak", written_entries)
+    # 8. Add Settings section across all platforms (Wi-Fi, Accent Color, Button Mapping, Emulators)
+    for p in platforms:
+        s_dir = f"skeleton/EXTRAS/Settings/{p}"
+        if not os.path.isdir(s_dir):
+            s_dir = "skeleton/EXTRAS/Settings/miyoomini"
+        add_dir_to_zip(out_zip, s_dir, f"Settings/{p}", written_entries)
 
+    # 9. Add NDS Libretro core emulator pak across all platforms
+    for p in platforms:
         nds_emu_dir = f"skeleton/SYSTEM/{p}/paks/Emus/NDS.pak"
         if os.path.isdir(nds_emu_dir):
             add_dir_to_zip(out_zip, nds_emu_dir, f"Emus/{p}/NDS.pak", written_entries)
 
-    # 8. Include NDS-Drastic.pak in Emus/miyoomini for users who also want standalone DraStic
+    # 10. Include NDS-Drastic.pak in Emus/miyoomini for users who also want standalone DraStic
     drastic_dir = "skeleton/EXTRAS/Emus/miyoomini/NDS-Drastic.pak"
     if os.path.isdir(drastic_dir):
         add_dir_to_zip(out_zip, drastic_dir, "Emus/miyoomini/NDS-Drastic.pak", written_entries)

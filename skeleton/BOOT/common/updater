@@ -2,12 +2,11 @@
 
 # NOTE: becomes .tmp_update/updater
 
-LOG_FILE="/mnt/SDCARD/cannelloni_install.log"
-echo "=== [$(date +'%Y-%m-%d %H:%M:%S')] .tmp_update/updater triggered ===" >> "$LOG_FILE" 2>&1
-echo "updater PWD: $(pwd)" >> "$LOG_FILE" 2>&1
+echo "=== [$(date +'%Y-%m-%d %H:%M:%S')] .tmp_update/updater triggered ==="
+echo "updater PWD: $(pwd)"
 
 INFO=`cat /proc/cpuinfo 2> /dev/null`
-echo "updater CPU Info: $(echo "$INFO" | grep -iE 'hardware|model|processor|cortex|arm' | tr '\n' ' ')" >> "$LOG_FILE" 2>&1
+echo "updater CPU Info: $(echo "$INFO" | grep -iE 'hardware|model|processor|cortex|arm' | tr '\n' ' ')"
 sync
 
 case $INFO in
@@ -42,18 +41,18 @@ if [ -z "$PLATFORM" ] && [ -f /usr/trimui/bin/runtrimui.sh ]; then
 	PLATFORM="tg5040"
 fi
 
-echo "updater resolved PLATFORM: '$PLATFORM'" >> "$LOG_FILE" 2>&1
+echo "updater resolved PLATFORM: '$PLATFORM'"
 
 TARGET_SCRIPT="/mnt/SDCARD/.tmp_update/$PLATFORM.sh"
-echo "Checking target script: $TARGET_SCRIPT (exists: $([ -f "$TARGET_SCRIPT" ] && echo YES || echo NO))" >> "$LOG_FILE" 2>&1
+echo "Checking target script: $TARGET_SCRIPT (exists: $([ -f "$TARGET_SCRIPT" ] && echo YES || echo NO))"
 sync
 
 if [ -n "$PLATFORM" ] && [ -f "$TARGET_SCRIPT" ]; then
 	chmod +x "$TARGET_SCRIPT" 2>/dev/null
-	echo "Executing $TARGET_SCRIPT..." >> "$LOG_FILE" 2>&1
+	echo "Executing $TARGET_SCRIPT..."
 	sync
 	exec "$TARGET_SCRIPT"
 else
-	echo "ERROR: Target script not found or PLATFORM is empty ('$PLATFORM')!" >> "$LOG_FILE" 2>&1
+	echo "ERROR: Target script not found or PLATFORM is empty ('$PLATFORM')!"
 	sync
 fi

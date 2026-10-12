@@ -13,15 +13,26 @@ cd "$HOME"
 
 export LD_LIBRARY_PATH="$SYSTEM_PATH/lib:$CORES_PATH:$LD_LIBRARY_PATH"
 
-LOG_FILE="$LOGS_PATH/$EMU_TAG.txt"
-echo "=== [$(date +'%Y-%m-%d %H:%M:%S')] Starting NDS: $ROM ===" > "$LOG_FILE"
-echo "Core: $CORES_PATH/${EMU_EXE}_libretro.so" >> "$LOG_FILE"
+# Check emulator preference configured in Settings -> Emulators
+EMU_PREF_FILE="$SHARED_USERDATA_PATH/.cannelloni/emu_nds.txt"
+EMU_PREF=""
+[ -f "$EMU_PREF_FILE" ] && EMU_PREF=$(cat "$EMU_PREF_FILE" | tr -d '\r\n')
 
+DRASTIC_EXE="$SDCARD_PATH/Emus/$PLATFORM/NDS-Drastic.pak/drastic"
+[ ! -x "$DRASTIC_EXE" ] && DRASTIC_EXE="$SDCARD_PATH/Emus/$PLATFORM/NDS.pak/drastic"
+
+if [ "$EMU_PREF" = "drastic" ] && [ -x "$DRASTIC_EXE" ]; then
+    DRASTIC_DIR="$(dirname "$DRASTIC_EXE")"
+    cd "$DRASTIC_DIR"
+    export LD_LIBRARY_PATH="$DRASTIC_DIR/libs:$LD_LIBRARY_PATH"
+    ./drastic "$ROM" &> "$LOGS_PATH/$EMU_TAG.txt"
+    exit 0
+fi
+
+# Default Libretro Core execution (enables in-game Cannelloni menu and save states)
 CORE_FILE="$CORES_PATH/${EMU_EXE}_libretro.so"
 if [ ! -f "$CORE_FILE" ]; then
     CORE_FILE="$CORES_PATH/desmume2015_libretro.so"
 fi
 
-nice -20 minarch.elf "$CORE_FILE" "$ROM" >> "$LOG_FILE" 2>&1
-EXIT_CODE=$?
-echo "minarch exited with code: $EXIT_CODE" >> "$LOG_FILE"
+nice -20 minarch.elf "$CORE_FILE" "$ROM" > "$LOGS_PATH/$EMU_TAG.txt" 2>&1
