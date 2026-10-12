@@ -6,6 +6,7 @@
 *.zip
 
 build
+build_release
 releases
 toolchains
 libretro-common
