@@ -26,8 +26,8 @@ BODY = """# Cannelloni v20261012-0
 Welcome to Cannelloni for Linux handhelds (Anbernic, Miyoo, TrimUI, Powkiddy, MagicX, and GKD).
 
 ## What's New in this Release:
-- **Universal One-Zip Drop-in Installation**: Drop either `Cannelloni.zip` or `Cannelloni-20261012-0.zip` directly to the root of your SD card without extracting it on PC. On boot, Cannelloni automatically unpacks all platform bootstrap and system files, runs the setup wizard, and completely erases the zip archive from the SD card!
-- **Interactive 3-Step Setup Wizard**: On initial boot, Cannelloni presents an interactive setup wizard in clear sequential steps:
+- **Universal One-Zip Distribution**: All handheld platforms (Miyoo Mini, Mini Plus, A30, Flip, TrimUI, RG35XX, RG35XX Plus, RGB30, MagicX, GKD, M17) are packaged into a single unified archive. Users no longer need to find or copy platform-specific folders (`miyoo/`, `trimui/`, `rg35xx/`, etc.).
+- **Interactive 3-Step Setup Wizard**: On initial boot, Cannelloni presents an interactive setup wizard directly on screen in clear sequential steps:
   1. **Language Selection**: Choose from 6 languages (English, Spanish, French, Portuguese - Brazil, German, Italian).
   2. **Accent Color Theming**: Pick from 7 vibrant accent colors (Cannelloni Gold `#f1c40f`, Tomato Red, Basil Green, Sky Blue, and more), immediately applied to the interface.
   3. **Handheld Console Selection**: Pick your exact device model from all 14 supported handhelds, automatically configuring the exact hardware drivers, bootloader dat assets, and optimized platform binaries.
@@ -55,10 +55,10 @@ Welcome to Cannelloni for Linux handhelds (Anbernic, Miyoo, TrimUI, Powkiddy, Ma
 
 ## Installation:
 1. Format your SD card as FAT32 (MBR).
-2. Simply drop **`Cannelloni.zip`** (or **`Cannelloni-20261012-0.zip`**) directly to the root of your SD card.
+2. Extract the unified release archive (`Cannelloni-20261012-0.zip` or `Cannelloni.zip`) directly to the root of your SD card. No need to hunt down or pick device-specific folders—all platform bootstrap files are included!
 3. Insert the card into your handheld and power on.
-4. Cannelloni automatically unpacks all system files and launches the 3-step setup wizard on screen: select Language, select Accent Color, and select your Device Model!
-5. After installation finishes, the zip archive is automatically erased from the SD card.
+4. Cannelloni boots automatically and presents the interactive 3-step setup wizard on screen: select your Language, Accent Color, and Device Model!
+5. Leftover update archives are automatically cleaned up and erased from the card.
 """
 
 print(f"Creating or updating release {TAG} on {REPO}...")
