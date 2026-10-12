@@ -255,8 +255,16 @@ while [ -f "$EXEC_PATH" ]; do
 	
 	if [ -f $NEXT_PATH ]; then
 		CMD=`cat $NEXT_PATH`
-		log "Processing NEXT_PATH command: $CMD"
-		eval $CMD
+		LAUNCH_LOG="$SDCARD_PATH/cannelloni_launch.log"
+		echo "=== [$(date +'%Y-%m-%d %H:%M:%S')] Launching: $CMD ===" >> "$LAUNCH_LOG"
+		echo "Platform: $PLATFORM, System: $SYSTEM_PATH, Cores: $CORES_PATH" >> "$LAUNCH_LOG"
+		echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH" >> "$LAUNCH_LOG"
+		echo "PATH: $PATH" >> "$LAUNCH_LOG"
+		eval $CMD >> "$LAUNCH_LOG" 2>&1
+		CMD_EXIT=$?
+		echo "=== Command finished with exit code: $CMD_EXIT ===" >> "$LAUNCH_LOG"
+		echo "" >> "$LAUNCH_LOG"
+		sync
 		rm -f $NEXT_PATH
 		if [ -f "/tmp/using-swap" ]; then
 			swapoff $USERDATA_PATH/swapfile

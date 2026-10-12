@@ -137,8 +137,17 @@ while [ -f "$EXEC_PATH" ]; do
 	sync
 	
 	if [ -f $NEXT_PATH ]; then
-		. $HDMI_EXPORT_PATH
-		. $NEXT_PATH
+		CMD=`cat $NEXT_PATH`
+		LAUNCH_LOG="$SDCARD_PATH/cannelloni_launch.log"
+		echo "=== [$(date +'%Y-%m-%d %H:%M:%S')] Launching: $CMD ===" >> "$LAUNCH_LOG"
+		echo "Platform: $PLATFORM, System: $SYSTEM_PATH, Cores: $CORES_PATH" >> "$LAUNCH_LOG"
+		echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH" >> "$LAUNCH_LOG"
+		echo "PATH: $PATH" >> "$LAUNCH_LOG"
+		eval $CMD >> "$LAUNCH_LOG" 2>&1
+		CMD_EXIT=$?
+		echo "=== Command finished with exit code: $CMD_EXIT ===" >> "$LAUNCH_LOG"
+		echo "" >> "$LAUNCH_LOG"
+		sync
 		rm -f $NEXT_PATH
 		echo `date +'%F %T'` > "$DATETIME_PATH"
 		sync

@@ -1,4 +1,5 @@
 import struct
+import os
 
 def patch_elf_verneed(filepath, outpath):
     with open(filepath, 'rb') as f:
@@ -57,9 +58,14 @@ def patch_elf_verneed(filepath, outpath):
         f.write(data)
     print(f"Wrote {outpath} with {patched_count} patches.")
 
-# Patch clean_desmume.so -> desmume2015_libretro.so and melonds_libretro.so
-patch_elf_verneed('build_release/temp/cores/clean_desmume.so', 'build_release/temp/cores/desmume2015_libretro.so')
-patch_elf_verneed('build_release/temp/cores/clean_desmume.so', 'build_release/temp/cores/melonds_libretro.so')
+import shutil
+if os.path.isfile('build_release/temp/cores/test_patched_desmume.so'):
+    shutil.copyfile('build_release/temp/cores/test_patched_desmume.so', 'build_release/temp/cores/desmume2015_libretro.so')
+    shutil.copyfile('build_release/temp/cores/test_patched_desmume.so', 'build_release/temp/cores/melonds_libretro.so')
+else:
+    patch_elf_verneed('build_release/temp/cores/clean_desmume.so', 'build_release/temp/cores/desmume2015_libretro.so')
+    patch_elf_verneed('build_release/temp/cores/clean_desmume.so', 'build_release/temp/cores/melonds_libretro.so')
 
 # Patch libstdc++.so.6
-patch_elf_verneed('build_release/temp/libstdc++.so.6', 'build_release/temp/libstdc++.so.6')
+if os.path.isfile('build_release/temp/libstdc++.so.6'):
+    patch_elf_verneed('build_release/temp/libstdc++.so.6', 'build_release/temp/libstdc++.so.6')

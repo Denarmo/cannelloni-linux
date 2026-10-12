@@ -164,6 +164,15 @@ def patch_about_page(data, name):
         b[idx+8 : idx+16] = b"Fork\x00\x00\x00\x00"
     return bytes(b)
 
+def patch_minarch_shaders_label(data):
+    """Patches 'Screen Effect\x00' in minarch.elf to 'Shaders\x00\x00\x00\x00\x00\x00\x00' so that
+    in-game menu shows 'Shaders' instead of 'Screen Effect'."""
+    target = b"Screen Effect\x00"
+    replacement = b"Shaders\x00\x00\x00\x00\x00\x00\x00"
+    if target in data:
+        return data.replace(target, replacement)
+    return data
+
 
 def build_dmenu_rg35xxplus():
     """Builds RG35XX Plus/H/SP/CubeXX/28XX dmenu.bin with official Cannelloni assets."""
@@ -376,8 +385,11 @@ def build_release():
                     data = fp.read()
 
         # Patch ELF binaries to bake in Cannelloni Gold (#f1c40f) for selection pills and slider bars
-        if name.endswith("/bin/minui.elf") or name.endswith("/bin/minarch.elf"):
+        if name.endswith("/bin/minui.elf") or name.endswith("/bin/cannelloni.elf"):
             data = patch_binary_accent_color(data, 241, 196, 15)
+        elif name.endswith("/bin/minarch.elf"):
+            data = patch_binary_accent_color(data, 241, 196, 15)
+            data = patch_minarch_shaders_label(data)
 
         # Patch About page and Settings menu hook into ELF
         if name.endswith("/bin/minui.elf"):
@@ -418,15 +430,11 @@ def build_release():
             else:
                 c_bytes = core_bytes
 
-            zinfo_m = zipfile.ZipInfo(f".system/{p}/cores/melonds_libretro.so")
-            zinfo_m.compress_type = zipfile.ZIP_DEFLATED
-            zinfo_m.external_attr = 0o755 << 16
-            out_cannelloni_zip.writestr(zinfo_m, c_bytes)
-
-            zinfo_d = zipfile.ZipInfo(f".system/{p}/cores/desmume2015_libretro.so")
-            zinfo_d.compress_type = zipfile.ZIP_DEFLATED
-            zinfo_d.external_attr = 0o755 << 16
-            out_cannelloni_zip.writestr(zinfo_d, c_bytes)
+            for core_name in ["melonds_libretro.so", "desmume2015_libretro.so", "desmume_libretro.so"]:
+                zinfo_core = zipfile.ZipInfo(f".system/{p}/cores/{core_name}")
+                zinfo_core.compress_type = zipfile.ZIP_DEFLATED
+                zinfo_core.external_attr = 0o755 << 16
+                out_cannelloni_zip.writestr(zinfo_core, c_bytes)
 
     # Bundle clean libstdc++.so.6 (patched to GLIBC_2.4) for miyoomini
     libstdc_path = "build_release/temp/libstdc++.so.6"
@@ -469,7 +477,7 @@ def build_release():
             base_minui = patch_about_page(raw_minui, minui_path)
             if p == "miyoomini":
                 base_minui = patch_minui_settings(base_minui, "miyoomini")
-            base_minarch = raw_minarch
+            base_minarch = patch_minarch_shaders_label(raw_minarch)
 
             raw_list = None
             list_path = f"skeleton/EXTRAS/Settings/{p}/Wi-Fi.pak/bin/{p}/cannelloni-list"
@@ -537,10 +545,6 @@ def build_release():
             zinfo_pa.external_attr = 0o755 << 16
             out_cannelloni_zip.writestr(zinfo_pa, accent_sh_bytes)
 
-    # Add common shaders into .system/common/shaders/
-    shaders_dir = "skeleton/SYSTEM/common/shaders"
-    if os.path.isdir(shaders_dir):
-        add_dir_to_zip(out_cannelloni_zip, shaders_dir, ".system/common/shaders", set())
 
     # Add network_store.sh across common and platforms
     net_sh_path = "skeleton/SYSTEM/common/network_store.sh"
@@ -651,14 +655,12 @@ def build_release():
     if os.path.isdir(drastic_dir):
         add_dir_to_zip(out_cannelloni_zip, drastic_dir, "Emus/miyoomini/NDS-Drastic.pak", written_entries)
 
-    # Default accent color, language, emulator, and shader configurations in Cannelloni.zip
+    # Default accent color, language, and emulator configurations in Cannelloni.zip
     for cfg_path, cfg_val in [
         (".userdata/shared/.cannelloni/accent_color.txt", b"#f1c40f\n"),
         (".userdata/shared/.cannelloni/language.txt", b"en\n"),
         (".userdata/shared/.cannelloni/emu_nds.txt", b"libretro\n"),
         (".userdata/shared/.cannelloni/button_swap.txt", b"default\n"),
-        (".userdata/shared/.cannelloni/shader_preset.txt", b"crt-cannelloni\n"),
-        (".userdata/shared/.cannelloni/shader_scope.txt", b"all\n"),
     ]:
         if cfg_path not in written_entries:
             out_cannelloni_zip.writestr(cfg_path, cfg_val)
