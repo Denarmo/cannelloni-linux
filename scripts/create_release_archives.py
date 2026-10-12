@@ -95,6 +95,13 @@ for item in in_minui_zip.infolist():
         with open("skeleton/SYSTEM/miyoomini/paks/Cannelloni.pak/launch.sh", "rb") as f:
             data = f.read()
 
+    # Overwrite assets@*.png with our tinted Cannelloni gold #f1c40f spritesheet
+    if name.startswith(".system/res/assets@") and name.endswith(".png"):
+        local_res = os.path.join("skeleton/SYSTEM/res", os.path.basename(name))
+        if os.path.isfile(local_res):
+            with open(local_res, "rb") as f:
+                data = f.read()
+
     # Update any minui references in scripts
     if name.endswith(".sh") or name.endswith(".txt"):
         try:
@@ -123,16 +130,40 @@ for item in in_minui_zip.infolist():
         zinfo.external_attr = 0o644 << 16
     out_cannelloni_zip.writestr(zinfo, data)
 
-# Add NDS.pak across all platforms from our skeleton
 platforms = [
     'gkdpixel', 'm17', 'magicmini', 'miyoomini', 'my282', 'my355',
     'rg35xx', 'rg35xxplus', 'rgb30', 'tg5040', 'trimuismart', 'zero28'
 ]
 
+# Inject NDS Libretro cores across all platforms in Cannelloni.zip
+print("Injecting NDS libretro cores into Cannelloni.zip...")
+for p in platforms:
+    if p == 'rg35xxplus':
+        core_file = "build_release/temp/cores/melonds_libretro_aarch64.so"
+    else:
+        core_file = "build_release/temp/cores/melonds_libretro.so"
+
+    if os.path.isfile(core_file):
+        with open(core_file, "rb") as f:
+            core_bytes = f.read()
+        zinfo_m = zipfile.ZipInfo(f".system/{p}/cores/melonds_libretro.so")
+        zinfo_m.compress_type = zipfile.ZIP_DEFLATED
+        zinfo_m.external_attr = 0o755 << 16
+        out_cannelloni_zip.writestr(zinfo_m, core_bytes)
+
+        zinfo_d = zipfile.ZipInfo(f".system/{p}/cores/desmume2015_libretro.so")
+        zinfo_d.compress_type = zipfile.ZIP_DEFLATED
+        zinfo_d.external_attr = 0o755 << 16
+        out_cannelloni_zip.writestr(zinfo_d, core_bytes)
+
+# Add NDS.pak across all platforms from skeleton
 for p in platforms:
     nds_dir = f"skeleton/SYSTEM/{p}/paks/Emus/NDS.pak"
     if os.path.isdir(nds_dir):
         add_dir_to_zip(out_cannelloni_zip, nds_dir, f".system/{p}/paks/Emus/NDS.pak")
+
+# Default accent color configuration in Cannelloni.zip
+out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/accent_color.txt", b"#f1c40f\n")
 
 in_minui_zip.close()
 out_cannelloni_zip.close()
@@ -206,6 +237,9 @@ with zipfile.ZipFile(SRC_BASE_ZIP, "r") as base_in, \
     # Add Bios/NDS folder
     base_out.writestr("Bios/NDS/.keep", b"# NDS Bios: bios7.bin, bios9.bin, firmware.bin\n")
 
+    # Default accent color setting
+    base_out.writestr(".userdata/shared/.cannelloni/accent_color.txt", b"#f1c40f\n")
+
     # Add Essential Tools (Nonna's Kitchen & Wi-Fi) directly to Base package
     for p in platforms:
         k_dir = f"skeleton/EXTRAS/Tools/{p}/Nonna's Kitchen.pak"
@@ -218,8 +252,8 @@ with zipfile.ZipFile(SRC_BASE_ZIP, "r") as base_in, \
             w_dir = "skeleton/EXTRAS/Tools/miyoomini/Wi-Fi.pak"
         add_dir_to_zip(base_out, w_dir, f"Tools/{p}/Wi-Fi.pak")
 
-        # Also include standalone NDS.pak in Emus/ for Base package
-        nds_emu_dir = f"skeleton/EXTRAS/Emus/{p}/NDS.pak"
+        # Also include NDS.pak in Emus/ for Base package
+        nds_emu_dir = f"skeleton/SYSTEM/{p}/paks/Emus/NDS.pak"
         if os.path.isdir(nds_emu_dir):
             add_dir_to_zip(base_out, nds_emu_dir, f"Emus/{p}/NDS.pak")
 
@@ -260,9 +294,14 @@ with zipfile.ZipFile(SRC_EXTRAS_ZIP, "r") as ext_in, \
             w_dir = "skeleton/EXTRAS/Tools/miyoomini/Wi-Fi.pak"
         add_dir_to_zip(ext_out, w_dir, f"Tools/{p}/Wi-Fi.pak")
 
-        nds_emu_dir = f"skeleton/EXTRAS/Emus/{p}/NDS.pak"
+        nds_emu_dir = f"skeleton/SYSTEM/{p}/paks/Emus/NDS.pak"
         if os.path.isdir(nds_emu_dir):
             add_dir_to_zip(ext_out, nds_emu_dir, f"Emus/{p}/NDS.pak")
+
+    # Include NDS-Drastic.pak in extras for users who also want standalone DraStic
+    drastic_dir = "skeleton/EXTRAS/Emus/miyoomini/NDS-Drastic.pak"
+    if os.path.isdir(drastic_dir):
+        add_dir_to_zip(ext_out, drastic_dir, "Emus/miyoomini/NDS-Drastic.pak")
 
 print(f"Extras package completed: {os.path.getsize(OUT_EXTRAS_ZIP)} bytes")
 print("All release archives built successfully!")
