@@ -29,9 +29,14 @@ log "SD card contents before install: $(ls -la "$SDCARD_PATH" 2>/dev/null | tr '
 CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 echo performance > "$CPU_PATH" 2>/dev/null
 
-# install/update
-if [ -f "$UPDATE_PATH" ]; then 
-	log "Install package detected at $UPDATE_PATH"
+# install/update or first boot configuration
+FIRST_BOOT=false
+if [ ! -f "$SDCARD_PATH/.userdata/shared/.cannelloni/device_model.txt" ]; then
+	FIRST_BOOT=true
+fi
+
+if [ -f "$UPDATE_PATH" ] || [ "$FIRST_BOOT" = true ]; then 
+	log "Install/Setup triggered (UPDATE_PATH exists: $([ -f "$UPDATE_PATH" ] && echo YES || echo NO), FIRST_BOOT: $FIRST_BOOT)"
 	cd $(dirname "$0")/$PLATFORM
 	
 	# init backlight
@@ -46,33 +51,29 @@ if [ -f "$UPDATE_PATH" ]; then
 	export LCD_INIT=1
 
 	chmod +x ./show.elf 2>/dev/null
-	if [ -d "$SYSTEM_PATH" ]; then
-		log "Existing .system found, showing updating.png..."
+	if [ -d "$SYSTEM_PATH" ] && [ "$FIRST_BOOT" = false ]; then
+		log "Existing .system found and not first boot, showing updating.png..."
 		./show.elf ./updating.png 2>/dev/null &
 	else
-		log "Fresh install, showing installing.png..."
+		log "Showing installing.png..."
 		./show.elf ./installing.png 2>/dev/null &
 	fi
 	sync
 	
-	log "Unpacking update archive $UPDATE_PATH to $SDCARD_PATH/..."
-	mv $SDCARD_PATH/.tmp_update $SDCARD_PATH/.tmp_update-old 2>/dev/null
-	
-	# Unzip update
-	unzip -o "$UPDATE_PATH" -d "$SDCARD_PATH" 2>&1 | tee -a "$LOG_FILE"
-	UNZIP_RESULT=$?
-	log "unzip exited with code: $UNZIP_RESULT"
-	
-	if [ -f "$SDCARD_PATH/Cannelloni.zip" ] && [ "$UPDATE_PATH" != "$SDCARD_PATH/Cannelloni.zip" ]; then
-		log "Found nested Cannelloni.zip, extracting..."
-		unzip -o "$SDCARD_PATH/Cannelloni.zip" -d "$SDCARD_PATH" 2>&1 | tee -a "$LOG_FILE"
-		log "nested Cannelloni.zip unzip exited with code: $?"
+	if [ -f "$UPDATE_PATH" ]; then
+		log "Unpacking update archive $UPDATE_PATH to $SDCARD_PATH/..."
+		mv $SDCARD_PATH/.tmp_update $SDCARD_PATH/.tmp_update-old 2>/dev/null
+		
+		# Unzip update
+		unzip -o "$UPDATE_PATH" -d "$SDCARD_PATH" 2>&1 | tee -a "$LOG_FILE"
+		UNZIP_RESULT=$?
+		log "unzip exited with code: $UNZIP_RESULT"
+		
+		log "Cleaning up archive..."
+		rm -f "$UPDATE_PATH"
+		rm -f "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null
+		rm -rf $SDCARD_PATH/.tmp_update-old 2>/dev/null
 	fi
-	
-	log "Cleaning up archive..."
-	rm -f "$UPDATE_PATH"
-	rm -f "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null
-	rm -rf $SDCARD_PATH/.tmp_update-old 2>/dev/null
 	
 	# Verify extracted binaries
 	log "Binaries in $SYSTEM_PATH/$PLATFORM/bin/:"

@@ -237,8 +237,9 @@ def build_release():
         minui_zip_bytes = base_in.read("MinUI.zip")
 
     in_minui_zip = zipfile.ZipFile(io.BytesIO(minui_zip_bytes), "r")
-    out_cannelloni_zip_buf = io.BytesIO()
-    out_cannelloni_zip = zipfile.ZipFile(out_cannelloni_zip_buf, "w", zipfile.ZIP_DEFLATED)
+    out_cannelloni_release = os.path.join(OUT_DIR, "Cannelloni.zip")
+    out_cannelloni_zip = zipfile.ZipFile(out_cannelloni_release, "w", zipfile.ZIP_DEFLATED)
+    written_entries = set()
 
     platforms = [
         'gkdpixel', 'm17', 'magicmini', 'miyoomini', 'my282', 'my355',
@@ -328,18 +329,22 @@ def build_release():
         # Ensure cannelloni.elf exists alongside minui.elf
         if name.endswith("/bin/minui.elf"):
             cannelloni_name = name.replace("/bin/minui.elf", "/bin/cannelloni.elf")
-            zinfo_c = zipfile.ZipInfo(cannelloni_name)
-            zinfo_c.compress_type = zipfile.ZIP_DEFLATED
-            zinfo_c.external_attr = 0o755 << 16
-            out_cannelloni_zip.writestr(zinfo_c, data)
+            if cannelloni_name not in written_entries:
+                zinfo_c = zipfile.ZipInfo(cannelloni_name)
+                zinfo_c.compress_type = zipfile.ZIP_DEFLATED
+                zinfo_c.external_attr = 0o755 << 16
+                out_cannelloni_zip.writestr(zinfo_c, data)
+                written_entries.add(cannelloni_name)
 
-        zinfo = zipfile.ZipInfo(name)
-        zinfo.compress_type = zipfile.ZIP_DEFLATED
-        if name.endswith(".sh") or name.endswith("MainUI") or name.endswith("updater") or name.endswith(".elf") or name.endswith(".bin"):
-            zinfo.external_attr = 0o755 << 16
-        else:
-            zinfo.external_attr = 0o644 << 16
-        out_cannelloni_zip.writestr(zinfo, data)
+        if name not in written_entries:
+            zinfo = zipfile.ZipInfo(name)
+            zinfo.compress_type = zipfile.ZIP_DEFLATED
+            if name.endswith(".sh") or name.endswith("MainUI") or name.endswith("updater") or name.endswith(".elf") or name.endswith(".bin"):
+                zinfo.external_attr = 0o755 << 16
+            else:
+                zinfo.external_attr = 0o644 << 16
+            out_cannelloni_zip.writestr(zinfo, data)
+            written_entries.add(name)
 
     # Inject NDS Libretro cores across all platforms in Cannelloni.zip
     print("Injecting clean NDS libretro cores into Cannelloni.zip...")
@@ -550,89 +555,83 @@ def build_release():
         k_dir = f"skeleton/EXTRAS/Tools/{p}/Nonna's Kitchen.pak"
         if not os.path.isdir(k_dir):
             k_dir = "skeleton/EXTRAS/Tools/miyoomini/Nonna's Kitchen.pak"
-        add_dir_to_zip(out_cannelloni_zip, k_dir, f"Tools/{p}/Nonna's Kitchen.pak", set())
+        add_dir_to_zip(out_cannelloni_zip, k_dir, f"Tools/{p}/Nonna's Kitchen.pak", written_entries)
 
     # Add Bootlogo.pak for miyoomini from skeleton
     blogo_dir = "skeleton/EXTRAS/Tools/miyoomini/Bootlogo.pak"
     if os.path.isdir(blogo_dir):
-        add_dir_to_zip(out_cannelloni_zip, blogo_dir, "Tools/miyoomini/Bootlogo.pak", set())
+        add_dir_to_zip(out_cannelloni_zip, blogo_dir, "Tools/miyoomini/Bootlogo.pak", written_entries)
 
     # Add Settings section across all platforms (Wi-Fi, Accent Color, Button Mapping, Emulators, Shaders, Device Model)
     for p in platforms:
         s_dir = f"skeleton/EXTRAS/Settings/{p}"
         if not os.path.isdir(s_dir):
             s_dir = "skeleton/EXTRAS/Settings/miyoomini"
-        add_dir_to_zip(out_cannelloni_zip, s_dir, f"Settings/{p}", set())
+        add_dir_to_zip(out_cannelloni_zip, s_dir, f"Settings/{p}", written_entries)
 
     # Add NDS Libretro core emulator pak across all platforms
     for p in platforms:
         nds_emu_dir = f"skeleton/SYSTEM/{p}/paks/Emus/NDS.pak"
         if os.path.isdir(nds_emu_dir):
-            add_dir_to_zip(out_cannelloni_zip, nds_emu_dir, f"Emus/{p}/NDS.pak", set())
+            add_dir_to_zip(out_cannelloni_zip, nds_emu_dir, f"Emus/{p}/NDS.pak", written_entries)
 
     # Include NDS-Drastic.pak in Emus/miyoomini for users who also want standalone DraStic
     drastic_dir = "skeleton/EXTRAS/Emus/miyoomini/NDS-Drastic.pak"
     if os.path.isdir(drastic_dir):
-        add_dir_to_zip(out_cannelloni_zip, drastic_dir, "Emus/miyoomini/NDS-Drastic.pak", set())
+        add_dir_to_zip(out_cannelloni_zip, drastic_dir, "Emus/miyoomini/NDS-Drastic.pak", written_entries)
 
     # Default accent color, language, emulator, and shader configurations in Cannelloni.zip
-    out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/accent_color.txt", b"#f1c40f\n")
-    out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/language.txt", b"en\n")
-    out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/emu_nds.txt", b"libretro\n")
-    out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/button_swap.txt", b"default\n")
-    out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/shader_preset.txt", b"crt-cannelloni\n")
-    out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/shader_scope.txt", b"all\n")
+    for cfg_path, cfg_val in [
+        (".userdata/shared/.cannelloni/accent_color.txt", b"#f1c40f\n"),
+        (".userdata/shared/.cannelloni/language.txt", b"en\n"),
+        (".userdata/shared/.cannelloni/emu_nds.txt", b"libretro\n"),
+        (".userdata/shared/.cannelloni/button_swap.txt", b"default\n"),
+        (".userdata/shared/.cannelloni/shader_preset.txt", b"crt-cannelloni\n"),
+        (".userdata/shared/.cannelloni/shader_scope.txt", b"all\n"),
+    ]:
+        if cfg_path not in written_entries:
+            out_cannelloni_zip.writestr(cfg_path, cfg_val)
+            written_entries.add(cfg_path)
 
     in_minui_zip.close()
-    out_cannelloni_zip.close()
-    cannelloni_zip_bytes = out_cannelloni_zip_buf.getvalue()
-
-    # Save standalone Cannelloni.zip payload
-    out_cannelloni_release = os.path.join(OUT_DIR, "Cannelloni.zip")
-    with open(out_cannelloni_release, "wb") as f:
-        f.write(cannelloni_zip_bytes)
-    print(f"OS Payload archive created: {out_cannelloni_release} ({os.path.getsize(out_cannelloni_release)} bytes)")
 
     # ----------------------------------------------------
-    # 2. Build lean unified release archive containing only bootstrap files + Cannelloni.zip
+    # 2. Add platform bootstrap files & user folders directly to single Cannelloni.zip
     # ----------------------------------------------------
-    print(f"Writing {OUT_UNIFIED_ZIP}...")
-    written_entries = set()
+    print(f"Adding bootstrap files directly to single archive: {out_cannelloni_release}...")
 
     BOOTSTRAP_DIRS = (
         "miyoo/", "miyoo354/", "miyoo355/", "miyoo285/", "trimui/",
         "rg35xx/", "rg35xxplus/", "gkdpixel/", "magicx/", "em_ui.sh", ".tmp_update/"
     )
 
-    with zipfile.ZipFile(SRC_BASE_ZIP, "r") as base_in, \
-         zipfile.ZipFile(OUT_UNIFIED_ZIP, "w", zipfile.ZIP_DEFLATED) as out_zip:
-
-        # 1. Cannelloni.zip (OS Payload) into root of release zip
-        out_zip.writestr("Cannelloni.zip", cannelloni_zip_bytes)
-        written_entries.add("Cannelloni.zip")
-
-        # 2. README.txt into root
+    # 1. README.txt into root
+    if "README.txt" not in written_entries:
         with open("skeleton/BASE/README.txt", "rb") as f:
-            out_zip.writestr("README.txt", f.read())
+            out_cannelloni_zip.writestr("README.txt", f.read())
         written_entries.add("README.txt")
 
-        # 3. Add Nintendo DS ROM, Bios, and Saves placeholder folders
-        for folder in [
-            "Roms/Nintendo DS (NDS)", "Roms/Game Boy Advance (GBA)", "Roms/Sony PlayStation (PS)",
-            "Bios/NDS", "Bios/PS", "Bios/GBA", "Saves/NDS", "Saves/PS", "Saves/GBA"
-        ]:
-            out_zip.writestr(f"{folder}/.keep", b"")
-            written_entries.add(f"{folder}/.keep")
+    # 2. Add Nintendo DS ROM, Bios, and Saves placeholder folders
+    for folder in [
+        "Roms/Nintendo DS (NDS)", "Roms/Game Boy Advance (GBA)", "Roms/Sony PlayStation (PS)",
+        "Bios/NDS", "Bios/PS", "Bios/GBA", "Saves/NDS", "Saves/PS", "Saves/GBA"
+    ]:
+        keep_path = f"{folder}/.keep"
+        if keep_path not in written_entries:
+            out_cannelloni_zip.writestr(keep_path, b"")
+            written_entries.add(keep_path)
 
-        # 4. Add dmenu.bin directly to root for RG35XX Plus/H/SP TF1 cards
+    # 3. Add dmenu.bin directly to root for RG35XX Plus/H/SP TF1 cards
+    if "dmenu.bin" not in written_entries:
         dmenu_bytes = build_dmenu_rg35xxplus()
         zinfo_dm = zipfile.ZipInfo("dmenu.bin")
         zinfo_dm.compress_type = zipfile.ZIP_DEFLATED
         zinfo_dm.external_attr = 0o755 << 16
-        out_zip.writestr(zinfo_dm, dmenu_bytes)
+        out_cannelloni_zip.writestr(zinfo_dm, dmenu_bytes)
         written_entries.add("dmenu.bin")
 
-        # 5. Add platform bootstrap files from base_in (and skeleton overrides)
+    # 4. Add platform bootstrap files from base_in (and skeleton overrides)
+    with zipfile.ZipFile(SRC_BASE_ZIP, "r") as base_in:
         for item in base_in.infolist():
             name = item.filename
             if name in ("MinUI.zip", "Cannelloni.zip", "README.txt") or name in written_entries:
@@ -712,7 +711,7 @@ def build_release():
                 zinfo.external_attr = 0o755 << 16
             else:
                 zinfo.external_attr = 0o644 << 16
-            out_zip.writestr(zinfo, data)
+            out_cannelloni_zip.writestr(zinfo, data)
             written_entries.add(name)
 
             # Write .tmp_update directly to root of archive for native Miyoo stock updater compatibility
@@ -722,20 +721,24 @@ def build_release():
                     zinfo_tmp = zipfile.ZipInfo(tmp_name)
                     zinfo_tmp.compress_type = zipfile.ZIP_DEFLATED
                     zinfo_tmp.external_attr = 0o755 << 16 if tmp_name.endswith((".sh", "updater", ".elf")) else 0o644 << 16
-                    out_zip.writestr(zinfo_tmp, data)
+                    out_cannelloni_zip.writestr(zinfo_tmp, data)
                     written_entries.add(tmp_name)
 
-        # 6. Inject device_select.sh directly into .tmp_update/ for initial setup wizard
+    # 5. Inject device_select.sh directly into .tmp_update/ for initial setup wizard
+    if ".tmp_update/device_select.sh" not in written_entries:
         with open("skeleton/SYSTEM/common/device_select.sh", "rb") as f:
             dev_sh_bytes = f.read()
         zinfo_dev = zipfile.ZipInfo(".tmp_update/device_select.sh")
         zinfo_dev.compress_type = zipfile.ZIP_DEFLATED
         zinfo_dev.external_attr = 0o755 << 16
-        out_zip.writestr(zinfo_dev, dev_sh_bytes)
+        out_cannelloni_zip.writestr(zinfo_dev, dev_sh_bytes)
         written_entries.add(".tmp_update/device_select.sh")
 
-    print(f"Unified bootstrap package completed: {os.path.getsize(OUT_UNIFIED_ZIP)} bytes ({len(written_entries)} entries)")
-    print("Release archives built successfully!")
+    out_cannelloni_zip.close()
+
+    shutil.copyfile(out_cannelloni_release, OUT_UNIFIED_ZIP)
+    print(f"Single unified release archive completed: {out_cannelloni_release} ({os.path.getsize(out_cannelloni_release)} bytes, {len(written_entries)} entries)")
+    print("Release archive built successfully!")
 
 if __name__ == "__main__":
     build_release()

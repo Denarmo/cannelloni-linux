@@ -425,7 +425,19 @@ cleanup_bootstrap() {
             rm -f "$SDCARD_PATH/dmenu.bin" "$SDCARD_PATH/em_ui.sh" 2>/dev/null
             ;;
     esac
-    log "Cleanup of unnecessary bootstrap folders complete."
+
+    # Remove all unselected platform folders from .system, Settings, Tools, and Emus
+    ALL_PLATFORMS="gkdpixel m17 magicmini miyoomini my282 my355 rg35xx rg35xxplus rgb30 tg5040 trimuismart zero28"
+    for other_plat in $ALL_PLATFORMS; do
+        if [ "$other_plat" != "$PLAT" ]; then
+            rm -rf "$SDCARD_PATH/.system/$other_plat" 2>/dev/null
+            rm -rf "$SDCARD_PATH/Settings/$other_plat" 2>/dev/null
+            rm -rf "$SDCARD_PATH/Tools/$other_plat" 2>/dev/null
+            rm -rf "$SDCARD_PATH/Emus/$other_plat" 2>/dev/null
+        fi
+    done
+
+    log "Cleanup of unnecessary bootstrap and platform folders complete."
     sync
 }
 

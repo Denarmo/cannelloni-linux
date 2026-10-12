@@ -55,10 +55,10 @@ Welcome to Cannelloni for Linux handhelds (Anbernic, Miyoo, TrimUI, Powkiddy, Ma
 
 ## Installation:
 1. Format your SD card as FAT32 (MBR).
-2. Extract the unified release archive (`Cannelloni-20261012-0.zip` or `Cannelloni.zip`) directly to the root of your SD card. No need to hunt down or pick device-specific folders—all platform bootstrap files are included!
+2. Extract the single release archive (`Cannelloni.zip`) directly to the root of your SD card. No nested zips, and no need to hunt down device-specific folders—all platform bootstrap files are included!
 3. Insert the card into your handheld and power on.
 4. Cannelloni boots automatically and presents the interactive 3-step setup wizard on screen: select your Language, Accent Color, and Device Model!
-5. Leftover update archives are automatically cleaned up and erased from the card.
+5. Unused platform folders and bootstrap files are automatically cleaned up and erased from the card.
 """
 
 print(f"Creating or updating release {TAG} on {REPO}...")
@@ -122,8 +122,8 @@ except urllib.error.HTTPError as e:
     else:
         raise
 
-# 2. Upload assets (Cannelloni-20261012-0.zip and Cannelloni.zip)
-assets_to_upload = [UNIFIED_ZIP, ALIAS_ZIP]
+# 2. Upload single asset (Cannelloni.zip)
+assets_to_upload = [ALIAS_ZIP]
 
 # Fetch current assets list
 req_assets = urllib.request.Request(
@@ -136,6 +136,23 @@ req_assets = urllib.request.Request(
 )
 with urllib.request.urlopen(req_assets) as resp:
     existing_assets = json.loads(resp.read().decode('utf-8'))
+
+target_names = [os.path.basename(p) for p in assets_to_upload]
+
+# Remove any obsolete assets (such as Cannelloni-20261012-0.zip) so only 1 zip is published
+for a in existing_assets:
+    if a['name'] not in target_names:
+        print(f"Deleting obsolete asset ID {a['id']} ({a['name']})...")
+        req_del = urllib.request.Request(
+            f"https://api.github.com/repos/{REPO}/releases/assets/{a['id']}",
+            headers={
+                "Authorization": f"token {token}",
+                "User-Agent": "Cannelloni",
+                "Accept": "application/vnd.github.v3+json"
+            },
+            method='DELETE'
+        )
+        urllib.request.urlopen(req_del)
 
 for file_path in assets_to_upload:
     if not os.path.isfile(file_path):
