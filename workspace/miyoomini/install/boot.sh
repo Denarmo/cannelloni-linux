@@ -107,7 +107,12 @@ if [ -f "$UPDATE_PATH" ] || [ "$FIRST_BOOT" = true ]; then
 	USERDATA_PATH="$SDCARD_PATH/.userdata/$PLATFORM"
 	mkdir -p "$USERDATA_PATH"
 	BOOTLOGO_FLAG="$USERDATA_PATH/.bootlogo_flashed"
-	if [ ! -f "$BOOTLOGO_FLAG" ] && [ -e "/dev/mtd3" ]; then
+	IMG_MD5=""
+	[ -f "$SYSTEM_PATH/$PLATFORM/dat/image1.jpg" ] && IMG_MD5=$(md5sum "$SYSTEM_PATH/$PLATFORM/dat/image1.jpg" 2>/dev/null | awk '{print $1}')
+	SAVED_MD5=""
+	[ -f "$BOOTLOGO_FLAG" ] && SAVED_MD5=$(cat "$BOOTLOGO_FLAG" 2>/dev/null)
+
+	if [ -e "/dev/mtd3" ] && [ -n "$IMG_MD5" ] && [ "$IMG_MD5" != "$SAVED_MD5" ]; then
 		if [ -f "$SYSTEM_PATH/$PLATFORM/dat/image1.jpg" ] && [ -x "$SYSTEM_PATH/$PLATFORM/bin/logowrite.elf" ]; then
 			log "Flashing Cannelloni boot logo to SPI flash (/dev/mtd3)..."
 			TMP_FLASH="/tmp/bootlogo_flash"
@@ -117,7 +122,7 @@ if [ -f "$UPDATE_PATH" ] || [ "$FIRST_BOOT" = true ]; then
 			cp -f "$SYSTEM_PATH/$PLATFORM/dat/image1.jpg" ./image1.jpg 2>/dev/null
 			if "$SYSTEM_PATH/$PLATFORM/bin/logomake.elf" >> "$LOG_FILE" 2>&1 && "$SYSTEM_PATH/$PLATFORM/bin/logowrite.elf" >> "$LOG_FILE" 2>&1; then
 				log "Cannelloni boot logo flashed successfully!"
-				touch "$BOOTLOGO_FLAG"
+				echo "$IMG_MD5" > "$BOOTLOGO_FLAG"
 			fi
 			cd "$SDCARD_PATH"
 			rm -rf "$TMP_FLASH"

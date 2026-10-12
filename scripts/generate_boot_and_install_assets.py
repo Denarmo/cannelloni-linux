@@ -131,7 +131,7 @@ def main():
     print("Generating official Cannelloni boot logos and action screens...")
 
     # 1. Boot logos
-    save_image(make_bootlogo(640, 480, logo_h=140), "skeleton/SYSTEM/miyoomini/dat/image1.jpg", "JPEG", quality=90)
+    save_image(make_bootlogo(640, 480, logo_h=140, rotate_deg=180), "skeleton/SYSTEM/miyoomini/dat/image1.jpg", "JPEG", quality=90)
     save_image(make_bootlogo(240, 320, logo_h=60, rotate_deg=90), "skeleton/SYSTEM/trimuismart/dat/logo.bmp", "BMP")
     save_image(make_bootlogo(100, 100, logo_h=45), "skeleton/EXTRAS/Tools/m17/Bootlogo.pak/logo.bmp", "BMP")
     save_image(make_bootlogo(480, 640, logo_h=140, rotate_deg=90, mode="RGBA", quantize_colors=64), "skeleton/EXTRAS/Tools/my282/Bootlogo.pak/bootlogo.bmp", "BMP")
