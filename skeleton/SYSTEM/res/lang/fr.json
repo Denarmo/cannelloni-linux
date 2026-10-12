@@ -1,0 +1,80 @@
+{
+  "lang_name": "Français",
+  "lang_code": "fr",
+  "wizard": {
+    "title_lang": "Choisissez votre langue",
+    "title_color": "Choisir la couleur d'accent",
+    "title_device": "Choisissez votre console",
+    "btn_next": "SUIVANT",
+    "btn_select": "SÉLECTIONNER",
+    "btn_install": "INSTALLER",
+    "btn_cancel": "ANNULER",
+    "configured": "Cannelloni configuré !",
+    "device": "Appareil",
+    "language": "Langue",
+    "accent": "Couleur d'accent",
+    "starting": "Démarrage de Cannelloni..."
+  },
+  "settings": {
+    "title": "Paramètres",
+    "language": "Langue",
+    "accent_color": "Couleur d'accent",
+    "wifi": "Wi-Fi",
+    "button_mapping": "Configuration des touches",
+    "emulators": "Émulateurs",
+    "shaders": "Shaders",
+    "device_model": "Modèle d'appareil"
+  },
+  "wifi": {
+    "title": "Configuration Wi-Fi",
+    "networks_title": "Réseaux Wi-Fi",
+    "enable": "Activer",
+    "start_on_boot": "Démarrer au boot",
+    "connect_network": "Se connecter au réseau",
+    "forget_network": "Oublier un réseau",
+    "refresh_connection": "Rafraîchir connexion",
+    "scanning": "Recherche de réseaux...",
+    "connecting": "Connexion en cours...",
+    "enabling": "Activation du Wi-Fi...",
+    "disabling": "Désactivation du Wi-Fi...",
+    "enter_password": "Entrer le mot de passe",
+    "btn_connect": "CONNECTER",
+    "btn_forget": "OUBLIER",
+    "btn_refresh": "ACTUALISER",
+    "btn_save": "ENREGISTRER",
+    "btn_exit": "QUITTER"
+  },
+  "colors": {
+    "gold": "Or Cannelloni (#f1c40f)",
+    "red": "Rouge Tomate (#e74c3c)",
+    "green": "Vert Basilic (#2ecc71)",
+    "blue": "Bleu Ciel (#3498db)",
+    "purple": "Violet Améthyste (#9b59b6)",
+    "orange": "Orange Carotte (#e67e22)",
+    "white": "Blanc Pâtes (#ffffff)"
+  },
+  "emulators": {
+    "title": "Configuration des émulateurs",
+    "nds_title": "Émulateur Nintendo DS",
+    "libretro": "Cœur Libretro (Menu & Sauvegardes)",
+    "drastic": "DraStic autonome (Pleine vitesse)"
+  },
+  "shaders": {
+    "title": "Configuration des Shaders",
+    "preset_title": "Préréglage Shader",
+    "scope_title": "Systèmes cibles",
+    "crt_cannelloni": "CRT Cannelloni",
+    "scanlines": "Lignes de balayage",
+    "lcd_grid": "Grille LCD",
+    "sharp_bilinear": "Bilinéaire net",
+    "disabled": "Désactivé (Pixels bruts)",
+    "scope_all": "Tous les systèmes",
+    "scope_retro": "Consoles portables (GB/GBC/GBA/GG)",
+    "scope_home": "Consoles de salon (NES/SNES/MD/PSX)"
+  },
+  "nonna": {
+    "serving": "La cuisine de Nonna est ouverte !",
+    "browser_hint": "Ouvrez dans un navigateur sur PC ou mobile :",
+    "stop_hint": "Appuyez sur A pour arrêter et quitter."
+  }
+}

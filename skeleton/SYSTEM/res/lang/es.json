@@ -1,0 +1,80 @@
+{
+  "lang_name": "Español",
+  "lang_code": "es",
+  "wizard": {
+    "title_lang": "Elige tu Idioma",
+    "title_color": "Elegir Color de Acento",
+    "title_device": "Elige tu Consola",
+    "btn_next": "SIGUIENTE",
+    "btn_select": "SELECCIONAR",
+    "btn_install": "INSTALAR",
+    "btn_cancel": "CANCELAR",
+    "configured": "¡Cannelloni Configurado!",
+    "device": "Dispositivo",
+    "language": "Idioma",
+    "accent": "Color de Acento",
+    "starting": "Iniciando Cannelloni..."
+  },
+  "settings": {
+    "title": "Ajustes",
+    "language": "Idioma",
+    "accent_color": "Color de Acento",
+    "wifi": "Wi-Fi",
+    "button_mapping": "Mapeo de Botones",
+    "emulators": "Emuladores",
+    "shaders": "Shaders",
+    "device_model": "Modelo de Dispositivo"
+  },
+  "wifi": {
+    "title": "Configuración Wi-Fi",
+    "networks_title": "Redes Wi-Fi",
+    "enable": "Activar",
+    "start_on_boot": "Iniciar al arrancar",
+    "connect_network": "Conectar a red",
+    "forget_network": "Olvidar una red",
+    "refresh_connection": "Actualizar conexión",
+    "scanning": "Buscando redes...",
+    "connecting": "Conectando a Wi-Fi...",
+    "enabling": "Activando Wi-Fi...",
+    "disabling": "Desactivando Wi-Fi...",
+    "enter_password": "Ingresar Contraseña",
+    "btn_connect": "CONECTAR",
+    "btn_forget": "OLVIDAR",
+    "btn_refresh": "ACTUALIZAR",
+    "btn_save": "GUARDAR",
+    "btn_exit": "SALIR"
+  },
+  "colors": {
+    "gold": "Oro Cannelloni (#f1c40f)",
+    "red": "Rojo Tomate (#e74c3c)",
+    "green": "Verde Albahaca (#2ecc71)",
+    "blue": "Azul Cielo (#3498db)",
+    "purple": "Púrpura Amatista (#9b59b6)",
+    "orange": "Naranja Zanahoria (#e67e22)",
+    "white": "Blanco Pasta (#ffffff)"
+  },
+  "emulators": {
+    "title": "Configuración de Emuladores",
+    "nds_title": "Emulador Nintendo DS",
+    "libretro": "Núcleo Libretro (Menú y Guardado)",
+    "drastic": "DraStic Independiente (Máxima Velocidad)"
+  },
+  "shaders": {
+    "title": "Configuración de Shaders",
+    "preset_title": "Perfil de Shader",
+    "scope_title": "Sistemas de Destino",
+    "crt_cannelloni": "CRT Cannelloni",
+    "scanlines": "Líneas de Escaneo",
+    "lcd_grid": "Cuadrícula LCD",
+    "sharp_bilinear": "Bilineal Nítido",
+    "disabled": "Desactivado (Píxeles Nativos)",
+    "scope_all": "Todos los Sistemas",
+    "scope_retro": "Portátiles Retro (GB/GBC/GBA/GG)",
+    "scope_home": "Consolas de Sobremesa (NES/SNES/MD/PSX)"
+  },
+  "nonna": {
+    "serving": "¡La Cocina de la Nonna está Sirviendo!",
+    "browser_hint": "Abrir en navegador desde teléfono o PC:",
+    "stop_hint": "Presiona A para Detener y Salir."
+  }
+}

@@ -25,21 +25,27 @@ BODY = """# Cannelloni v20261012-0
 Welcome to Cannelloni for Linux handhelds (Anbernic, Miyoo, TrimUI, Powkiddy, MagicX, and GKD).
 
 ## What's New in this Release:
-- **Universal One-Zip Installation & Device Selector**: No longer requires identifying or manually copying device-specific folders! Simply drag the single unified archive or extract it to the root of your SD card. On initial boot, Cannelloni presents an interactive on-screen Device Selector where you pick your console model, automatically configuring the exact hardware drivers and platform files. Reconfigure hardware anytime via **Settings -> Device Model**.
-- **Denarmo Shaders & Shader Settings**: Integrated high-performance GLSL shaders directly from [Denarmo/cannelloni](https://github.com/Denarmo/cannelloni) (`crt-cannelloni`, `crt-cannelloni-lite`, `crt-easymode`, `crt-aperture`, `crt-geom`, `crt-lottes-fast`, `dot`, `lcd3x`, `scanline`, `sharp-bilinear-simple`, `zfast-crt`, `zfast-lcd`). Configure active preset and scope (All Consoles, Handhelds Only, Home Consoles, Nintendo DS) under **Settings -> Shaders**.
-- **Secure Wi-Fi Storage**: Wi-Fi credentials are now stored encrypted/obfuscated in `.userdata/shared/.cannelloni/network.conf` with restricted `0600` permissions (never in plain text in the SD card root), with automatic background migration and sanitization from legacy `wifi.txt`.
+- **Interactive 3-Step Setup Wizard**: On initial boot, Cannelloni presents an interactive setup wizard in clear sequential steps:
+  1. **Language Selection**: Choose from 6 languages (English, Spanish, French, Portuguese - Brazil, German, Italian).
+  2. **Accent Color Theming**: Pick from 7 vibrant accent colors (Cannelloni Gold `#f1c40f`, Tomato Red, Basil Green, Sky Blue, and more), immediately applied to the interface.
+  3. **Handheld Console Selection**: Pick your exact device model from all 14 supported handhelds, automatically configuring the exact hardware drivers, bootloader dat assets, and optimized platform binaries.
+- **Language Setting & Full Localization**: Change language anytime directly from **Settings -> Language**. Comprehensive translation dictionaries included for English (`en`), Spanish (`es`), French (`fr`), Portuguese - Brazil (`pt_BR`), German (`de`), and Italian (`it`).
+- **Default Yellow Accent Color on First Boot**: Fixed first-boot theming by bundling pre-rendered `#f1c40f` spritesheets directly in the system assets and ensuring clean startup theme initialization without requiring manual color changing.
+- **Reliable Wi-Fi & Start-on-Boot**: Fixed Wi-Fi settings exiting immediately on launch, added hardware radio power management (`wifion`), and fixed automatic startup on boot paths in `auto.sh`.
+- **Denarmo Shaders & Shader Settings**: Integrated high-performance GLSL shaders directly from [Denarmo/cannelloni](https://github.com/Denarmo/cannelloni) (`crt-cannelloni`, `crt-cannelloni-lite`, `crt-easymode`, `crt-aperture`, `crt-geom`, `crt-lottes-fast`, `dot`, `lcd3x`, `scanline`, `sharp-bilinear-simple`, `zfast-crt`, `zfast-lcd`). Configure active preset and scope under **Settings -> Shaders**.
+- **Secure Wi-Fi Storage**: Wi-Fi credentials are stored encrypted/obfuscated in `.userdata/shared/.cannelloni/network.conf` with restricted `0600` permissions (never in plain text in the SD card root), with automatic background migration and sanitization from legacy `wifi.txt`.
 - **Official Boot Logo**: Centered cannelloni drawing with title **"Cannelloni"** and subtitle **"forked from MinUI/Cannoli"** across all handheld platforms, with automatic SPI flash programming on Miyoo Mini / Plus hardware.
 - **Attribution on About Page**: Pressing the Home (`MENU`) button displays **"Cannelloni"** and **"forked from MinUI/Cannoli"** cleanly without crashing.
-- **Seamless Accent Color Theming**: Pre-generated theme binary suites and spritesheets for 7 vibrant presets (Cannelloni Gold `#f1c40f`, Tomato Red, Basil Green, Sky Blue, and more) with solid matching selection pills across launcher, in-game menus, settings, and tools, completely eliminating re-boot lockups.
 - **Permissive Licensing**: Explicit licensing terms establishing that upstream code is copyright Shaun Inman / MinUI contributors, while all Cannelloni additions and modifications are licensed under the permissive MIT License for anyone to freely use.
 - **Unified Single-Zip Distribution**: All core systems, emulators, tools, and platform installers delivered in one unified archive (`Cannelloni-20261012-0.zip`).
 - **New Top-Level Settings Menu**: Direct access from the main screen to:
-  - **Wi-Fi**: Connect to wireless networks, view IP, and toggle auto-start on boot directly on-device.
-  - **Shaders**: Select shader preset and apply scope across consoles.
-  - **Device Model**: Interactively switch or reconfigure target handheld console hardware.
+  - **Language**: Switch system language anytime on-device.
+  - **Wi-Fi**: Connect to wireless networks, view IP, and toggle auto-start on boot.
   - **Accent Color**: Customize interface colors (Cannelloni Gold `#f1c40f`, Tomato Red, Basil Green, Sky Blue, and more).
   - **Button Mapping**: Swap A/B and X/Y button layouts.
   - **Emulators**: Choose preferred emulators per console (e.g. Libretro DeSmuME vs standalone DraStic for Nintendo DS).
+  - **Shaders**: Select shader preset and apply scope across consoles.
+  - **Device Model**: Interactively switch or reconfigure target handheld console hardware.
 - **Nonna's Kitchen (Web Dashboard)**: Wireless HTTP management service on port `1091` matching Android Cannelloni. Connect with any web browser to view storage, browse files, and drag-and-drop upload ROMs, BIOS, and Saves.
 - **Curated Tools Section**: Focused strictly on essential utilities: `Clock`, `Files`, `Input`, `IP`, and `Nonna's Kitchen`.
 - **Full Cannelloni Gold UI (#f1c40f)**: Uniform gold accent theming across all UI components, button badges `(A)`/`(B)`, battery fill and charging bolt, Wi-Fi icon, volume and brightness indicators, and solid gold selection pills across all screen scales (1x through 4x).
@@ -49,7 +55,7 @@ Welcome to Cannelloni for Linux handhelds (Anbernic, Miyoo, TrimUI, Powkiddy, Ma
 1. Format your SD card as FAT32 (MBR).
 2. Drag or extract **`Cannelloni-20261012-0.zip`** directly to the root of your SD card.
 3. Insert the card into your handheld and power on.
-4. Use the on-screen Device Selector to pick your console model and press A (INSTALL).
+4. Follow the 3-step setup wizard on screen: select Language, select Accent Color, and select your Device Model!
 """
 
 print(f"Creating or updating release {TAG} on {REPO}...")

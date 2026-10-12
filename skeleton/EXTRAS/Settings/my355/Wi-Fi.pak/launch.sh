@@ -27,8 +27,12 @@ if uname -m | grep -q '64'; then
 fi
 
 export HOME="$USERDATA_PATH/$PAK_NAME"
-export LD_LIBRARY_PATH="$PAK_DIR/lib/$PLATFORM:$PAK_DIR/lib:$LD_LIBRARY_PATH"
-export PATH="$PAK_DIR/bin/$architecture:$PAK_DIR/bin/$PLATFORM:$PAK_DIR/bin:$PATH"
+export LD_LIBRARY_PATH="$PAK_DIR/lib/$PLATFORM:$PAK_DIR/lib:$SDCARD_PATH/.system/$PLATFORM/lib:/customer/lib:/lib:/usr/lib:$LD_LIBRARY_PATH"
+export PATH="$PAK_DIR/bin/$architecture:$PAK_DIR/bin/$PLATFORM:$PAK_DIR/bin:$SDCARD_PATH/.system/$PLATFORM/bin:$PATH"
+
+# Ensure execute permissions on all bundled binaries immediately
+chmod +x "$PAK_DIR/bin/"* "$PAK_DIR/bin/$architecture/"* "$PAK_DIR/bin/$PLATFORM/"* 2>/dev/null
+[ -f "$PAK_DIR/bin/$architecture/jq" ] && chmod +x "$PAK_DIR/bin/$architecture/jq" 2>/dev/null
 
 # --- Cannelloni Secure Network Storage ---
 SECURE_NET_DIR="$SDCARD_PATH/.userdata/shared/.cannelloni"
@@ -128,68 +132,67 @@ delete_network_credential() {
     sync
 }
 
-get_network_password() {
-    target_s="$1"
-    [ ! -f "$SECURE_NET_CONF" ] && return
-    while IFS= read -r line || [ -n "$line" ]; do
-        case "$line" in
-            NET:*)
-                enc_s=$(echo "$line" | cut -d: -f2)
-                s=$(decode_cred "$enc_s")
-                if [ "$s" = "$target_s" ]; then
-                    enc_p=$(echo "$line" | cut -d: -f3)
-                    decode_cred "$enc_p"
-                    return
-                fi
-                ;;
-        esac
-    done < "$SECURE_NET_CONF"
-}
-
 get_all_saved_networks() {
     migrate_legacy_wifi_txt
-    [ ! -f "$SECURE_NET_CONF" ] && return
-    while IFS= read -r line || [ -n "$line" ]; do
-        case "$line" in
-            NET:*)
-                enc_s=$(echo "$line" | cut -d: -f2)
-                decode_cred "$enc_s"
-                echo ""
-                ;;
-        esac
-    done < "$SECURE_NET_CONF"
+    if [ -f "$SECURE_NET_CONF" ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+            case "$line" in
+                NET:*)
+                    enc_s=$(echo "$line" | cut -d: -f2)
+                    decode_cred "$enc_s"
+                    ;;
+            esac
+        done < "$SECURE_NET_CONF"
+    fi
+}
+
+get_network_password() {
+    match_s="$1"
+    migrate_legacy_wifi_txt
+    if [ -f "$SECURE_NET_CONF" ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+            case "$line" in
+                NET:*)
+                    enc_s=$(echo "$line" | cut -d: -f2)
+                    s=$(decode_cred "$enc_s")
+                    if [ "$s" = "$match_s" ]; then
+                        enc_p=$(echo "$line" | cut -d: -f3)
+                        decode_cred "$enc_p"
+                        return 0
+                    fi
+                    ;;
+            esac
+        done < "$SECURE_NET_CONF"
+    fi
+    return 1
 }
 
 has_saved_networks() {
     migrate_legacy_wifi_txt
-    [ ! -s "$SECURE_NET_CONF" ] && return 1
-    while IFS= read -r line || [ -n "$line" ]; do
-        case "$line" in
-            NET:*)
-                return 0
-                ;;
-        esac
-    done < "$SECURE_NET_CONF"
+    if [ -f "$SECURE_NET_CONF" ]; then
+        if grep -q "^NET:" "$SECURE_NET_CONF" 2>/dev/null; then
+            return 0
+        fi
+    fi
     return 1
 }
 
-
 get_ssid_and_ip() {
-    enabled="$(cat /sys/class/net/wlan0/operstate)"
-    if [ "$enabled" != "up" ]; then
+    if ! wifi-enabled; then
         return
     fi
 
     ssid=""
     ip_address=""
 
-    for i in $(seq 1 5); do
+    for i in $(seq 1 4); do
         if [ "$PLATFORM" = "my355" ]; then
-            ssid="$(wpa_cli -i wlan0 status | grep ssid= | grep -v bssid= | cut -d'=' -f2)"
-            ip_address="$(wpa_cli -i wlan0 status | grep ip_address= | cut -d'=' -f2)"
+            ssid="$(wpa_cli -i wlan0 status 2>/dev/null | grep ssid= | grep -v bssid= | cut -d'=' -f2)"
+            ip_address="$(wpa_cli -i wlan0 status 2>/dev/null | grep ip_address= | cut -d'=' -f2)"
         else
-            ssid="$(iw dev wlan0 link | grep SSID: | cut -d':' -f2- | sed -e 's/^[ \t]*//' -e 's/[ \t]*$//')"
-            ip_address="$(ip addr show wlan0 | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1)"
+            ssid="$(iw dev wlan0 link 2>/dev/null | grep SSID: | cut -d':' -f2- | sed -e 's/^[ \t]*//' -e 's/[ \t]*$//')"
+            ip_address="$(ip addr show wlan0 2>/dev/null | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1)"
+            [ -z "$ip_address" ] && ip_address="$(ifconfig wlan0 2>/dev/null | awk '/inet addr:/ {print $2}' | cut -d: -f2 | head -n1)"
         fi
 
         if [ -n "$ip_address" ] && [ -n "$ssid" ]; then
@@ -221,19 +224,21 @@ main_screen() {
     fi
 
     enabled=false
-    ssid_and_ip=""
+    ssid="N/A"
+    ip_address="N/A"
     if wifi-enabled; then
         enabled=true
         template_file="$PAK_DIR/res/settings.enabled.json"
-    fi
-
-    ssid_and_ip="$(get_ssid_and_ip)"
-    if [ -n "$ssid_and_ip" ]; then
-        ssid="$(echo "$ssid_and_ip" | cut -f1)"
-        ip_address="$(echo "$ssid_and_ip" | cut -f2)"
-        template_file="$PAK_DIR/res/settings.connected.json"
-        if [ "$ip_address" = "N/A" ]; then
-            template_file="$PAK_DIR/res/settings.no-ip.json"
+        ssid_and_ip="$(get_ssid_and_ip)"
+        if [ -n "$ssid_and_ip" ]; then
+            ssid="$(echo "$ssid_and_ip" | cut -f1)"
+            ip_address="$(echo "$ssid_and_ip" | cut -f2)"
+            if [ -n "$ssid" ] && [ "$ssid" != "N/A" ]; then
+                template_file="$PAK_DIR/res/settings.connected.json"
+                if [ "$ip_address" = "N/A" ] || [ -z "$ip_address" ]; then
+                    template_file="$PAK_DIR/res/settings.no-ip.json"
+                fi
+            fi
         fi
     fi
 
@@ -261,12 +266,12 @@ networks_screen() {
     touch "$cannelloni_list_file"
 
     show_message "Scanning for networks" forever
-    DELAY=30
+    DELAY=15
 
     if [ "$PLATFORM" = "my355" ]; then
-        wpa_cli -i wlan0 scan
+        wpa_cli -i wlan0 scan 2>/dev/null
         for i in $(seq 1 "$DELAY"); do
-            wpa_cli -i wlan0 scan_results | grep -v "ssid" | cut -f 5 | sort -u >>"$cannelloni_list_file"
+            wpa_cli -i wlan0 scan_results 2>/dev/null | grep -v "ssid" | cut -f 5 | sort -u >>"$cannelloni_list_file"
             if [ -s "$cannelloni_list_file" ]; then
                 break
             fi
@@ -274,7 +279,7 @@ networks_screen() {
         done
     else
         for i in $(seq 1 "$DELAY"); do
-            iw dev wlan0 scan | grep SSID: | cut -d':' -f2- | sed -e 's/^[ \t]*//' -e 's/[ \t]*$//' | sort -u >>"$cannelloni_list_file"
+            iw dev wlan0 scan 2>/dev/null | grep SSID: | cut -d':' -f2- | sed -e 's/^[ \t]*//' -e 's/[ \t]*$//' | sort -u >>"$cannelloni_list_file"
             if [ -s "$cannelloni_list_file" ]; then
                 break
             fi
@@ -365,26 +370,32 @@ show_message() {
 }
 
 disable_start_on_boot() {
-    sed -i "/${PAK_NAME}.pak-on-boot/d" "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
-    sync
+    if [ -f "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh" ]; then
+        sed -i "/${PAK_NAME}.pak-on-boot/d" "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
+        sed -i "/Wi-Fi.pak-on-boot/d" "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
+        sync
+    fi
     return 0
 }
 
 enable_start_on_boot() {
+    mkdir -p "$SDCARD_PATH/.userdata/$PLATFORM"
     if [ ! -f "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh" ]; then
         echo '#!/bin/sh' >"$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
         echo '' >>"$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
     fi
 
-    echo "test -f \"\$SDCARD_PATH/Tools/\$PLATFORM/$PAK_NAME.pak/bin/on-boot\" && \"\$SDCARD_PATH/Tools/\$PLATFORM/$PAK_NAME.pak/bin/on-boot\" # ${PAK_NAME}.pak-on-boot" >>"$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
+    echo "test -f \"\$SDCARD_PATH/Settings/\$PLATFORM/$PAK_NAME.pak/bin/on-boot\" && \"\$SDCARD_PATH/Settings/\$PLATFORM/$PAK_NAME.pak/bin/on-boot\" # ${PAK_NAME}.pak-on-boot" >>"$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
     chmod +x "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
     sync
     return 0
 }
 
 will_start_on_boot() {
-    if grep -q "${PAK_NAME}.pak-on-boot" "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh" >/dev/null 2>&1; then
-        return 0
+    if [ -f "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh" ]; then
+        if grep -q -E "(${PAK_NAME}|Wi-Fi)\.pak-on-boot" "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh" >/dev/null 2>&1; then
+            return 0
+        fi
     fi
     return 1
 }
@@ -447,25 +458,23 @@ write_config() {
     fi
 
     if [ "$PLATFORM" = "miyoomini" ]; then
-        cp "$PAK_DIR/res/wpa_supplicant.conf" /etc/wifi/wpa_supplicant.conf
-        cp "$PAK_DIR/res/wpa_supplicant.conf" /appconfigs/wpa_supplicant.conf
+        cp "$PAK_DIR/res/wpa_supplicant.conf" /etc/wifi/wpa_supplicant.conf 2>/dev/null
+        cp "$PAK_DIR/res/wpa_supplicant.conf" /appconfigs/wpa_supplicant.conf 2>/dev/null
     elif [ "$PLATFORM" = "my282" ]; then
-        cp "$PAK_DIR/res/wpa_supplicant.conf" /etc/wifi/wpa_supplicant.conf
-        cp "$PAK_DIR/res/wpa_supplicant.conf" /config/wpa_supplicant.conf
+        cp "$PAK_DIR/res/wpa_supplicant.conf" /etc/wifi/wpa_supplicant.conf 2>/dev/null
+        cp "$PAK_DIR/res/wpa_supplicant.conf" /config/wpa_supplicant.conf 2>/dev/null
     elif [ "$PLATFORM" = "my355" ]; then
-        cp "$PAK_DIR/res/wpa_supplicant.conf" /userdata/cfg/wpa_supplicant.conf
+        cp "$PAK_DIR/res/wpa_supplicant.conf" /userdata/cfg/wpa_supplicant.conf 2>/dev/null
     elif [ "$PLATFORM" = "rg35xxplus" ]; then
-        cp "$PAK_DIR/res/wpa_supplicant.conf" /etc/wpa_supplicant/wpa_supplicant.conf
-        cp "$PAK_DIR/res/netplan.yaml" /etc/netplan/01-netcfg.yaml
+        cp "$PAK_DIR/res/wpa_supplicant.conf" /etc/wpa_supplicant/wpa_supplicant.conf 2>/dev/null
+        cp "$PAK_DIR/res/netplan.yaml" /etc/netplan/01-netcfg.yaml 2>/dev/null
         if [ "$has_passwords" = false ]; then
             rm -f /etc/netplan/01-netcfg.yaml
         fi
     elif [ "$PLATFORM" = "tg5040" ]; then
-        cp "$PAK_DIR/res/wpa_supplicant.conf" /etc/wifi/wpa_supplicant.conf
-    else
-        show_message "$PLATFORM is not a supported platform" 2
-        return 1
+        cp "$PAK_DIR/res/wpa_supplicant.conf" /etc/wifi/wpa_supplicant.conf 2>/dev/null
     fi
+    sync
 }
 
 has_credentials() {
@@ -501,9 +510,9 @@ wifi_on() {
         return 0
     fi
 
-    DELAY=30
+    DELAY=20
     for i in $(seq 1 "$DELAY"); do
-        STATUS=$(cat "/sys/class/net/wlan0/operstate")
+        STATUS=$(cat "/sys/class/net/wlan0/operstate" 2>/dev/null)
         if [ "$STATUS" = "up" ]; then
             break
         fi
@@ -520,25 +529,19 @@ forget_network_loop() {
     while true; do
         saved_networks_screen
         exit_code=$?
-        # exit codes: 2 = back button (go back to main screen)
         if [ "$exit_code" -eq 2 ]; then
             break
         fi
-
-        # exit codes: 3 = menu button (exit out of the app)
         if [ "$exit_code" -eq 3 ]; then
             next_screen="exit"
             break
         fi
-
-        # some sort of error and then go back to main screen
         if [ "$exit_code" -ne 0 ]; then
             next_screen="main"
             break
         fi
 
         SSID="$(cat /tmp/cannelloni-output)"
-        # remove the SSID from the secure network config
         delete_network_credential "$SSID"
         if ! write_config "true"; then
             show_message "Failed to write wireless config" 2
@@ -546,14 +549,13 @@ forget_network_loop() {
         fi
 
         show_message "Refreshing connection" forever
-
         if ! wifi_off; then
-            show_message "Failed to disable wifi" 2
+            show_message "Failed to stop wifi" 2
             break
         fi
 
         if ! wifi_on; then
-            show_message "Failed to enable wifi" 2
+            show_message "Failed to restart wifi" 2
             break
         fi
         break
@@ -576,18 +578,13 @@ network_loop() {
     while true; do
         networks_screen
         exit_code=$?
-        # exit codes: 2 = back button (go back to main screen)
         if [ "$exit_code" -eq 2 ]; then
             break
         fi
-
-        # exit codes: 3 = menu button (exit out of the app)
         if [ "$exit_code" -eq 3 ]; then
             next_screen="exit"
             break
         fi
-
-        # some sort of error and then go back to main screen
         if [ "$exit_code" -ne 0 ]; then
             show_message "Error selecting a network" 2
             next_screen="main"
@@ -597,17 +594,13 @@ network_loop() {
         SSID="$(cat /tmp/cannelloni-output)"
         password_screen "$SSID"
         exit_code=$?
-        # exit codes: 2 = back button (go back to networks screen)
         if [ "$exit_code" -eq 2 ]; then
             continue
         fi
-
-        # exit codes: 3 = menu button (exit out of the app)
         if [ "$exit_code" -eq 3 ]; then
             next_screen="exit"
             break
         fi
-
         if [ "$exit_code" -ne 0 ]; then
             continue
         fi
@@ -617,7 +610,6 @@ network_loop() {
             show_message "Failed to start wifi" 2
             break
         fi
-
         break
     done
 
@@ -646,17 +638,18 @@ main() {
         fi
     fi
 
-    if ! command -v cannelloni-keyboard >/dev/null 2>&1; then
+    # Check for binaries with executable fallback
+    if ! command -v cannelloni-keyboard >/dev/null 2>&1 && [ ! -x "$PAK_DIR/bin/$PLATFORM/cannelloni-keyboard" ]; then
         show_message "cannelloni-keyboard not found" 2
         return 1
     fi
 
-    if ! command -v cannelloni-list >/dev/null 2>&1; then
+    if ! command -v cannelloni-list >/dev/null 2>&1 && [ ! -x "$PAK_DIR/bin/$PLATFORM/cannelloni-list" ]; then
         show_message "cannelloni-list not found" 2
         return 1
     fi
 
-    if ! command -v cannelloni-presenter >/dev/null 2>&1; then
+    if ! command -v cannelloni-presenter >/dev/null 2>&1 && [ ! -x "$PAK_DIR/bin/$PLATFORM/cannelloni-presenter" ]; then
         show_message "cannelloni-presenter not found" 2
         return 1
     fi
@@ -673,23 +666,22 @@ main() {
             return 1
         fi
 
-        if ! grep -c 8188fu /proc/modules; then
-            insmod "$PAK_DIR/res/miyoomini/8188fu.ko"
+        if ! grep -q 8188fu /proc/modules 2>/dev/null; then
+            insmod "$PAK_DIR/res/miyoomini/8188fu.ko" 2>/dev/null
         fi
+
+        # Power on hardware Wi-Fi chip and initialize interface
+        /customer/app/axp_test wifion 2>/dev/null
+        ifconfig wlan0 up 2>/dev/null
     fi
 
     if [ "$PLATFORM" = "rg35xxplus" ]; then
-        RGXX_MODEL="$(strings /mnt/vendor/bin/dmenu.bin | grep ^RG)"
+        RGXX_MODEL="$(strings /mnt/vendor/bin/dmenu.bin 2>/dev/null | grep ^RG)"
         if [ "$RGXX_MODEL" = "RG28xx" ]; then
             show_message "Wifi not supported on RG28XX" 2
             return 1
         fi
     fi
-
-    chmod +x "$PAK_DIR/bin/$architecture/jq"
-    chmod +x "$PAK_DIR/bin/$PLATFORM/cannelloni-keyboard"
-    chmod +x "$PAK_DIR/bin/$PLATFORM/cannelloni-list"
-    chmod +x "$PAK_DIR/bin/$PLATFORM/cannelloni-presenter"
 
     while true; do
         main_screen
@@ -703,9 +695,9 @@ main() {
         selected_index="$(echo "$output" | jq -r '.selected')"
         selection="$(echo "$output" | jq -r ".settings[$selected_index].name")"
 
-        if [ "$selection" = "Enable" ] || [ "$selection" = "Start on boot" ]; then
-            selected_option_index="$(echo "$output" | jq -r ".settings[0].selected")"
-            selected_option="$(echo "$output" | jq -r ".settings[0].options[$selected_option_index]")"
+        if [ "$selection" = "Enable" ]; then
+            selected_option_index="$(echo "$output" | jq -r ".settings[$selected_index].selected")"
+            selected_option="$(echo "$output" | jq -r ".settings[$selected_index].options[$selected_option_index]")"
 
             if [ "$selected_option" = "true" ]; then
                 if ! wifi-enabled; then
@@ -724,9 +716,9 @@ main() {
                     fi
                 fi
             fi
-
-            selected_option_index="$(echo "$output" | jq -r ".settings[1].selected")"
-            selected_option="$(echo "$output" | jq -r ".settings[1].options[$selected_option_index]")"
+        elif [ "$selection" = "Start on boot" ]; then
+            selected_option_index="$(echo "$output" | jq -r ".settings[$selected_index].selected")"
+            selected_option="$(echo "$output" | jq -r ".settings[$selected_index].options[$selected_option_index]")"
 
             if [ "$selected_option" = "true" ]; then
                 if ! will_start_on_boot; then
@@ -747,13 +739,13 @@ main() {
             fi
         elif echo "$selection" | grep -q "^Connect to network$"; then
             network_loop
-            next_screen="$(cat /tmp/wifi-next-screen)"
+            next_screen="$(cat /tmp/wifi-next-screen 2>/dev/null)"
             if [ "$next_screen" = "exit" ]; then
                 break
             fi
         elif echo "$selection" | grep -q "^Forget a network$"; then
             forget_network_loop
-            next_screen="$(cat /tmp/wifi-next-screen)"
+            next_screen="$(cat /tmp/wifi-next-screen 2>/dev/null)"
             if [ "$next_screen" = "exit" ]; then
                 break
             fi

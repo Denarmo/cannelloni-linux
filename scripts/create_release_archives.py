@@ -283,6 +283,16 @@ def build_release():
                 with open(l_path, "rb") as fp:
                     data = fp.read()
 
+        # Override stock MinUI spritesheets with official Cannelloni Gold (#f1c40f) assets
+        if name.startswith(".system/res/assets@"):
+            bn = os.path.basename(name)
+            gold_asset = os.path.join("skeleton/SYSTEM/res/themes/#f1c40f", bn)
+            if not os.path.isfile(gold_asset):
+                gold_asset = os.path.join("skeleton/SYSTEM/res", bn)
+            if os.path.isfile(gold_asset):
+                with open(gold_asset, "rb") as fp:
+                    data = fp.read()
+
         # Patch ELF binaries to bake in Cannelloni Gold (#f1c40f) for selection pills and slider bars
         if name.endswith("/bin/minui.elf") or name.endswith("/bin/minarch.elf"):
             data = patch_binary_accent_color(data, 241, 196, 15)
@@ -485,9 +495,14 @@ def build_release():
             zi_l.external_attr = 0o755 << 16
             out_cannelloni_zip.writestr(zi_l, l_bytes)
 
-    # Default accent color, emulator, and shader configurations in Cannelloni.zip
+    # Add translation files into .system/res/lang/
+    lang_dir = "skeleton/SYSTEM/res/lang"
+    if os.path.isdir(lang_dir):
+        add_dir_to_zip(out_cannelloni_zip, lang_dir, ".system/res/lang", set())
+
+    # Default accent color, language, emulator, and shader configurations in Cannelloni.zip
     out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/accent_color.txt", b"#f1c40f\n")
-    out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/.current_accent", b"#f1c40f\n")
+    out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/language.txt", b"en\n")
     out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/emu_nds.txt", b"libretro\n")
     out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/button_swap.txt", b"default\n")
     out_cannelloni_zip.writestr(".userdata/shared/.cannelloni/shader_preset.txt", b"crt-cannelloni\n")
@@ -649,8 +664,8 @@ def build_release():
         # 6. Default settings configurations in root
         out_zip.writestr(".userdata/shared/.cannelloni/accent_color.txt", b"#f1c40f\n")
         written_entries.add(".userdata/shared/.cannelloni/accent_color.txt")
-        out_zip.writestr(".userdata/shared/.cannelloni/.current_accent", b"#f1c40f\n")
-        written_entries.add(".userdata/shared/.cannelloni/.current_accent")
+        out_zip.writestr(".userdata/shared/.cannelloni/language.txt", b"en\n")
+        written_entries.add(".userdata/shared/.cannelloni/language.txt")
         out_zip.writestr(".userdata/shared/.cannelloni/emu_nds.txt", b"libretro\n")
         written_entries.add(".userdata/shared/.cannelloni/emu_nds.txt")
         out_zip.writestr(".userdata/shared/.cannelloni/button_swap.txt", b"default\n")

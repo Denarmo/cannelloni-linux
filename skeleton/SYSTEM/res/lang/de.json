@@ -1,0 +1,80 @@
+{
+  "lang_name": "Deutsch",
+  "lang_code": "de",
+  "wizard": {
+    "title_lang": "Wähle deine Sprache",
+    "title_color": "Akzentfarbe wählen",
+    "title_device": "Wähle deine Konsole",
+    "btn_next": "WEITER",
+    "btn_select": "AUSWÄHLEN",
+    "btn_install": "INSTALLIEREN",
+    "btn_cancel": "ABBRECHEN",
+    "configured": "Cannelloni eingerichtet!",
+    "device": "Gerät",
+    "language": "Sprache",
+    "accent": "Akzentfarbe",
+    "starting": "Cannelloni wird gestartet..."
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "language": "Sprache",
+    "accent_color": "Akzentfarbe",
+    "wifi": "WLAN",
+    "button_mapping": "Tastenbelegung",
+    "emulators": "Emulatoren",
+    "shaders": "Shader",
+    "device_model": "Gerätemodell"
+  },
+  "wifi": {
+    "title": "WLAN-Konfiguration",
+    "networks_title": "WLAN-Netzwerke",
+    "enable": "Aktivieren",
+    "start_on_boot": "Beim Start aktivieren",
+    "connect_network": "Mit Netzwerk verbinden",
+    "forget_network": "Netzwerk vergessen",
+    "refresh_connection": "Verbindung aktualisieren",
+    "scanning": "Netzwerke werden gesucht...",
+    "connecting": "Verbindung wird hergestellt...",
+    "enabling": "WLAN wird aktiviert...",
+    "disabling": "WLAN wird deaktiviert...",
+    "enter_password": "Passwort eingeben",
+    "btn_connect": "VERBINDEN",
+    "btn_forget": "VERGESSEN",
+    "btn_refresh": "AKTUALISIEREN",
+    "btn_save": "SPEICHERN",
+    "btn_exit": "BEENDEN"
+  },
+  "colors": {
+    "gold": "Cannelloni-Gold (#f1c40f)",
+    "red": "Tomatenrot (#e74c3c)",
+    "green": "Basilikumgrün (#2ecc71)",
+    "blue": "Himmelblau (#3498db)",
+    "purple": "Amethyst-Lila (#9b59b6)",
+    "orange": "Karottenorange (#e67e22)",
+    "white": "Pasta-Weiß (#ffffff)"
+  },
+  "emulators": {
+    "title": "Emulatoren-Konfiguration",
+    "nds_title": "Nintendo DS Emulator",
+    "libretro": "Libretro-Core (Menü & Speicherstände)",
+    "drastic": "DraStic Standalone (Volle Geschwindigkeit)"
+  },
+  "shaders": {
+    "title": "Shader-Konfiguration",
+    "preset_title": "Shader-Voreinstellung",
+    "scope_title": "Zielsysteme",
+    "crt_cannelloni": "CRT Cannelloni",
+    "scanlines": "Scanlines",
+    "lcd_grid": "LCD-Raster",
+    "sharp_bilinear": "Scharf Bilinear",
+    "disabled": "Deaktiviert (Pixelgenau)",
+    "scope_all": "Alle Systeme",
+    "scope_retro": "Retro-Handhelds (GB/GBC/GBA/GG)",
+    "scope_home": "Heimkonsolen (NES/SNES/MD/PSX)"
+  },
+  "nonna": {
+    "serving": "Nonnas Küche serviert!",
+    "browser_hint": "Im Browser auf Smartphone oder PC öffnen:",
+    "stop_hint": "A drücken zum Beenden."
+  }
+}

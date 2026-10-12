@@ -1,0 +1,80 @@
+{
+  "lang_name": "English",
+  "lang_code": "en",
+  "wizard": {
+    "title_lang": "Choose Your Language",
+    "title_color": "Choose Accent Color",
+    "title_device": "Choose Your Handheld",
+    "btn_next": "NEXT",
+    "btn_select": "SELECT",
+    "btn_install": "INSTALL",
+    "btn_cancel": "CANCEL",
+    "configured": "Cannelloni Configured!",
+    "device": "Device",
+    "language": "Language",
+    "accent": "Accent Color",
+    "starting": "Starting Cannelloni..."
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "accent_color": "Accent Color",
+    "wifi": "Wi-Fi",
+    "button_mapping": "Button Mapping",
+    "emulators": "Emulators",
+    "shaders": "Shaders",
+    "device_model": "Device Model"
+  },
+  "wifi": {
+    "title": "Wi-Fi Configuration",
+    "networks_title": "Wi-Fi Networks",
+    "enable": "Enable",
+    "start_on_boot": "Start on boot",
+    "connect_network": "Connect to network",
+    "forget_network": "Forget a network",
+    "refresh_connection": "Refresh connection",
+    "scanning": "Scanning for networks...",
+    "connecting": "Connecting to Wi-Fi...",
+    "enabling": "Enabling Wi-Fi...",
+    "disabling": "Disabling Wi-Fi...",
+    "enter_password": "Enter Password",
+    "btn_connect": "CONNECT",
+    "btn_forget": "FORGET",
+    "btn_refresh": "REFRESH",
+    "btn_save": "SAVE",
+    "btn_exit": "EXIT"
+  },
+  "colors": {
+    "gold": "Cannelloni Gold (#f1c40f)",
+    "red": "Tomato Red (#e74c3c)",
+    "green": "Basil Green (#2ecc71)",
+    "blue": "Sky Blue (#3498db)",
+    "purple": "Amethyst Purple (#9b59b6)",
+    "orange": "Carrot Orange (#e67e22)",
+    "white": "Pasta White (#ffffff)"
+  },
+  "emulators": {
+    "title": "Emulators Configuration",
+    "nds_title": "Nintendo DS Emulator",
+    "libretro": "Libretro Core (Menu & Save States)",
+    "drastic": "Standalone DraStic (Full Speed)"
+  },
+  "shaders": {
+    "title": "Shader Configuration",
+    "preset_title": "Shader Preset",
+    "scope_title": "Target Systems",
+    "crt_cannelloni": "CRT Cannelloni",
+    "scanlines": "Scanlines",
+    "lcd_grid": "LCD Grid",
+    "sharp_bilinear": "Sharp Bilinear",
+    "disabled": "Disabled (Raw Pixels)",
+    "scope_all": "All Systems",
+    "scope_retro": "Retro Handhelds (GB/GBC/GBA/GG)",
+    "scope_home": "Home Consoles (NES/SNES/MD/PSX)"
+  },
+  "nonna": {
+    "serving": "Nonna's Kitchen is Serving!",
+    "browser_hint": "Open in browser on phone or PC:",
+    "stop_hint": "Press A to Stop & Exit."
+  }
+}
