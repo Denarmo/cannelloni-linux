@@ -33,7 +33,7 @@ fi
 
 if [ -z "$IP" ] || [ "$IP" = "127.0.0.1" ]; then
 	$SAY "Wi-Fi is not connected.
-Configure Wi-Fi in Stock OS first."
+Configure Wi-Fi in Tools > Wi-Fi first."
 	exit 0
 fi
 

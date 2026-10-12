@@ -26,6 +26,34 @@ OUT_EXTRAS_ZIP = os.path.join(OUT_DIR, f"{RELEASE_NAME}-extras.zip")
 
 print(f"Building {RELEASE_NAME} releases...")
 
+def add_dir_to_zip(zout, src_dir, zip_prefix):
+    """Recursively adds a local directory into a zip archive with proper permissions."""
+    if not os.path.isdir(src_dir):
+        return
+    for root, dirs, files in os.walk(src_dir):
+        for f in files:
+            full_path = os.path.join(root, f)
+            rel = os.path.relpath(full_path, src_dir).replace("\\", "/")
+            dest = f"{zip_prefix}/{rel}".strip("/")
+            with open(full_path, "rb") as fp:
+                data = fp.read()
+            zinfo = zipfile.ZipInfo(dest)
+            zinfo.compress_type = zipfile.ZIP_DEFLATED
+            is_exec = (
+                f.endswith((".sh", ".elf", "MainUI", "updater")) or
+                ("." not in f and not f.startswith(".")) or
+                f in (
+                    "drastic", "cpuclock", "show_hotkeys", "minui-keyboard",
+                    "minui-list", "minui-presenter", "iw", "jq", "service-on",
+                    "service-off", "wifi-enabled", "on-boot", "png2raw"
+                )
+            )
+            if is_exec:
+                zinfo.external_attr = 0o755 << 16
+            else:
+                zinfo.external_attr = 0o644 << 16
+            zout.writestr(zinfo, data)
+
 # ----------------------------------------------------
 # 1. Process and rebuild Cannelloni.zip (from MinUI.zip)
 # ----------------------------------------------------
@@ -102,14 +130,9 @@ platforms = [
 ]
 
 for p in platforms:
-    nds_launch_path = f"skeleton/SYSTEM/{p}/paks/Emus/NDS.pak/launch.sh"
-    nds_cfg_path = f"skeleton/SYSTEM/{p}/paks/Emus/NDS.pak/default.cfg"
-    if os.path.isfile(nds_launch_path):
-        with open(nds_launch_path, "rb") as f:
-            out_cannelloni_zip.writestr(f".system/{p}/paks/Emus/NDS.pak/launch.sh", f.read())
-    if os.path.isfile(nds_cfg_path):
-        with open(nds_cfg_path, "rb") as f:
-            out_cannelloni_zip.writestr(f".system/{p}/paks/Emus/NDS.pak/default.cfg", f.read())
+    nds_dir = f"skeleton/SYSTEM/{p}/paks/Emus/NDS.pak"
+    if os.path.isdir(nds_dir):
+        add_dir_to_zip(out_cannelloni_zip, nds_dir, f".system/{p}/paks/Emus/NDS.pak")
 
 in_minui_zip.close()
 out_cannelloni_zip.close()
@@ -185,23 +208,20 @@ with zipfile.ZipFile(SRC_BASE_ZIP, "r") as base_in, \
 
     # Add Essential Tools (Nonna's Kitchen & Wi-Fi) directly to Base package
     for p in platforms:
-        k_path = f"skeleton/EXTRAS/Tools/{p}/Nonna's Kitchen.pak/launch.sh"
-        if not os.path.isfile(k_path):
-            k_path = "skeleton/EXTRAS/Tools/miyoomini/Nonna's Kitchen.pak/launch.sh"
-        with open(k_path, "rb") as f:
-            zinfo_k = zipfile.ZipInfo(f"Tools/{p}/Nonna's Kitchen.pak/launch.sh")
-            zinfo_k.compress_type = zipfile.ZIP_DEFLATED
-            zinfo_k.external_attr = 0o755 << 16
-            base_out.writestr(zinfo_k, f.read())
+        k_dir = f"skeleton/EXTRAS/Tools/{p}/Nonna's Kitchen.pak"
+        if not os.path.isdir(k_dir):
+            k_dir = "skeleton/EXTRAS/Tools/miyoomini/Nonna's Kitchen.pak"
+        add_dir_to_zip(base_out, k_dir, f"Tools/{p}/Nonna's Kitchen.pak")
 
-        w_path = f"skeleton/EXTRAS/Tools/{p}/Wi-Fi.pak/launch.sh"
-        if not os.path.isfile(w_path):
-            w_path = "skeleton/EXTRAS/Tools/miyoomini/Wi-Fi.pak/launch.sh"
-        with open(w_path, "rb") as f:
-            zinfo_w = zipfile.ZipInfo(f"Tools/{p}/Wi-Fi.pak/launch.sh")
-            zinfo_w.compress_type = zipfile.ZIP_DEFLATED
-            zinfo_w.external_attr = 0o755 << 16
-            base_out.writestr(zinfo_w, f.read())
+        w_dir = f"skeleton/EXTRAS/Tools/{p}/Wi-Fi.pak"
+        if not os.path.isdir(w_dir):
+            w_dir = "skeleton/EXTRAS/Tools/miyoomini/Wi-Fi.pak"
+        add_dir_to_zip(base_out, w_dir, f"Tools/{p}/Wi-Fi.pak")
+
+        # Also include standalone NDS.pak in Emus/ for Base package
+        nds_emu_dir = f"skeleton/EXTRAS/Emus/{p}/NDS.pak"
+        if os.path.isdir(nds_emu_dir):
+            add_dir_to_zip(base_out, nds_emu_dir, f"Emus/{p}/NDS.pak")
 
 print(f"Base package completed: {os.path.getsize(OUT_BASE_ZIP)} bytes")
 
@@ -212,9 +232,12 @@ print(f"Writing {OUT_EXTRAS_ZIP}...")
 with zipfile.ZipFile(SRC_EXTRAS_ZIP, "r") as ext_in, \
      zipfile.ZipFile(OUT_EXTRAS_ZIP, "w", zipfile.ZIP_DEFLATED) as ext_out:
 
-    ext_existing = set(item.filename for item in ext_in.infolist())
     for item in ext_in.infolist():
         name = item.filename
+        # Avoid duplicating tools and emu paks that we are inserting freshly
+        if any(name.startswith(f"Tools/{p}/Wi-Fi.pak/") or name.startswith(f"Tools/{p}/Nonna's Kitchen.pak/") or name.startswith(f"Emus/{p}/NDS.pak/") for p in platforms):
+            continue
+
         data = ext_in.read(name)
         if name == "README.txt":
             # Update README with Cannelloni branding
@@ -223,31 +246,23 @@ with zipfile.ZipFile(SRC_EXTRAS_ZIP, "r") as ext_in, \
                 data = content.encode("utf-8")
             except UnicodeDecodeError:
                 pass
-        ext_out.writestr(name, data)
+        ext_out.writestr(item, data)
 
     # Add Nonna's Kitchen & Wi-Fi tool paks across all platforms
     for p in platforms:
-        k_target = f"Tools/{p}/Nonna's Kitchen.pak/launch.sh"
-        if k_target not in ext_existing:
-            k_path = f"skeleton/EXTRAS/Tools/{p}/Nonna's Kitchen.pak/launch.sh"
-            if not os.path.isfile(k_path):
-                k_path = "skeleton/EXTRAS/Tools/miyoomini/Nonna's Kitchen.pak/launch.sh"
-            with open(k_path, "rb") as f:
-                zinfo_k = zipfile.ZipInfo(k_target)
-                zinfo_k.compress_type = zipfile.ZIP_DEFLATED
-                zinfo_k.external_attr = 0o755 << 16
-                ext_out.writestr(zinfo_k, f.read())
+        k_dir = f"skeleton/EXTRAS/Tools/{p}/Nonna's Kitchen.pak"
+        if not os.path.isdir(k_dir):
+            k_dir = "skeleton/EXTRAS/Tools/miyoomini/Nonna's Kitchen.pak"
+        add_dir_to_zip(ext_out, k_dir, f"Tools/{p}/Nonna's Kitchen.pak")
 
-        w_target = f"Tools/{p}/Wi-Fi.pak/launch.sh"
-        if w_target not in ext_existing:
-            w_path = f"skeleton/EXTRAS/Tools/{p}/Wi-Fi.pak/launch.sh"
-            if not os.path.isfile(w_path):
-                w_path = "skeleton/EXTRAS/Tools/miyoomini/Wi-Fi.pak/launch.sh"
-            with open(w_path, "rb") as f:
-                zinfo_w = zipfile.ZipInfo(w_target)
-                zinfo_w.compress_type = zipfile.ZIP_DEFLATED
-                zinfo_w.external_attr = 0o755 << 16
-                ext_out.writestr(zinfo_w, f.read())
+        w_dir = f"skeleton/EXTRAS/Tools/{p}/Wi-Fi.pak"
+        if not os.path.isdir(w_dir):
+            w_dir = "skeleton/EXTRAS/Tools/miyoomini/Wi-Fi.pak"
+        add_dir_to_zip(ext_out, w_dir, f"Tools/{p}/Wi-Fi.pak")
+
+        nds_emu_dir = f"skeleton/EXTRAS/Emus/{p}/NDS.pak"
+        if os.path.isdir(nds_emu_dir):
+            add_dir_to_zip(ext_out, nds_emu_dir, f"Emus/{p}/NDS.pak")
 
 print(f"Extras package completed: {os.path.getsize(OUT_EXTRAS_ZIP)} bytes")
 print("All release archives built successfully!")

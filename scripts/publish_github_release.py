@@ -92,6 +92,26 @@ for file_path, asset_name in assets:
         print(f"File not found: {file_path}")
         continue
 
+    # Delete existing asset if it exists
+    req_assets = urllib.request.Request(
+        f"https://api.github.com/repos/{REPO}/releases/{release_id}/assets",
+        headers={"Authorization": f"token {token}", "User-Agent": "Cannelloni"}
+    )
+    try:
+        with urllib.request.urlopen(req_assets) as resp:
+            existing_assets = json.loads(resp.read().decode('utf-8'))
+            for ea in existing_assets:
+                if ea['name'] == asset_name:
+                    print(f"Deleting existing asset {asset_name} (id {ea['id']})...")
+                    del_req = urllib.request.Request(
+                        f"https://api.github.com/repos/{REPO}/releases/assets/{ea['id']}",
+                        headers={"Authorization": f"token {token}", "User-Agent": "Cannelloni"}
+                    )
+                    del_req.get_method = lambda: "DELETE"
+                    urllib.request.urlopen(del_req)
+    except Exception as e:
+        print(f"Warning checking existing assets: {e}")
+
     print(f"Uploading {asset_name} ({os.path.getsize(file_path)} bytes)...")
     upload_url = f"https://uploads.github.com/repos/{REPO}/releases/{release_id}/assets?name={asset_name}"
     
