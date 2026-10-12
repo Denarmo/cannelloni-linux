@@ -183,6 +183,26 @@ with zipfile.ZipFile(SRC_BASE_ZIP, "r") as base_in, \
     # Add Bios/NDS folder
     base_out.writestr("Bios/NDS/.keep", b"# NDS Bios: bios7.bin, bios9.bin, firmware.bin\n")
 
+    # Add Essential Tools (Nonna's Kitchen & Wi-Fi) directly to Base package
+    for p in platforms:
+        k_path = f"skeleton/EXTRAS/Tools/{p}/Nonna's Kitchen.pak/launch.sh"
+        if not os.path.isfile(k_path):
+            k_path = "skeleton/EXTRAS/Tools/miyoomini/Nonna's Kitchen.pak/launch.sh"
+        with open(k_path, "rb") as f:
+            zinfo_k = zipfile.ZipInfo(f"Tools/{p}/Nonna's Kitchen.pak/launch.sh")
+            zinfo_k.compress_type = zipfile.ZIP_DEFLATED
+            zinfo_k.external_attr = 0o755 << 16
+            base_out.writestr(zinfo_k, f.read())
+
+        w_path = f"skeleton/EXTRAS/Tools/{p}/Wi-Fi.pak/launch.sh"
+        if not os.path.isfile(w_path):
+            w_path = "skeleton/EXTRAS/Tools/miyoomini/Wi-Fi.pak/launch.sh"
+        with open(w_path, "rb") as f:
+            zinfo_w = zipfile.ZipInfo(f"Tools/{p}/Wi-Fi.pak/launch.sh")
+            zinfo_w.compress_type = zipfile.ZIP_DEFLATED
+            zinfo_w.external_attr = 0o755 << 16
+            base_out.writestr(zinfo_w, f.read())
+
 print(f"Base package completed: {os.path.getsize(OUT_BASE_ZIP)} bytes")
 
 # ----------------------------------------------------
@@ -192,6 +212,7 @@ print(f"Writing {OUT_EXTRAS_ZIP}...")
 with zipfile.ZipFile(SRC_EXTRAS_ZIP, "r") as ext_in, \
      zipfile.ZipFile(OUT_EXTRAS_ZIP, "w", zipfile.ZIP_DEFLATED) as ext_out:
 
+    ext_existing = set(item.filename for item in ext_in.infolist())
     for item in ext_in.infolist():
         name = item.filename
         data = ext_in.read(name)
@@ -204,12 +225,29 @@ with zipfile.ZipFile(SRC_EXTRAS_ZIP, "r") as ext_in, \
                 pass
         ext_out.writestr(name, data)
 
-    # Add Nonna's Kitchen tool pak across all platforms
+    # Add Nonna's Kitchen & Wi-Fi tool paks across all platforms
     for p in platforms:
-        pak_path = f"skeleton/EXTRAS/Tools/{p}/Nonna's Kitchen.pak/launch.sh"
-        if os.path.isfile(pak_path):
-            with open(pak_path, "rb") as f:
-                ext_out.writestr(f"Tools/{p}/Nonna's Kitchen.pak/launch.sh", f.read())
+        k_target = f"Tools/{p}/Nonna's Kitchen.pak/launch.sh"
+        if k_target not in ext_existing:
+            k_path = f"skeleton/EXTRAS/Tools/{p}/Nonna's Kitchen.pak/launch.sh"
+            if not os.path.isfile(k_path):
+                k_path = "skeleton/EXTRAS/Tools/miyoomini/Nonna's Kitchen.pak/launch.sh"
+            with open(k_path, "rb") as f:
+                zinfo_k = zipfile.ZipInfo(k_target)
+                zinfo_k.compress_type = zipfile.ZIP_DEFLATED
+                zinfo_k.external_attr = 0o755 << 16
+                ext_out.writestr(zinfo_k, f.read())
+
+        w_target = f"Tools/{p}/Wi-Fi.pak/launch.sh"
+        if w_target not in ext_existing:
+            w_path = f"skeleton/EXTRAS/Tools/{p}/Wi-Fi.pak/launch.sh"
+            if not os.path.isfile(w_path):
+                w_path = "skeleton/EXTRAS/Tools/miyoomini/Wi-Fi.pak/launch.sh"
+            with open(w_path, "rb") as f:
+                zinfo_w = zipfile.ZipInfo(w_target)
+                zinfo_w.compress_type = zipfile.ZIP_DEFLATED
+                zinfo_w.external_attr = 0o755 << 16
+                ext_out.writestr(zinfo_w, f.read())
 
 print(f"Extras package completed: {os.path.getsize(OUT_EXTRAS_ZIP)} bytes")
 print("All release archives built successfully!")
