@@ -56,6 +56,54 @@ def add_dir_to_zip(zout, src_dir, zip_prefix, written_entries):
             zout.writestr(zinfo, data)
             written_entries.add(dest)
 
+def patch_arm32_gold(data):
+    """Patches ARM32 ELF binaries so RGB_WHITE is initialized to #f1c40f (Cannelloni Gold).
+    This ensures SDL_FillRect in GFX_blitPill and GFX_blitBar renders 100% solid gold
+    in the center rather than white."""
+    import struct
+    b = bytearray(data)
+    for i in range(0, len(b) - 48, 4):
+        w1 = struct.unpack('<I', b[i:i+4])[0]
+        if w1 == 0xe3a030ff:  # MOV r3, #0xff
+            w2_off = -1
+            w3_off = -1
+            for j in range(i+4, min(i+48, len(b)-4), 4):
+                w = struct.unpack('<I', b[j:j+4])[0]
+                if w == 0xe1a02003:  # MOV r2, r3
+                    w2_off = j
+                elif w == 0xe1a01003:  # MOV r1, r3
+                    w3_off = j
+            if w2_off != -1 and w3_off != -1:
+                b[i:i+4] = struct.pack('<I', 0xe3a0300f)      # MOV r3, #0x0f (Blue)
+                b[w2_off:w2_off+4] = struct.pack('<I', 0xe3a020c4)  # MOV r2, #0xc4 (Green)
+                b[w3_off:w3_off+4] = struct.pack('<I', 0xe3a010f1)  # MOV r1, #0xf1 (Red)
+    return bytes(b)
+
+def patch_core_glibc(data):
+    """Removes GLIBC_2.17 symbol version requirements from ARM cores so they load
+    on Miyoo Mini (glibc 2.4/2.15/2.27)."""
+    import struct
+    b = bytearray(data)
+    # 1. Replace hash of GLIBC_2.17 (0x6969197) with hash of GLIBC_2.4 (0xd696914)
+    old_hash = struct.pack('<I', 0x6969197)
+    new_hash = struct.pack('<I', 0xd696914)
+    idx = 0
+    while True:
+        idx = b.find(old_hash, idx)
+        if idx == -1:
+            break
+        b[idx:idx+4] = new_hash
+        idx += 4
+    # 2. Replace b'GLIBC_2.17' with b'GLIBC_2.4\x00\x00'
+    idx = 0
+    while True:
+        idx = b.find(b'GLIBC_2.17', idx)
+        if idx == -1:
+            break
+        b[idx:idx+10] = b'GLIBC_2.4\x00\x00'
+        idx += 10
+    return bytes(b)
+
 # ----------------------------------------------------
 # 1. Process and rebuild Cannelloni.zip (from MinUI.zip)
 # ----------------------------------------------------
@@ -66,6 +114,11 @@ with zipfile.ZipFile(SRC_BASE_ZIP, "r") as base_in:
 in_minui_zip = zipfile.ZipFile(io.BytesIO(minui_zip_bytes), "r")
 out_cannelloni_zip_buf = io.BytesIO()
 out_cannelloni_zip = zipfile.ZipFile(out_cannelloni_zip_buf, "w", zipfile.ZIP_DEFLATED)
+
+platforms = [
+    'gkdpixel', 'm17', 'magicmini', 'miyoomini', 'my282', 'my355',
+    'rg35xx', 'rg35xxplus', 'rgb30', 'tg5040', 'trimuismart', 'zero28'
+]
 
 # Read all entries from MinUI.zip, adapting and updating
 for item in in_minui_zip.infolist():
@@ -92,10 +145,13 @@ for item in in_minui_zip.infolist():
         with open("workspace/miyoomini/install/boot.sh", "rb") as f:
             data = f.read()
 
-    # Update miyoomini launch.sh
-    if name == ".system/miyoomini/paks/Cannelloni.pak/launch.sh":
-        with open("skeleton/SYSTEM/miyoomini/paks/Cannelloni.pak/launch.sh", "rb") as f:
-            data = f.read()
+    # Update platform Cannelloni.pak launch.sh from skeleton
+    for p in platforms:
+        if name == f".system/{p}/paks/Cannelloni.pak/launch.sh":
+            plat_launch = f"skeleton/SYSTEM/{p}/paks/Cannelloni.pak/launch.sh"
+            if os.path.isfile(plat_launch):
+                with open(plat_launch, "rb") as f:
+                    data = f.read()
 
     # Overwrite assets@*.png with our tinted Cannelloni gold #f1c40f spritesheet
     if name.startswith(".system/res/assets@") and name.endswith(".png"):
@@ -116,6 +172,10 @@ for item in in_minui_zip.infolist():
         except UnicodeDecodeError:
             pass
 
+    # Patch ARM32 binaries to bake in Cannelloni Gold (#f1c40f) for selection pills and slider bars
+    if name.endswith("/bin/minui.elf") or name.endswith("/bin/minarch.elf"):
+        data = patch_arm32_gold(data)
+
     # Ensure cannelloni.elf exists alongside minui.elf
     if name.endswith("/bin/minui.elf"):
         cannelloni_name = name.replace("/bin/minui.elf", "/bin/cannelloni.elf")
@@ -132,11 +192,6 @@ for item in in_minui_zip.infolist():
         zinfo.external_attr = 0o644 << 16
     out_cannelloni_zip.writestr(zinfo, data)
 
-platforms = [
-    'gkdpixel', 'm17', 'magicmini', 'miyoomini', 'my282', 'my355',
-    'rg35xx', 'rg35xxplus', 'rgb30', 'tg5040', 'trimuismart', 'zero28'
-]
-
 # Inject NDS Libretro cores across all platforms in Cannelloni.zip
 print("Injecting NDS libretro cores into Cannelloni.zip...")
 for p in platforms:
@@ -148,6 +203,7 @@ for p in platforms:
     if os.path.isfile(core_file):
         with open(core_file, "rb") as f:
             core_bytes = f.read()
+        core_bytes = patch_core_glibc(core_bytes)
         zinfo_m = zipfile.ZipInfo(f".system/{p}/cores/melonds_libretro.so")
         zinfo_m.compress_type = zipfile.ZIP_DEFLATED
         zinfo_m.external_attr = 0o755 << 16

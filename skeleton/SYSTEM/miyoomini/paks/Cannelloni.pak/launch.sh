@@ -113,7 +113,7 @@ fi
 
 AUTO_PATH=$USERDATA_PATH/auto.sh
 if [ -f "$AUTO_PATH" ]; then
-	"$AUTO_PATH"
+	/bin/sh "$AUTO_PATH"
 fi
 
 cd $(dirname "$0")

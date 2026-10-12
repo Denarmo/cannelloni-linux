@@ -5,15 +5,24 @@ PAK_DIR="$(dirname "$BIN_DIR")"
 PAK_NAME="$(basename "$PAK_DIR")"
 PAK_NAME="${PAK_NAME%.*}"
 
+[ -z "$SDCARD_PATH" ] && export SDCARD_PATH="/mnt/SDCARD"
+if [ -z "$PLATFORM" ]; then
+    if [ -f /customer/app/axp_test ] || [ -f /customer/app/MainUI ]; then
+        export PLATFORM="miyoomini"
+    fi
+fi
+[ -z "$USERDATA_PATH" ] && export USERDATA_PATH="$SDCARD_PATH/.userdata/$PLATFORM"
+[ -z "$LOGS_PATH" ] && export LOGS_PATH="$USERDATA_PATH/logs"
+mkdir -p "$LOGS_PATH"
+
 rm -f "$LOGS_PATH/$PAK_NAME.on-boot.txt"
-exec >>"$LOGS_PATH/$PAK_NAME.on-boot.txt"
-exec 2>&1
+exec >>"$LOGS_PATH/$PAK_NAME.on-boot.txt" 2>&1
 
 echo "$0" "$@"
 cd "$PAK_DIR" || exit 1
 
 main() {
-    "$BIN_DIR/service-on" &
+    /bin/sh "$BIN_DIR/service-on" &
 }
 
 main "$@"
