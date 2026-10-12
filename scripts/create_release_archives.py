@@ -37,7 +37,7 @@ in_minui_zip = zipfile.ZipFile(io.BytesIO(minui_zip_bytes), "r")
 out_cannelloni_zip_buf = io.BytesIO()
 out_cannelloni_zip = zipfile.ZipFile(out_cannelloni_zip_buf, "w", zipfile.ZIP_DEFLATED)
 
-# Read all entries from MinUI.zip, rebranding and updating
+# Read all entries from MinUI.zip, adapting and updating
 for item in in_minui_zip.infolist():
     name = item.filename
     data = in_minui_zip.read(name)
@@ -111,7 +111,7 @@ with zipfile.ZipFile(SRC_BASE_ZIP, "r") as base_in, \
             continue
 
         data = base_in.read(name)
-        # Rebrand scripts inside installer directories (e.g. rg35xxplus, trimui, etc.)
+        # Process and adapt scripts inside installer directories (e.g. rg35xxplus, trimui, etc.)
         if name.endswith(".sh") or name.endswith(".txt"):
             try:
                 content = data.decode("utf-8")

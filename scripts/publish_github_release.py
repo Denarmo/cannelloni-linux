@@ -26,11 +26,11 @@ BODY = """# Cannelloni v20261012-0
 Welcome to Cannelloni for Linux handhelds (Anbernic, Miyoo, TrimUI, Powkiddy, MagicX, and GKD).
 
 ## What's New in this Release:
-- **Cannelloni Rebrand**: Complete rebranding from MinUI across all code, platforms, launch scripts, and tools.
+- **Cannelloni Linux Handheld Edition**: Universal, distraction-free retro gaming frontend for Anbernic, Miyoo, TrimUI, Powkiddy, MagicX, and GKD.
 - **melonDS Libretro Core (Nintendo DS)**: Added internal melonDS libretro core and `NDS.pak` across all 12 supported handheld platforms.
 - **Nonna's Kitchen (FTP File Transfer)**: RFC 959 compliant wireless file transfer server on port `2121`. Access your SD card directly over local Wi-Fi with FileZilla, Cyberduck, or your computer's file manager.
 - **Interactive Settings Menu**: Press `MENU` in the launcher to access Nonna's Kitchen toggle, Wi-Fi status/connection, and accent color selection.
-- **Customizable Accent Color**: Default `#f1c40f` (Cannelloni Gold) with dynamic pill/bar tinting and presets (Gold, Cannoli Blue, Coral Red, Emerald, Purple, Amber, White).
+- **Customizable Accent Color**: Default Cannelloni Gold with dynamic pill/bar tinting and presets (Gold, Cannoli Blue, Coral Red, Emerald, Purple, Amber, White).
 
 ## Installation:
 1. Extract `Cannelloni-20261012-0-base.zip` directly to the root of your freshly formatted FAT32 SD card.

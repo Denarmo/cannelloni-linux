@@ -170,10 +170,10 @@ Settings Menu, Wi-Fi & Accent Color
 Press the MENU button in the launcher to open the Settings menu. Here you can:
 - Toggle Nonna's Kitchen (FTP server) on or off
 - View Wi-Fi status and connect/reconnect on supported devices
-- Customize the accent color (default: #f1c40f Gold, Cannoli, Coral Red, Emerald, Purple, Amber, White)
+- Customize the accent color (default: Gold, Cannoli, Coral Red, Emerald, Purple, Amber, White)
 - View system hardware model, release, and commit info
 
-To manually set any hex accent color, place the hex code (eg. #f1c40f) in "/.userdata/shared/.cannelloni/accent_color.txt".
+To manually set a custom accent color, place the color name or definition in "/.userdata/shared/.cannelloni/accent_color.txt".
 
 ----------------------------------------
 Nonna's Kitchen (Wireless FTP File Transfer)
