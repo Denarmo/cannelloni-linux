@@ -254,8 +254,30 @@ def build_release():
         if "paks/MinUI.pak" in name:
             continue
 
+        # Inject updated platform bootstrap and updater scripts
+        if name.endswith(".tmp_update/updater") or name == ".tmp_update/updater":
+            with open("skeleton/BOOT/common/updater", "rb") as f:
+                data = f.read()
+        elif name.endswith(".tmp_update/miyoomini.sh") or name == ".tmp_update/miyoomini.sh":
+            with open("workspace/miyoomini/install/boot.sh", "rb") as f:
+                data = f.read()
+        elif name.endswith(".tmp_update/my282.sh") or name == ".tmp_update/my282.sh":
+            with open("workspace/my282/install/boot.sh", "rb") as f:
+                data = f.read()
+        elif name.endswith(".tmp_update/my355.sh") or name == ".tmp_update/my355.sh":
+            with open("workspace/my355/install/boot.sh", "rb") as f:
+                data = f.read()
+        elif name.endswith(".tmp_update/tg5040.sh") or name == ".tmp_update/tg5040.sh":
+            with open("workspace/tg5040/install/boot.sh", "rb") as f:
+                data = f.read()
+        elif name.endswith(".tmp_update/trimuismart.sh") or name == ".tmp_update/trimuismart.sh":
+            with open("workspace/trimuismart/install/boot.sh", "rb") as f:
+                data = f.read()
+        elif name.endswith(".tmp_update/zero28.sh") or name == ".tmp_update/zero28.sh":
+            with open("workspace/zero28/install/boot.sh", "rb") as f:
+                data = f.read()
         # Update any minui references in scripts
-        if (name.endswith(".sh") or name.endswith(".txt")) and name != ".system/version.txt":
+        elif (name.endswith(".sh") or name.endswith(".txt")) and name != ".system/version.txt":
             try:
                 content = data.decode("utf-8")
                 content = content.replace("MinUI.pak", "Cannelloni.pak")
@@ -524,7 +546,19 @@ def build_release():
          zipfile.ZipFile(SRC_EXTRAS_ZIP, "r") as ext_in, \
          zipfile.ZipFile(OUT_UNIFIED_ZIP, "w", zipfile.ZIP_DEFLATED) as out_zip:
 
-        # 1. Cannelloni.zip into root
+        # 1. Unpack all Cannelloni system files directly into the release zip
+        cannelloni_in = zipfile.ZipFile(io.BytesIO(cannelloni_zip_bytes), "r")
+        for citem in cannelloni_in.infolist():
+            if citem.filename not in written_entries:
+                cdata = cannelloni_in.read(citem.filename)
+                zinfo_c = zipfile.ZipInfo(citem.filename)
+                zinfo_c.compress_type = zipfile.ZIP_DEFLATED
+                zinfo_c.external_attr = citem.external_attr
+                out_zip.writestr(zinfo_c, cdata)
+                written_entries.add(citem.filename)
+        cannelloni_in.close()
+
+        # 1b. Also keep Cannelloni.zip inside root for backward compatibility with any legacy updater
         out_zip.writestr("Cannelloni.zip", cannelloni_zip_bytes)
         written_entries.add("Cannelloni.zip")
 
@@ -551,6 +585,21 @@ def build_release():
                     data = f.read()
             elif name.endswith(".tmp_update/miyoomini.sh"):
                 with open("workspace/miyoomini/install/boot.sh", "rb") as f:
+                    data = f.read()
+            elif name.endswith(".tmp_update/my282.sh"):
+                with open("workspace/my282/install/boot.sh", "rb") as f:
+                    data = f.read()
+            elif name.endswith(".tmp_update/my355.sh"):
+                with open("workspace/my355/install/boot.sh", "rb") as f:
+                    data = f.read()
+            elif name.endswith(".tmp_update/tg5040.sh"):
+                with open("workspace/tg5040/install/boot.sh", "rb") as f:
+                    data = f.read()
+            elif name.endswith(".tmp_update/trimuismart.sh"):
+                with open("workspace/trimuismart/install/boot.sh", "rb") as f:
+                    data = f.read()
+            elif name.endswith(".tmp_update/zero28.sh"):
+                with open("workspace/zero28/install/boot.sh", "rb") as f:
                     data = f.read()
             elif name == "rg35xxplus/dmenu.bin":
                 data = build_dmenu_rg35xxplus()
@@ -710,7 +759,10 @@ def build_release():
             add_dir_to_zip(out_zip, drastic_dir, "Emus/miyoomini/NDS-Drastic.pak", written_entries)
 
     print(f"Unified package completed: {os.path.getsize(OUT_UNIFIED_ZIP)} bytes ({len(written_entries)} entries)")
-    print("Release archive built successfully!")
+    out_cannelloni_release = os.path.join(OUT_DIR, "Cannelloni.zip")
+    shutil.copyfile(OUT_UNIFIED_ZIP, out_cannelloni_release)
+    print(f"Release alias archive created: {out_cannelloni_release} ({os.path.getsize(out_cannelloni_release)} bytes)")
+    print("Release archives built successfully!")
 
 if __name__ == "__main__":
     build_release()

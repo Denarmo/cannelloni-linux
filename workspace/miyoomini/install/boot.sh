@@ -7,7 +7,7 @@ PLATFORM="miyoomini"
 SDCARD_PATH="/mnt/SDCARD"
 UPDATE_PATH="$SDCARD_PATH/Cannelloni.zip"
 if [ ! -f "$UPDATE_PATH" ]; then
-	FOUND_ZIP=$(ls "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip 2>/dev/null | head -n1)
+	FOUND_ZIP=$(ls "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null | head -n1)
 	if [ -n "$FOUND_ZIP" ] && [ -f "$FOUND_ZIP" ]; then
 		echo "Found update package: $FOUND_ZIP"
 		UPDATE_PATH="$FOUND_ZIP"
@@ -57,13 +57,15 @@ if [ -f "$UPDATE_PATH" ]; then
 	echo "unzip exited with code: $UNZIP_RESULT"
 	sync
 	
-	if [ $UNZIP_RESULT -eq 0 ]; then
-		echo "Unpack succeeded, cleaning up archive..."
-		rm -f "$UPDATE_PATH"
-		rm -rf $SDCARD_PATH/.tmp_update-old
-	else
-		echo "WARNING: unzip returned non-zero code $UNZIP_RESULT, keeping archive"
+	if [ -f "$SDCARD_PATH/Cannelloni.zip" ] && [ "$UPDATE_PATH" != "$SDCARD_PATH/Cannelloni.zip" ]; then
+		echo "Found nested Cannelloni.zip, extracting..."
+		unzip -o "$SDCARD_PATH/Cannelloni.zip" -d "$SDCARD_PATH"
 	fi
+	
+	echo "Cleaning up archive..."
+	rm -f "$UPDATE_PATH"
+	rm -f "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null
+	rm -rf $SDCARD_PATH/.tmp_update-old 2>/dev/null
 	
 	# Verify extracted binaries
 	echo "Binaries in $SYSTEM_PATH/$PLATFORM/bin/:"

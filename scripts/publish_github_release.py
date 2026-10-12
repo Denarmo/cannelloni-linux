@@ -19,12 +19,14 @@ REPO = "Denarmo/cannelloni-linux"
 TAG = "v20261012-0"
 RELEASE_TITLE = "Cannelloni v20261012-0"
 UNIFIED_ZIP = "releases/Cannelloni-20261012-0.zip"
+ALIAS_ZIP = "releases/Cannelloni.zip"
 
 BODY = """# Cannelloni v20261012-0
 
 Welcome to Cannelloni for Linux handhelds (Anbernic, Miyoo, TrimUI, Powkiddy, MagicX, and GKD).
 
 ## What's New in this Release:
+- **Universal One-Zip Drop-in Installation**: Drop either `Cannelloni.zip` or `Cannelloni-20261012-0.zip` directly to the root of your SD card without extracting it on PC. On boot, Cannelloni automatically unpacks all platform bootstrap and system files, runs the setup wizard, and completely erases the zip archive from the SD card!
 - **Interactive 3-Step Setup Wizard**: On initial boot, Cannelloni presents an interactive setup wizard in clear sequential steps:
   1. **Language Selection**: Choose from 6 languages (English, Spanish, French, Portuguese - Brazil, German, Italian).
   2. **Accent Color Theming**: Pick from 7 vibrant accent colors (Cannelloni Gold `#f1c40f`, Tomato Red, Basil Green, Sky Blue, and more), immediately applied to the interface.
@@ -37,7 +39,7 @@ Welcome to Cannelloni for Linux handhelds (Anbernic, Miyoo, TrimUI, Powkiddy, Ma
 - **Official Boot Logo**: Centered cannelloni drawing with title **"Cannelloni"** and subtitle **"forked from MinUI/Cannoli"** across all handheld platforms, with automatic SPI flash programming on Miyoo Mini / Plus hardware.
 - **Attribution on About Page**: Pressing the Home (`MENU`) button displays **"Cannelloni"** and **"forked from MinUI/Cannoli"** cleanly without crashing.
 - **Permissive Licensing**: Explicit licensing terms establishing that upstream code is copyright Shaun Inman / MinUI contributors, while all Cannelloni additions and modifications are licensed under the permissive MIT License for anyone to freely use.
-- **Unified Single-Zip Distribution**: All core systems, emulators, tools, and platform installers delivered in one unified archive (`Cannelloni-20261012-0.zip`).
+- **Unified Single-Zip Distribution**: All core systems, emulators, tools, and platform installers delivered in one unified archive (`Cannelloni.zip` / `Cannelloni-20261012-0.zip`).
 - **New Top-Level Settings Menu**: Direct access from the main screen to:
   - **Language**: Switch system language anytime on-device.
   - **Wi-Fi**: Connect to wireless networks, view IP, and toggle auto-start on boot.
@@ -53,9 +55,10 @@ Welcome to Cannelloni for Linux handhelds (Anbernic, Miyoo, TrimUI, Powkiddy, Ma
 
 ## Installation:
 1. Format your SD card as FAT32 (MBR).
-2. Drag or extract **`Cannelloni-20261012-0.zip`** directly to the root of your SD card.
+2. Simply drop **`Cannelloni.zip`** (or **`Cannelloni-20261012-0.zip`**) directly to the root of your SD card.
 3. Insert the card into your handheld and power on.
-4. Follow the 3-step setup wizard on screen: select Language, select Accent Color, and select your Device Model!
+4. Cannelloni automatically unpacks all system files and launches the 3-step setup wizard on screen: select Language, select Accent Color, and select your Device Model!
+5. After installation finishes, the zip archive is automatically erased from the SD card.
 """
 
 print(f"Creating or updating release {TAG} on {REPO}...")
@@ -119,10 +122,10 @@ except urllib.error.HTTPError as e:
     else:
         raise
 
-# 2. Upload asset
-asset_name = os.path.basename(UNIFIED_ZIP)
-print(f"Checking assets for {asset_name}...")
+# 2. Upload assets (Cannelloni-20261012-0.zip and Cannelloni.zip)
+assets_to_upload = [UNIFIED_ZIP, ALIAS_ZIP]
 
+# Fetch current assets list
 req_assets = urllib.request.Request(
     f"https://api.github.com/repos/{REPO}/releases/{release_id}/assets",
     headers={
@@ -132,8 +135,16 @@ req_assets = urllib.request.Request(
     }
 )
 with urllib.request.urlopen(req_assets) as resp:
-    assets = json.loads(resp.read().decode('utf-8'))
-    for a in assets:
+    existing_assets = json.loads(resp.read().decode('utf-8'))
+
+for file_path in assets_to_upload:
+    if not os.path.isfile(file_path):
+        print(f"Skipping {file_path}, file not found")
+        continue
+
+    asset_name = os.path.basename(file_path)
+    print(f"\nChecking assets for {asset_name}...")
+    for a in existing_assets:
         if a['name'] == asset_name:
             print(f"Deleting existing asset ID {a['id']} ({asset_name})...")
             req_del = urllib.request.Request(
@@ -147,21 +158,21 @@ with urllib.request.urlopen(req_assets) as resp:
             )
             urllib.request.urlopen(req_del)
 
-print(f"Uploading {UNIFIED_ZIP} ({os.path.getsize(UNIFIED_ZIP)} bytes)...")
-with open(UNIFIED_ZIP, "rb") as f:
-    zip_bytes = f.read()
+    print(f"Uploading {file_path} ({os.path.getsize(file_path)} bytes)...")
+    with open(file_path, "rb") as f:
+        zip_bytes = f.read()
 
-req_up = urllib.request.Request(
-    f"https://uploads.github.com/repos/{REPO}/releases/{release_id}/assets?name={asset_name}",
-    data=zip_bytes,
-    headers={
-        "Authorization": f"token {token}",
-        "User-Agent": "Cannelloni",
-        "Content-Type": "application/zip",
-        "Accept": "application/vnd.github.v3+json"
-    }
-)
-with urllib.request.urlopen(req_up) as resp:
-    print(f"Successfully uploaded {asset_name} to GitHub Release {TAG}!")
+    req_up = urllib.request.Request(
+        f"https://uploads.github.com/repos/{REPO}/releases/{release_id}/assets?name={asset_name}",
+        data=zip_bytes,
+        headers={
+            "Authorization": f"token {token}",
+            "User-Agent": "Cannelloni",
+            "Content-Type": "application/zip",
+            "Accept": "application/vnd.github.v3+json"
+        }
+    )
+    with urllib.request.urlopen(req_up) as resp:
+        print(f"Successfully uploaded {asset_name} to GitHub Release {TAG}!")
 
-print(f"Release published: https://github.com/{REPO}/releases/tag/{TAG}")
+print(f"\nRelease published successfully: https://github.com/{REPO}/releases/tag/{TAG}")

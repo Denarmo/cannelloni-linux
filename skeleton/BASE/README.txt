@@ -11,12 +11,9 @@ UNIVERSAL ONE-ZIP INSTALLATION
 Cannelloni features a universal single-zip installation method. You are no longer required to identify or manually copy device-specific folders!
 
 1. Format your SD card as FAT32 (MBR).
-2. Simply extract the unified Cannelloni release zip (or copy the release zip / Cannelloni.zip) directly to the root of your SD card.
-   - All bootstrap files (.tmp_update, miyoo, trimui, dmenu.bin, etc.) and system packages are bundled together.
+2. Simply drop the downloaded Cannelloni release zip (Cannelloni.zip or Cannelloni-20261012-0.zip) directly to the root of your SD card. No manual extraction on PC required!
 3. Insert the SD card into your device and power it on.
-4. On initial boot, Cannelloni presents an interactive on-screen Device Selector.
-   - Use the D-pad to highlight your console model and press A (INSTALL).
-   - Cannelloni will automatically configure the exact hardware drivers, display settings, and platform files.
+4. Cannelloni will automatically detect the archive, extract all system and platform files, run the interactive 3-step setup wizard (Language -> Accent Color -> Device Model), and completely erase the zip file from your SD card once finished!
 5. If you ever want to reconfigure your hardware or switch devices, simply navigate to Settings -> Device Model.
 
 SUPPORTED HARDWARE:

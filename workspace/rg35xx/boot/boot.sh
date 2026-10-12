@@ -11,7 +11,7 @@ UPDATE_FRAG=/Cannelloni.zip
 SYSTEM_PATH=${SDCARD_PATH}${SYSTEM_FRAG}
 UPDATE_PATH=${SDCARD_PATH}${UPDATE_FRAG}
 if [ ! -f "$UPDATE_PATH" ]; then
-	FOUND_ZIP=$(ls "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip 2>/dev/null | head -n1)
+	FOUND_ZIP=$(ls "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null | head -n1)
 	if [ -n "$FOUND_ZIP" ] && [ -f "$FOUND_ZIP" ]; then
 		UPDATE_PATH="$FOUND_ZIP"
 	fi
@@ -46,7 +46,7 @@ SDCARD_PATH=$TF2_PATH
 SYSTEM_PATH=${SDCARD_PATH}${SYSTEM_FRAG}
 UPDATE_PATH=${SDCARD_PATH}${UPDATE_FRAG}
 if [ ! -f "$UPDATE_PATH" ]; then
-	FOUND_ZIP=$(ls "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip 2>/dev/null | head -n1)
+	FOUND_ZIP=$(ls "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null | head -n1)
 	if [ -n "$FOUND_ZIP" ] && [ -f "$FOUND_ZIP" ]; then
 		UPDATE_PATH="$FOUND_ZIP"
 	fi
@@ -71,10 +71,23 @@ if [ -f $UPDATE_PATH ]; then
 	sync
 	
 	busybox unzip -o $UPDATE_PATH -d $SDCARD_PATH
+	if [ -f "$SDCARD_PATH/Cannelloni.zip" ] && [ "$UPDATE_PATH" != "$SDCARD_PATH/Cannelloni.zip" ]; then
+		busybox unzip -o "$SDCARD_PATH/Cannelloni.zip" -d "$SDCARD_PATH"
+	fi
 	rm -f $UPDATE_PATH
+	rm -f "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null
+	sync
 	
 	# the updated system finishes the install/update
 	$SYSTEM_PATH/bin/install.sh # &> $SDCARD_PATH/install.txt
+	
+	DEV_SELECT="$SDCARD_PATH/.system/common/device_select.sh"
+	[ ! -f "$DEV_SELECT" ] && DEV_SELECT="$SDCARD_PATH/.system/bin/device_select.sh"
+	if [ -f "$DEV_SELECT" ]; then
+		chmod +x "$DEV_SELECT" 2>/dev/null
+		"$DEV_SELECT"
+	fi
+	sync
 fi
 
 ROOTFS_IMAGE=$SYSTEM_PATH/rootfs.ext2

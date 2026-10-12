@@ -59,7 +59,7 @@ SDCARD_PATH=$TF2_PATH
 SYSTEM_PATH=${SDCARD_PATH}${SYSTEM_FRAG}
 UPDATE_PATH=${SDCARD_PATH}${UPDATE_FRAG}
 if [ ! -f "$UPDATE_PATH" ]; then
-	FOUND_ZIP=$(ls "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip 2>/dev/null | head -n1)
+	FOUND_ZIP=$(ls "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null | head -n1)
 	if [ -n "$FOUND_ZIP" ] && [ -f "$FOUND_ZIP" ]; then
 		UPDATE_PATH="$FOUND_ZIP"
 	fi
@@ -118,16 +118,24 @@ if [ -f $UPDATE_PATH ]; then
 	fi
 
 	/tmp/unzip -o $UPDATE_PATH -d $SDCARD_PATH >> $TF1_PATH/log.txt
+	if [ -f "$SDCARD_PATH/Cannelloni.zip" ] && [ "$UPDATE_PATH" != "$SDCARD_PATH/Cannelloni.zip" ]; then
+		/tmp/unzip -o "$SDCARD_PATH/Cannelloni.zip" -d "$SDCARD_PATH" >> $TF1_PATH/log.txt
+	fi
 	rm -f $UPDATE_PATH
-
-	# ls -la $SDCARD_PATH >> $TF1_PATH/log.txt
-	
-	# cd /tmp
-	# rm data installing updating bootlogo.bmp installing-r updating-r bootlogo-r.bmp unzip
+	rm -f "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null
+	sync
 
 	# the updated system finishes the install/update
 	echo "finishing update..." >> $TF1_PATH/log.txt
 	$SYSTEM_PATH/bin/install.sh >> $TF1_PATH/log.txt
+
+	DEV_SELECT="$SDCARD_PATH/.system/common/device_select.sh"
+	[ ! -f "$DEV_SELECT" ] && DEV_SELECT="$SDCARD_PATH/.system/bin/device_select.sh"
+	if [ -f "$DEV_SELECT" ]; then
+		chmod +x "$DEV_SELECT" 2>/dev/null
+		"$DEV_SELECT" >> $TF1_PATH/log.txt
+	fi
+	sync
 fi
 
 if [ -f $SYSTEM_PATH/paks/Cannelloni.pak/launch.sh ]; then

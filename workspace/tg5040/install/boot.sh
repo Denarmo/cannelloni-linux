@@ -5,7 +5,7 @@ PLATFORM="tg5040"
 SDCARD_PATH="/mnt/SDCARD"
 UPDATE_PATH="$SDCARD_PATH/Cannelloni.zip"
 if [ ! -f "$UPDATE_PATH" ]; then
-	FOUND_ZIP=$(ls "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip 2>/dev/null | head -n1)
+	FOUND_ZIP=$(ls "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null | head -n1)
 	if [ -n "$FOUND_ZIP" ] && [ -f "$FOUND_ZIP" ]; then
 		UPDATE_PATH="$FOUND_ZIP"
 	fi
@@ -47,13 +47,26 @@ if [ -f "$UPDATE_PATH" ]; then
 	./show.elf ./$DEVICE/$ACTION.png
 	
 	./unzip -o "$UPDATE_PATH" -d "$SDCARD_PATH" # &> /mnt/SDCARD/unzip.txt
+	if [ -f "$SDCARD_PATH/Cannelloni.zip" ] && [ "$UPDATE_PATH" != "$SDCARD_PATH/Cannelloni.zip" ]; then
+		./unzip -o "$SDCARD_PATH/Cannelloni.zip" -d "$SDCARD_PATH"
+	fi
 	rm -f "$UPDATE_PATH"
+	rm -f "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null
 	sync
 	
 	# the updated system finishes the install/update
 	if [ -f $SYSTEM_PATH/$PLATFORM/bin/install.sh ]; then
 		$SYSTEM_PATH/$PLATFORM/bin/install.sh # &> $SDCARD_PATH/log.txt
 	fi
+	sync
+
+	DEV_SELECT="$SYSTEM_PATH/common/device_select.sh"
+	[ ! -f "$DEV_SELECT" ] && DEV_SELECT="$SYSTEM_PATH/bin/device_select.sh"
+	if [ -f "$DEV_SELECT" ]; then
+		chmod +x "$DEV_SELECT" 2>/dev/null
+		"$DEV_SELECT"
+	fi
+	sync
 	
 	if [ "$ACTION" = "installing" ]; then
 		reboot
