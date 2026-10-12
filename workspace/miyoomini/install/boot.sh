@@ -52,12 +52,29 @@ if [ -f "$UPDATE_PATH" ] || [ "$FIRST_BOOT" = true ]; then
 
 	chmod +x ./show.elf 2>/dev/null
 	if [ -d "$SYSTEM_PATH" ] && [ "$FIRST_BOOT" = false ]; then
-		log "Existing .system found and not first boot, showing updating.png..."
-		./show.elf ./updating.png 2>/dev/null &
+		log "Existing .system found and not first boot, showing updating..."
+		ACTION_PREFIX="updating"
 	else
-		log "Showing installing.png..."
-		./show.elf ./installing.png 2>/dev/null &
+		log "Showing installing..."
+		ACTION_PREFIX="installing"
 	fi
+
+	# Show initial action screen immediately
+	./show.elf "./${ACTION_PREFIX}.png" 2>/dev/null &
+
+	# Start background spinning cannelloni animation loop while unzipping/installing
+	touch /tmp/cannelloni_anim_active
+	(
+		while [ -f /tmp/cannelloni_anim_active ]; do
+			for f in ./${ACTION_PREFIX}_*.png; do
+				[ ! -f "$f" ] && break
+				[ ! -f /tmp/cannelloni_anim_active ] && break
+				./show.elf "$f" 2>/dev/null
+				usleep 100000 2>/dev/null || sleep 1
+			done
+		done
+	) &
+	ANIM_PID=$!
 	sync
 	
 	if [ -f "$UPDATE_PATH" ]; then
@@ -74,6 +91,11 @@ if [ -f "$UPDATE_PATH" ] || [ "$FIRST_BOOT" = true ]; then
 		rm -f "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null
 		rm -rf $SDCARD_PATH/.tmp_update-old 2>/dev/null
 	fi
+
+	# Stop spinning animation
+	rm -f /tmp/cannelloni_anim_active
+	kill $ANIM_PID 2>/dev/null
+	wait $ANIM_PID 2>/dev/null
 	
 	# Verify extracted binaries
 	log "Binaries in $SYSTEM_PATH/$PLATFORM/bin/:"

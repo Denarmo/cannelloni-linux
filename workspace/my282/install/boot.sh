@@ -20,10 +20,24 @@ if [ -f "$UPDATE_PATH" ]; then
 	cd $(dirname "$0")/$PLATFORM
 
 	if [ -d "$SYSTEM_PATH" ]; then
-		./show.elf ./updating.png
+		ACTION="updating"
 	else
-		./show.elf ./installing.png
+		ACTION="installing"
 	fi
+	./show.elf ./${ACTION}.png 2>/dev/null &
+
+	touch /tmp/cannelloni_anim_active
+	(
+		while [ -f /tmp/cannelloni_anim_active ]; do
+			for f in ./${ACTION}_*.png; do
+				[ ! -f "$f" ] && break
+				[ ! -f /tmp/cannelloni_anim_active ] && break
+				./show.elf "$f" 2>/dev/null
+				usleep 100000 2>/dev/null || sleep 1
+			done
+		done
+	) &
+	ANIM_PID=$!
 
 	mv $SDCARD_PATH/.tmp_update $SDCARD_PATH/.tmp_update-old 2>/dev/null
 	./unzip -o "$UPDATE_PATH" -d "$SDCARD_PATH"
@@ -33,6 +47,10 @@ if [ -f "$UPDATE_PATH" ]; then
 	rm -f "$UPDATE_PATH"
 	rm -f "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null
 	rm -rf $SDCARD_PATH/.tmp_update-old 2>/dev/null
+
+	rm -f /tmp/cannelloni_anim_active
+	kill $ANIM_PID 2>/dev/null
+	wait $ANIM_PID 2>/dev/null
 
 	# the updated system finishes the install/update
 	if [ -f "$SYSTEM_PATH/$PLATFORM/bin/install.sh" ]; then

@@ -11,7 +11,7 @@ bbox = logo.getbbox()
 logo_cropped = logo.crop(bbox)
 
 def make_bootlogo(w, h, logo_h=None, rotate_deg=0, mode="RGB", quantize_colors=None):
-    """Generates a boot logo image centered on a black background reading 'Canneloni' and 'A fork of MinUI and Cannoli'."""
+    """Generates a boot logo image centered on a black background reading 'Cannelloni' and 'forked from MinUI/Cannoli'."""
     canvas_w = w if rotate_deg in (0, 180) else h
     canvas_h = h if rotate_deg in (0, 180) else w
     
@@ -79,31 +79,62 @@ def make_bootlogo(w, h, logo_h=None, rotate_deg=0, mode="RGB", quantize_colors=N
         bg = bg.rotate(rotate_deg, expand=True)
     return bg
 
-def make_action_screen(w, h, text, mode="RGB", rotate_deg=0):
-    """Generates an installation/updating screen with the Cannelloni logo and action text."""
+def make_action_screen(w, h, text, angle=0, mode="RGB", rotate_deg=0):
+    """Generates an installation/updating screen with:
+    1. Cannelloni logo at top.
+    2. Message 'Installing Cannelloni' in middle.
+    3. Spinning cannelloni rotated by `angle` below the message to show loading."""
     canvas_w = w if rotate_deg in (0, 180) else h
     canvas_h = h if rotate_deg in (0, 180) else w
     
     scale = min(canvas_w / 640.0, canvas_h / 480.0)
-    logo_h = max(24, int(115 * scale))
-    logo_w = int(logo_cropped.width * (logo_h / logo_cropped.height))
-    scaled_logo = logo_cropped.resize((logo_w, logo_h), Image.Resampling.LANCZOS)
     
+    # 1. Top Logo
+    top_logo_h = max(24, int(105 * scale))
+    top_logo_w = int(logo_cropped.width * (top_logo_h / logo_cropped.height))
+    scaled_top_logo = logo_cropped.resize((top_logo_w, top_logo_h), Image.Resampling.LANCZOS)
+    
+    # 2. Text: "Installing Cannelloni" (or "Updating Cannelloni")
     font_size = max(10, int(26 * scale))
     font = ImageFont.truetype(FONT_PATH, font_size)
+    draw_dummy = ImageDraw.Draw(Image.new('RGB', (1, 1)))
+    tb = draw_dummy.textbbox((0, 0), text, font=font)
+    tw = tb[2] - tb[0]
+    th = tb[3] - tb[1]
+    
+    # 3. Spinning Cannelloni below message
+    spinner_box_size = max(20, int(84 * scale))
+    spinner_w = int(spinner_box_size * 0.88)
+    spinner_h = int(logo_cropped.height * (spinner_w / logo_cropped.width))
+    spinner_base = logo_cropped.resize((spinner_w, spinner_h), Image.Resampling.LANCZOS)
+    
+    # Create square canvas for smooth centered rotation
+    sq_canvas = Image.new('RGBA', (spinner_box_size, spinner_box_size), (0, 0, 0, 0))
+    sq_canvas.paste(spinner_base, ((spinner_box_size - spinner_w) // 2, (spinner_box_size - spinner_h) // 2), spinner_base)
+    rotated_spinner = sq_canvas.rotate(angle, resample=Image.Resampling.BICUBIC)
+    
+    # Vertical layout
+    gap1 = max(4, int(18 * scale))
+    gap2 = max(6, int(24 * scale))
+    total_h = top_logo_h + gap1 + th + gap2 + spinner_box_size
+    start_y = max(0, int((canvas_h - total_h) // 2))
     
     im = Image.new(mode, (canvas_w, canvas_h), (0, 0, 0, 255) if mode == "RGBA" else (0, 0, 0))
-    lx = (canvas_w - logo_w) // 2
-    total_h = logo_h + int(28 * scale) + font_size
-    start_y = int((canvas_h - total_h) // 2)
-    im.paste(scaled_logo, (lx, start_y), scaled_logo)
     
+    # Paste top logo
+    lx = (canvas_w - top_logo_w) // 2
+    im.paste(scaled_top_logo, (lx, start_y), scaled_top_logo)
+    
+    # Draw text
     draw = ImageDraw.Draw(im)
-    tb = draw.textbbox((0, 0), text, font=font)
-    tw = tb[2] - tb[0]
     tx = (canvas_w - tw) // 2
-    ty = int(start_y + logo_h + 28 * scale)
+    ty = start_y + top_logo_h + gap1
     draw.text((tx, ty), text, font=font, fill=(255, 255, 255))
+    
+    # Paste rotated spinner below text
+    sx = (canvas_w - spinner_box_size) // 2
+    sy = ty + th + gap2
+    im.paste(rotated_spinner, (sx, sy), rotated_spinner)
     
     if rotate_deg != 0:
         im = im.rotate(rotate_deg, expand=True)
@@ -127,8 +158,22 @@ def save_image(img, path, fmt=None, quality=90):
         img.save(path, format=fmt)
     print(f"Generated {path} ({img.size}, {img.mode})")
 
+def generate_action_screen_set(w, h, text, base_path_pattern, mode="RGB", rotate_deg=0, num_frames=12):
+    """Generates the static action screen (frame 0) and the full animated sequence of rotation frames."""
+    angles = [int(i * (360.0 / num_frames)) for i in range(num_frames)]
+    
+    # Static base image (angle 0)
+    base_img = make_action_screen(w, h, text, angle=0, mode=mode, rotate_deg=rotate_deg)
+    save_image(base_img, base_path_pattern.replace("{frame}", "").replace("_.png", ".png").replace("_.bmp", ".bmp"))
+    
+    # Animated frames
+    for i, ang in enumerate(angles):
+        frame_img = make_action_screen(w, h, text, angle=-ang, mode=mode, rotate_deg=rotate_deg)
+        frame_path = base_path_pattern.format(frame=f"{i:02d}")
+        save_image(frame_img, frame_path)
+
 def main():
-    print("Generating official Cannelloni boot logos and action screens...")
+    print("Generating official Cannelloni boot logos, action screens, and spinning loaders...")
 
     # 1. Boot logos
     save_image(make_bootlogo(640, 480, logo_h=140, rotate_deg=180), "skeleton/SYSTEM/miyoomini/dat/image1.jpg", "JPEG", quality=90)
@@ -145,66 +190,64 @@ def main():
     save_image(make_bootlogo(720, 720, logo_h=160), "workspace/rg35xxplus/boot/bootlogo-s.bmp", "BMP")
     save_image(make_bootlogo(720, 480, logo_h=140), "workspace/rg35xxplus/boot/bootlogo-w.bmp", "BMP")
 
-    # 2. Action screens (Installing and Updating)
+    # 2. Action screens (Installing and Updating) with spinning Cannelloni loader
     # 640x480 standard
-    ins_640 = make_action_screen(640, 480, "Installing Cannelloni...")
-    upd_640 = make_action_screen(640, 480, "Updating Cannelloni...")
-
     for plat in ["miyoomini", "my282", "my355", "zero28", "tg5040"]:
-        save_image(ins_640, f"workspace/{plat}/install/installing.png", "PNG")
-        save_image(upd_640, f"workspace/{plat}/install/updating.png", "PNG")
+        generate_action_screen_set(640, 480, "Installing Cannelloni", f"workspace/{plat}/install/installing_{{frame}}.png")
+        generate_action_screen_set(640, 480, "Updating Cannelloni", f"workspace/{plat}/install/updating_{{frame}}.png")
 
+    # RG35XX & RG35XX+
+    ins_640 = make_action_screen(640, 480, "Installing Cannelloni", angle=0)
+    upd_640 = make_action_screen(640, 480, "Updating Cannelloni", angle=0)
     save_image(ins_640, "workspace/rg35xx/boot/installing.bmp", "BMP")
     save_image(upd_640, "workspace/rg35xx/boot/updating.bmp", "BMP")
     save_image(ins_640, "workspace/rg35xxplus/boot/installing.bmp", "BMP")
     save_image(upd_640, "workspace/rg35xxplus/boot/updating.bmp", "BMP")
 
     # 960x720 Brick
-    ins_960 = make_action_screen(960, 720, "Installing Cannelloni...")
-    upd_960 = make_action_screen(960, 720, "Updating Cannelloni...")
-    save_image(ins_960, "workspace/tg5040/install/brick/installing.png", "PNG")
-    save_image(upd_960, "workspace/tg5040/install/brick/updating.png", "PNG")
+    generate_action_screen_set(960, 720, "Installing Cannelloni", "workspace/tg5040/install/brick/installing_{frame}.png")
+    generate_action_screen_set(960, 720, "Updating Cannelloni", "workspace/tg5040/install/brick/updating_{frame}.png")
 
     # 320x240 TrimUI Smart & GKD Pixel
-    ins_320 = make_action_screen(320, 240, "Installing Cannelloni...")
-    upd_320 = make_action_screen(320, 240, "Updating Cannelloni...")
-    save_image(ins_320, "workspace/trimuismart/install/installing.png", "PNG")
-    save_image(upd_320, "workspace/trimuismart/install/updating.png", "PNG")
+    generate_action_screen_set(320, 240, "Installing Cannelloni", "workspace/trimuismart/install/installing_{frame}.png")
+    generate_action_screen_set(320, 240, "Updating Cannelloni", "workspace/trimuismart/install/updating_{frame}.png")
+    ins_320 = make_action_screen(320, 240, "Installing Cannelloni", angle=0)
+    upd_320 = make_action_screen(320, 240, "Updating Cannelloni", angle=0)
     save_image(ins_320, "workspace/gkdpixel/boot/installing.bmp", "BMP")
     save_image(upd_320, "workspace/gkdpixel/boot/updating.bmp", "BMP")
 
     # 480x272 M17
-    ins_480_272 = make_action_screen(480, 272, "Installing Cannelloni...")
-    upd_480_272 = make_action_screen(480, 272, "Updating Cannelloni...")
+    ins_480_272 = make_action_screen(480, 272, "Installing Cannelloni", angle=0)
+    upd_480_272 = make_action_screen(480, 272, "Updating Cannelloni", angle=0)
     save_image(ins_480_272, "workspace/m17/boot/installing.bmp", "BMP")
     save_image(upd_480_272, "workspace/m17/boot/updating.bmp", "BMP")
 
     # 480x640 MagicMini & RG35XX Plus Rotated
-    ins_480_640 = make_action_screen(480, 640, "Installing Cannelloni...")
-    upd_480_640 = make_action_screen(480, 640, "Updating Cannelloni...")
+    ins_480_640 = make_action_screen(480, 640, "Installing Cannelloni", angle=0)
+    upd_480_640 = make_action_screen(480, 640, "Updating Cannelloni", angle=0)
     save_image(ins_480_640, "workspace/magicmini/install/installing.bmp", "BMP")
     save_image(upd_480_640, "workspace/magicmini/install/updating.bmp", "BMP")
     save_image(ins_480_640, "workspace/rg35xxplus/boot/installing-r.bmp", "BMP")
     save_image(upd_480_640, "workspace/rg35xxplus/boot/updating-r.bmp", "BMP")
 
     # 720x720 Square
-    ins_720 = make_action_screen(720, 720, "Installing Cannelloni...")
-    upd_720 = make_action_screen(720, 720, "Updating Cannelloni...")
+    ins_720 = make_action_screen(720, 720, "Installing Cannelloni", angle=0)
+    upd_720 = make_action_screen(720, 720, "Updating Cannelloni", angle=0)
     save_image(ins_720, "workspace/rg35xxplus/boot/installing-s.bmp", "BMP")
     save_image(upd_720, "workspace/rg35xxplus/boot/updating-s.bmp", "BMP")
 
     # 720x480 Wide
-    ins_720_480 = make_action_screen(720, 480, "Installing Cannelloni...")
-    upd_720_480 = make_action_screen(720, 480, "Updating Cannelloni...")
+    ins_720_480 = make_action_screen(720, 480, "Installing Cannelloni", angle=0)
+    upd_720_480 = make_action_screen(720, 480, "Updating Cannelloni", angle=0)
     save_image(ins_720_480, "workspace/rg35xxplus/boot/installing-w.bmp", "BMP")
     save_image(upd_720_480, "workspace/rg35xxplus/boot/updating-w.bmp", "BMP")
 
     # Tool and Setting resource images
     save_image(upd_640, "skeleton/EXTRAS/Settings/rgb30/Wi-Fi.pak/res/update.png", "PNG")
     save_image(upd_640, "skeleton/EXTRAS/Tools/my282/Bootlogo.pak/res/updating.png", "PNG")
-    save_image(make_action_screen(640, 480, "Rebooting..."), "skeleton/EXTRAS/Tools/my355/Bootlogo.pak/res/reboot.png", "PNG")
-    save_image(make_action_screen(640, 480, "Replacing Boot Logo..."), "skeleton/EXTRAS/Tools/my355/Bootlogo.pak/res/replace-logo.png", "PNG")
-    save_image(make_action_screen(640, 480, "Rebooting..."), "workspace/my355/init/res/reboot.png", "PNG")
+    save_image(make_action_screen(640, 480, "Rebooting...", angle=0), "skeleton/EXTRAS/Tools/my355/Bootlogo.pak/res/reboot.png", "PNG")
+    save_image(make_action_screen(640, 480, "Replacing Boot Logo...", angle=0), "skeleton/EXTRAS/Tools/my355/Bootlogo.pak/res/replace-logo.png", "PNG")
+    save_image(make_action_screen(640, 480, "Rebooting...", angle=0), "workspace/my355/init/res/reboot.png", "PNG")
 
     print("All assets generated successfully!")
 

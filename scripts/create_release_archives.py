@@ -219,6 +219,46 @@ def build_dmenu_rg35xx():
     boot_sh = open("workspace/rg35xx/boot/boot.sh", "rb").read()
     return boot_sh + b"BINARY\n" + b"".join(uu_lines)
 
+def inject_spinner_frames(zout, written_entries):
+    """Injects all spinning cannelloni animation frames into .tmp_update folders across all platforms."""
+    platforms_with_frames = [
+        ("miyoomini", "workspace/miyoomini/install", "miyoomini"),
+        ("my282", "workspace/my282/install", "my282"),
+        ("my355", "workspace/my355/install", "my355"),
+        ("zero28", "workspace/zero28/install", "zero28"),
+        ("tg5040", "workspace/tg5040/install", "tg5040"),
+        ("tg5040/brick", "workspace/tg5040/install/brick", "tg5040/brick"),
+        ("trimuismart", "workspace/trimuismart/install", "trimuismart"),
+    ]
+    for plat_key, src_dir, rel_target in platforms_with_frames:
+        if not os.path.isdir(src_dir):
+            continue
+        for frame in range(12):
+            for action in ["installing", "updating"]:
+                f_name = f"{action}_{frame:02d}.png"
+                src_path = os.path.join(src_dir, f_name)
+                if not os.path.isfile(src_path):
+                    continue
+                with open(src_path, "rb") as fp:
+                    frame_bytes = fp.read()
+                
+                dest_list = [
+                    f".tmp_update/{rel_target}/{f_name}",
+                    f"miyoo/app/.tmp_update/{rel_target}/{f_name}",
+                    f"miyoo354/app/.tmp_update/{rel_target}/{f_name}",
+                    f"miyoo355/app/.tmp_update/{rel_target}/{f_name}",
+                    f"miyoo285/app/.tmp_update/{rel_target}/{f_name}",
+                    f"trimui/app/.tmp_update/{rel_target}/{f_name}",
+                    f"magicx/.tmp_update/{rel_target}/{f_name}"
+                ]
+                for dest in dest_list:
+                    if dest not in written_entries:
+                        zi = zipfile.ZipInfo(dest)
+                        zi.compress_type = zipfile.ZIP_DEFLATED
+                        zi.external_attr = 0o644 << 16
+                        zout.writestr(zi, frame_bytes)
+                        written_entries.add(dest)
+
 def build_release():
     os.makedirs("build_release/temp", exist_ok=True)
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -308,6 +348,22 @@ def build_release():
             if os.path.isfile(l_path):
                 with open(l_path, "rb") as fp:
                     data = fp.read()
+
+        # Override stock MinUI installing/updating screens with official Cannelloni screens
+        if name.endswith("installing.png"):
+            if "brick" in name:
+                data = open("workspace/tg5040/install/brick/installing.png", "rb").read()
+            elif "trimuismart" in name:
+                data = open("workspace/trimuismart/install/installing.png", "rb").read()
+            else:
+                data = open("workspace/miyoomini/install/installing.png", "rb").read()
+        elif name.endswith("updating.png"):
+            if "brick" in name:
+                data = open("workspace/tg5040/install/brick/updating.png", "rb").read()
+            elif "trimuismart" in name:
+                data = open("workspace/trimuismart/install/updating.png", "rb").read()
+            else:
+                data = open("workspace/miyoomini/install/updating.png", "rb").read()
 
         # Override stock MinUI spritesheets with official Cannelloni Gold (#f1c40f) assets
         if name.startswith(".system/res/assets@"):
@@ -757,6 +813,9 @@ def build_release():
         zinfo_lang.external_attr = 0o755 << 16
         out_cannelloni_zip.writestr(zinfo_lang, lang_sh_bytes)
         written_entries.add(".tmp_update/apply_language.sh")
+
+    # 6. Inject spinning cannelloni animation frames into all .tmp_update folders
+    inject_spinner_frames(out_cannelloni_zip, written_entries)
 
     out_cannelloni_zip.close()
 
