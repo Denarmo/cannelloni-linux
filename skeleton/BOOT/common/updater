@@ -11,7 +11,7 @@ case $INFO in
 		PLATFORM="trimuismart"
 	fi
 	;;
-*"SStar"*)
+*"SStar"*|*"sstar"*|*"Sigmastar"*|*"SigmaStar"*|*"SSD20"*|*"infinity2"*|*"Infinity2"*|*"MStar"*)
 	PLATFORM="miyoomini"
 	;;
 *"TG5040"*|*"TG3040"*)
@@ -22,6 +22,11 @@ case $INFO in
 	;;
 *"0xd05"*)
 	PLATFORM="my355" # Miyoo Flip
+	;;
+*)
+	if [ -f "/customer/app/axp_test" ] || [ -d "/customer/app" ]; then
+		PLATFORM="miyoomini"
+	fi
 	;;
 esac
 

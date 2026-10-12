@@ -10,7 +10,12 @@ case $INFO in
 *"sun8i"*)
 	./my282.sh
 	;;
-*"SStar"*)
+*"SStar"*|*"sstar"*|*"Sigmastar"*|*"SigmaStar"*|*"SSD20"*|*"infinity2"*|*"Infinity2"*|*"MStar"*)
 	./miyoomini.sh
+	;;
+*)
+	if [ -f "/customer/app/axp_test" ] || [ -d "/customer/app" ]; then
+		./miyoomini.sh
+	fi
 	;;
 esac

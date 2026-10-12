@@ -4,6 +4,9 @@
 PLATFORM="miyoomini"
 SDCARD_PATH="/mnt/SDCARD"
 UPDATE_PATH="$SDCARD_PATH/Cannelloni.zip"
+if [ ! -f "$UPDATE_PATH" ] && [ -f "$SDCARD_PATH/MinUI.zip" ]; then
+	UPDATE_PATH="$SDCARD_PATH/MinUI.zip"
+fi
 SYSTEM_PATH="$SDCARD_PATH/.system"
 
 CPU_PATH=/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor

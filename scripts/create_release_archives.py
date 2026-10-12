@@ -57,6 +57,11 @@ for item in in_minui_zip.infolist():
     if name == ".system/version.txt":
         data = f"{RELEASE_NAME}\n{COMMIT_HASH}\n".encode("utf-8")
 
+    # Update .tmp_update/miyoomini.sh with updated boot script
+    if name == ".tmp_update/miyoomini.sh":
+        with open("workspace/miyoomini/install/boot.sh", "rb") as f:
+            data = f.read()
+
     # Update any minui references in scripts
     if name.endswith(".sh") or name.endswith(".txt"):
         try:
@@ -112,7 +117,19 @@ with zipfile.ZipFile(SRC_BASE_ZIP, "r") as base_in, \
 
         data = base_in.read(name)
         # Process and adapt scripts inside installer directories (e.g. rg35xxplus, trimui, etc.)
-        if name.endswith(".sh") or name.endswith(".txt"):
+        if name.endswith("/app/MainUI") or name == "miyoo/app/MainUI":
+            with open("skeleton/BOOT/miyoo/app/MainUI", "rb") as f:
+                data = f.read()
+        elif name.endswith("/app/miyoomini.sh"):
+            with open("skeleton/BOOT/miyoo/app/miyoomini.sh", "rb") as f:
+                data = f.read()
+        elif name.endswith(".tmp_update/updater"):
+            with open("skeleton/BOOT/common/updater", "rb") as f:
+                data = f.read()
+        elif name.endswith(".tmp_update/miyoomini.sh"):
+            with open("workspace/miyoomini/install/boot.sh", "rb") as f:
+                data = f.read()
+        elif name.endswith(".sh") or name.endswith(".txt"):
             try:
                 content = data.decode("utf-8")
                 content = content.replace("MinUI.zip", "Cannelloni.zip")
@@ -123,7 +140,13 @@ with zipfile.ZipFile(SRC_BASE_ZIP, "r") as base_in, \
             except UnicodeDecodeError:
                 pass
 
-        base_out.writestr(name, data)
+        zinfo = zipfile.ZipInfo(name)
+        zinfo.compress_type = zipfile.ZIP_DEFLATED
+        if name.endswith(".sh") or name.endswith("MainUI") or name.endswith("updater") or name.endswith(".elf") or name.endswith(".bin"):
+            zinfo.external_attr = 0o755 << 16
+        else:
+            zinfo.external_attr = 0o644 << 16
+        base_out.writestr(zinfo, data)
 
     # Add Nintendo DS ROM folder
     base_out.writestr("Roms/Nintendo DS (NDS)/.keep", b"# Nintendo DS ROMs (.nds, .zip)\n")
