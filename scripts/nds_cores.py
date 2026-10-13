@@ -3,6 +3,7 @@ from pathlib import Path
 import struct
 
 NDS_CORES = ("melonds_libretro.so", "desmume2015_libretro.so", "desmume_libretro.so")
+NDS_RUNTIMES = {"rgb30": ("libstdc++.so.6", "libgcc_s.so.1")}
 
 
 def elf_target(path):
@@ -31,4 +32,11 @@ def collect_nds_cores(platforms, root=Path(".")):
             if elf_target(source) != target:
                 raise ValueError(f"NDS core architecture does not match {platform} minarch: {source}")
             cores[f".system/{platform}/cores/{core_name}"] = source.read_bytes()
+        for library in NDS_RUNTIMES.get(platform, ()):
+            source = output / "runtime" / library
+            if not source.is_file():
+                raise FileNotFoundError(f"Missing {platform} SDK runtime: {source}")
+            if elf_target(source) != target:
+                raise ValueError(f"SDK runtime architecture does not match {platform} minarch: {source}")
+            cores[f".system/{platform}/lib/{library}"] = source.read_bytes()
     return cores

@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from create_release_archives import PLATFORMS
 from verify_release_archive import verify_archive, verify_payload
 from release_version import release_version
+from nds_cores import NDS_RUNTIMES
 
 
 def elf(machine=40):
@@ -36,6 +37,8 @@ class ReleaseVerifierTests(unittest.TestCase):
                 base + "paks/Emus/NDS.pak/launch.sh": b'EMU_PREF="libretro"\nminarch.elf\n',
                 base + "system.cfg": b"minarch_screen_effect = None\n",
             })
+            for library in NDS_RUNTIMES.get(platform, ()):
+                files[base + "lib/" + library] = elf()
         if change:
             files.update(change)
         data = io.BytesIO()
@@ -71,6 +74,12 @@ class ReleaseVerifierTests(unittest.TestCase):
         with zipfile.ZipFile(self.payload(("m17",))) as archive:
             with self.assertRaisesRegex(ValueError, "differs from current build"):
                 verify_payload(archive, ("m17",), builds)
+
+    def test_rejects_incompatible_sdk_runtime(self):
+        change = {".system/rgb30/lib/libstdc++.so.6": elf(183)}
+        with zipfile.ZipFile(self.payload(("rgb30",), change)) as archive:
+            with self.assertRaisesRegex(ValueError, "incompatible SDK runtime"):
+                verify_payload(archive, ("rgb30",))
 
 
 if __name__ == "__main__":

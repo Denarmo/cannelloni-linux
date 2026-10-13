@@ -37,4 +37,18 @@ snes9x2005_plus_FLAGS = USE_BLARGG_APU=1
 
 ###############################
 
+# The MOSS SDK ships only shared C++ runtime libraries. Keep its exact runtime
+# with its core instead of mixing a different compiler's libstdc++ into the OS.
+NDS_CXX_RUNTIME =
+
 include ../../all/cores/makefile
+
+.PHONY: nds-runtime
+nds: nds-runtime
+nds-runtime:
+	mkdir -p output/runtime
+	@set -eu; for library in libstdc++.so.6 libgcc_s.so.1; do \
+		path="$$($(CROSS_COMPILE)g++ -print-file-name=$$library)"; \
+		test "$$path" != "$$library" && test -f "$$path" || { echo "Missing SDK runtime: $$library" >&2; exit 1; }; \
+		cp -L "$$path" "output/runtime/$$library"; \
+	done

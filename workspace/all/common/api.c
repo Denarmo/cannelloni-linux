@@ -55,7 +55,7 @@ uint32_t RGB_LIGHT_GRAY;
 uint32_t RGB_GRAY;
 uint32_t RGB_DARK_GRAY;
 uint32_t RGB_ACCENT;
-SDL_Color COLOR_ACCENT_CURRENT = (SDL_Color){TRIAD_ACCENT};
+SDL_Color COLOR_ACCENT_CURRENT = {TRIAD_ACCENT};
 
 static struct GFX_Context {
 	SDL_Surface* screen;

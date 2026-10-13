@@ -478,8 +478,8 @@ def build_release():
         out_cannelloni_zip.writestr(zinfo_core, core_bytes)
         written_entries.add(core_path)
 
-    # NDS builds link the toolchain's C++ runtime statically. Do not inject an
-    # arbitrary patched libstdc++ that may not match the target device libc.
+    # Most NDS builds link C++ statically. SDKs without static libraries supply
+    # their exact matching runtime through collect_nds_cores above.
 
     # Add NDS.pak across all platforms from skeleton
     for p in platforms:

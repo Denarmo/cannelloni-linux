@@ -162,6 +162,20 @@ class NDSCorePackagingTests(unittest.TestCase):
         with self.assertRaisesRegex(FileNotFoundError, "NDS libretro"):
             collect_nds_cores(["miyoomini"], self.root)
 
+    def test_rgb30_requires_and_preserves_matching_sdk_runtime(self):
+        self.binary("workspace/all/minarch/build/rgb30/minarch.elf", 183, 2)
+        self.binary("workspace/rgb30/cores/output/melonds_libretro.so", 183, 2)
+        with self.assertRaisesRegex(FileNotFoundError, "SDK runtime"):
+            collect_nds_cores(["rgb30"], self.root)
+        for library in ("libstdc++.so.6", "libgcc_s.so.1"):
+            self.binary("workspace/rgb30/cores/output/runtime/" + library, 183, 2, b"exact SDK runtime")
+        output = collect_nds_cores(["rgb30"], self.root)
+        self.assertEqual(len(output), 3)
+        self.assertTrue(output[".system/rgb30/lib/libstdc++.so.6"].endswith(b"exact SDK runtime"))
+        self.binary("workspace/rgb30/cores/output/runtime/libgcc_s.so.1", 40, 1)
+        with self.assertRaisesRegex(ValueError, "architecture"):
+            collect_nds_cores(["rgb30"], self.root)
+
 
 @unittest.skipUnless(find_shell(), "A POSIX shell is needed for compiler selection tests")
 class NDSCompilerSelectionTests(unittest.TestCase):

@@ -14,8 +14,9 @@ Download Cannelloni-Installer.zip from:
 https://github.com/Denarmo/cannelloni-linux/releases/tag/v1.0.0
 
 1. Extract the installer package to a folder on your computer. Keep its bundled
-   Cannelloni.zip beside the installer, compressed. Cannoli.zip is also accepted.
-   This archive is the only OS payload; no loose duplicate OS files are needed.
+   Cannelloni.zip beside the installer, compressed, and retain the VERSION file.
+   Cannoli.zip is also accepted. The archive is the only OS payload; no loose
+   duplicate OS files are needed.
 2. Prepare a FAT32 SD card for your device. The installer does not format the
    card or replace its underlying firmware. Back up existing Saves and .userdata
    first; installation replaces system files and applies fresh settings.

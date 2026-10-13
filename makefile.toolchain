@@ -17,6 +17,7 @@ all: $(INIT_IF_NECESSARY)
 	docker run -it --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) -v $(HOST_VERSION):/root/VERSION:ro $(PLATFORM)-toolchain /bin/bash
 
 $(INIT_IF_NECESSARY): $(GIT_IF_NECESSARY)
+	python3 scripts/prepare_toolchain.py $(PLATFORM) $(GIT_IF_NECESSARY)
 	cd toolchains/$(PLATFORM)-toolchain && make .build
 
 $(GIT_IF_NECESSARY):

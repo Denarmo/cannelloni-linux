@@ -40,10 +40,12 @@ jobs:
           - {platform: magicmini, runner: ubuntu-latest}
           - {platform: my355, runner: ubuntu-latest}
           - {platform: zero28, runner: ubuntu-latest}
+          - {platform: tg5040, runner: ubuntu-latest}
         include:
           - {platform: magicmini, runner: ubuntu-24.04-arm}
           - {platform: my355, runner: ubuntu-24.04-arm}
           - {platform: zero28, runner: ubuntu-24.04-arm}
+          - {platform: tg5040, runner: ubuntu-24.04-arm}
     steps:
       - uses: actions/checkout@v4
       - name: Compile current launcher, emulator frontend and DS core
@@ -56,6 +58,7 @@ jobs:
             workspace/all/cannelloni/build/${{ matrix.platform }}/cannelloni.elf
             workspace/all/minarch/build/${{ matrix.platform }}/minarch.elf
             workspace/${{ matrix.platform }}/cores/output/*_libretro.so
+            workspace/${{ matrix.platform }}/cores/output/runtime/*.so*
 
   windows-installer:
     needs: test

@@ -4,8 +4,8 @@ Full illustrated guide:
 https://github.com/Denarmo/cannelloni-linux#install-with-the-desktop-installer
 
 1. Extract Cannelloni-Installer.zip into a folder on your computer. Keep the
-   bundled Cannelloni.zip beside the installer. Do not extract that inner ZIP:
-   it contains the OS, and the installer reads it directly. Legacy payloads
+   bundled Cannelloni.zip and VERSION file beside the installer. Do not extract
+   that inner ZIP: it contains the OS, and the installer reads it directly. Legacy payloads
    named Cannoli.zip are also supported.
 2. Insert a FAT32 SD card prepared for your handheld. This tool does not format
    it or replace its underlying firmware. Back up existing Saves and .userdata

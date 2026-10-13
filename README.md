@@ -31,7 +31,7 @@ Version **1.0.0** adds a desktop installer that reads its bundled OS archive, Ni
 
 ### 1. Download and prepare your card
 
-Download **[Cannelloni-Installer.zip](https://github.com/Denarmo/cannelloni-linux/releases/download/v1.0.0/Cannelloni-Installer.zip)** and extract it into a folder on your computer. Keep **`Cannelloni.zip` beside the installer**. That ZIP is the OS payload: leave it compressed. Legacy payloads named `Cannoli.zip` are also recognized.
+Download **[Cannelloni-Installer.zip](https://github.com/Denarmo/cannelloni-linux/releases/download/v1.0.0/Cannelloni-Installer.zip)** and extract it into a folder on your computer. Keep **`Cannelloni.zip` and `VERSION` beside the installer**. That ZIP is the OS payload: leave it compressed. Legacy payloads named `Cannoli.zip` are also recognized.
 
 Use a FAT32 SD card prepared for your handheld. The installer copies files; it does not format the card or replace the device's underlying firmware. Back up an existing card first, especially `Saves` and `.userdata`, because installation replaces system files and applies fresh settings. See the [device notes](#supported-devices) for cards that also need a separate boot card.
 
@@ -157,7 +157,7 @@ On RGB30, **L3 or R3** acts as MENU. Additional power, volume, and brightness sh
 
 Run the host checks with **`python -m unittest discover -s tests -v`**. They cover ZIP installation, DS launch routing, shader rendering and settings, and release contents. Host checks do not replace testing on a handheld.
 
-To build release frontends on a host with Docker, a POSIX shell, and make, run **`sh scripts/build_release_frontends.sh`**, or append one platform name to build that target. The build selects melonDS when the cross compiler supports C++17 and DeSmuME2015 otherwise.
+For local frontend builds, use Docker, a POSIX shell, and make on a host that matches the toolchain architecture, then run **`sh scripts/build_release_frontends.sh <platform>`**. The `magicmini`, `my355`, `zero28`, and `tg5040` toolchain images require an ARM64 Docker host; the remaining targets use an x86-64 host. The [release workflow](.github/workflows/release.yml) uses both runner architectures and is the recommended way to build the full matrix. The build selects melonDS when the cross compiler supports C++17 and DeSmuME2015 otherwise.
 
 Build **`dist/Cannelloni-Installer.exe`** using PyInstaller on Windows, then run **`python scripts/create_release_archives.py`** with all required platform artifacts available. Packaging requires freshly built launcher/minarch binaries and a matching DS core for each platform; it rejects missing builds or incorrect core architectures. **`python scripts/verify_release_archive.py releases/Cannelloni-Installer.zip --built-workspace workspace`** verifies the packaged payload against those builds.
 

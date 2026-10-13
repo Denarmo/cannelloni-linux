@@ -16,11 +16,12 @@ endif
 # Passing e.g. platform=miyoomini otherwise selects its Windows fallback.
 melonds_HASH = 66b5d2634cd0a79030562811e6e05f5532f800ba
 melonds_ARCH = $(firstword $(subst -, ,$(shell $(CROSS_COMPILE)gcc -dumpmachine)))
-melonds_MAKE = $(MAKE) platform=unix ARCH=$(subst aarch64,arm64,$(melonds_ARCH)) CC=$(CROSS_COMPILE)gcc CXX="$(CROSS_COMPILE)g++ -static-libgcc -static-libstdc++" AR=$(CROSS_COMPILE)ar HAVE_OPENGL=0 HAVE_OPENGLES3=0
+NDS_CXX_RUNTIME ?= -static-libgcc -static-libstdc++
+melonds_MAKE = $(MAKE) platform=unix ARCH=$(subst aarch64,arm64,$(melonds_ARCH)) CC=$(CROSS_COMPILE)gcc CXX="$(CROSS_COMPILE)g++ $(NDS_CXX_RUNTIME)" AR=$(CROSS_COMPILE)ar HAVE_OPENGL=0 HAVE_OPENGLES3=0
 
 desmume2015_HASH = 422b688009ccb9f2917c086a8fe79c8cecb030ae
 desmume2015_BUILD_PATH = desmume2015/desmume
-desmume2015_MAKE = $(MAKE) -f Makefile.libretro platform=unix CC=$(CROSS_COMPILE)gcc CXX="$(CROSS_COMPILE)g++ -static-libgcc -static-libstdc++" AR=$(CROSS_COMPILE)ar DESMUME_JIT=0 DESMUME_JIT_ARM=0
+desmume2015_MAKE = $(MAKE) -f Makefile.libretro platform=unix CC=$(CROSS_COMPILE)gcc CXX="$(CROSS_COMPILE)g++ $(NDS_CXX_RUNTIME)" AR=$(CROSS_COMPILE)ar DESMUME_JIT=0 DESMUME_JIT_ARM=0
 
 # C++17 support differs across official device toolchains. Both choices use
 # minarch and the same OS menu; the core filename always identifies its build.

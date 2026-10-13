@@ -8,7 +8,7 @@ import tempfile
 import zipfile
 
 from create_release_archives import PLATFORMS, load_built_frontends
-from nds_cores import NDS_CORES
+from nds_cores import NDS_CORES, NDS_RUNTIMES
 from release_version import release_version
 
 
@@ -41,6 +41,10 @@ def verify_payload(payload, platforms=PLATFORMS, builds=None):
         for core in cores:
             if names.count(core) != 1 or elf_target(payload.read(core)) != elf_target(frontend):
                 raise ValueError(f"Duplicate or incompatible NDS core: {core}")
+        for library in NDS_RUNTIMES.get(platform, ()):
+            filename = base + "lib/" + library
+            if names.count(filename) != 1 or elf_target(payload.read(filename)) != elf_target(frontend):
+                raise ValueError(f"Missing, duplicate or incompatible SDK runtime: {filename}")
         launcher = payload.read(base + "paks/Emus/NDS.pak/launch.sh")
         if b'EMU_PREF="libretro"' not in launcher or b"minarch.elf" not in launcher:
             raise ValueError(f"NDS launcher does not default to minarch: {platform}")
