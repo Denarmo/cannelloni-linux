@@ -1458,19 +1458,17 @@ static void Config_readControls(void) {
 	Config_readControlsString(config.default_cfg);
 	Config_readControlsString(config.user_cfg);
 }
-static void Config_write(int override) {
+static int Config_write(int override) {
 	char path[MAX_PATH];
-	// sprintf(path, "%s/%s.cfg", core.config_dir, game.name);
-	Config_getPath(path, CONFIG_WRITE_GAME);
-	
-	if (!override) {
-		if (config.loaded==CONFIG_GAME) unlink(path);
-		Config_getPath(path, CONFIG_WRITE_ALL);
-	}
-	config.loaded = override ? CONFIG_GAME : CONFIG_CONSOLE;
-	
-	FILE *file = fopen(path, "wb");
-	if (!file) return;
+	char game_path[MAX_PATH];
+	char temporary[MAX_PATH + 5];
+	Config_getPath(game_path, CONFIG_WRITE_GAME);
+	Config_getPath(path, override);
+	int length = snprintf(temporary, sizeof(temporary), "%s.tmp", path);
+	if (length < 0 || (size_t)length >= sizeof(temporary)) return 0;
+	// Keep the previous settings until a complete replacement has been written.
+	FILE *file = fopen(temporary, "wb");
+	if (!file) return 0;
 	
 	for (int i=0; config.frontend.options[i].key; i++) {
 		Option* option = &config.frontend.options[i];
@@ -1496,8 +1494,22 @@ static void Config_write(int override) {
 		fprintf(file, "bind %s = %s\n", mapping->name, button_labels[j]);
 	}
 	
-	fclose(file);
+	int failed = ferror(file);
+	if (fclose(file) != 0) failed = 1;
+	if (failed || rename(temporary, path) != 0) {
+		unlink(temporary);
+		return 0;
+	}
+	// Saving console settings intentionally removes this game's override, but
+	// only after the console replacement succeeds. Retain the loaded scope if
+	// the override cannot be removed, so the menu does not claim it disappeared.
+	if (!override && config.loaded==CONFIG_GAME && unlink(game_path) != 0 && errno != ENOENT) {
+		sync();
+		return 0;
+	}
+	config.loaded = override ? CONFIG_GAME : CONFIG_CONSOLE;
 	sync();
+	return 1;
 }
 static void Config_restore(void) {
 	char path[MAX_PATH];
@@ -2081,12 +2093,15 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: { /* 10 */
-		const enum retro_pixel_format *format = (enum retro_pixel_format *)data;
-
-		if (*format != RETRO_PIXEL_FORMAT_RGB565) { // TODO: pull from platform.h?
-			/* 565 is only supported format */
-			return false;
-			// downsample = 1; // TODO: not ready for primetime yet
+		const enum retro_pixel_format *format = data;
+		if (!format || (*format != RETRO_PIXEL_FORMAT_RGB565 &&
+				*format != RETRO_PIXEL_FORMAT_XRGB8888)) return false;
+		int convert = *format == RETRO_PIXEL_FORMAT_XRGB8888;
+		if (convert != downsample) {
+			downsample = convert;
+			// Both formats may have the same RGB565 presentation pitch, but
+			// enabling conversion still needs a buffer on the next frame.
+			renderer.dst_p = 0;
 		}
 		break;
 	}
@@ -3067,8 +3082,17 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 		selectScaler(width, height, pitch);
 		GFX_clearAll();
 	}
+
+	if (downsample) {
+		buffer_downsample(data,width,height,input_pitch);
+		renderer.src = buffer;
+	}
+	else {
+		renderer.src = (void*)data;
+	}
 	
-	// debug
+	// Draw on the RGB565 presentation frame after conversion. XRGB8888
+	// frames belong to the core and must not receive 16-bit debug writes.
 	if (show_debug) {
 		int x = 2 + renderer.src_x;
 		int y = 2 + renderer.src_y;
@@ -3077,24 +3101,16 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 		if (scale==-1) scale = 1; // nearest neighbor flag
 		
 		sprintf(debug_text, "%ix%i %ix", renderer.src_w,renderer.src_h, scale);
-		blitBitmapText(debug_text,x,y,(uint16_t*)data,pitch/2, width,height);
+		blitBitmapText(debug_text,x,y,renderer.src,pitch/2, width,height);
 
 		sprintf(debug_text, "%i,%i %ix%i", renderer.dst_x,renderer.dst_y, renderer.src_w*scale,renderer.src_h*scale);
-		blitBitmapText(debug_text,-x,y,(uint16_t*)data,pitch/2, width,height);
+		blitBitmapText(debug_text,-x,y,renderer.src,pitch/2, width,height);
 	
 		sprintf(debug_text, "%.01f/%.01f %i%%", fps_double, cpu_double, (int)use_double);
-		blitBitmapText(debug_text,x,-y,(uint16_t*)data,pitch/2, width,height);
+		blitBitmapText(debug_text,x,-y,renderer.src,pitch/2, width,height);
 	
 		sprintf(debug_text, "%ix%i", renderer.dst_w,renderer.dst_h);
-		blitBitmapText(debug_text,-x,-y,(uint16_t*)data,pitch/2, width,height);
-	}
-	
-	if (downsample) {
-		buffer_downsample(data,width,height,input_pitch);
-		renderer.src = buffer;
-	}
-	else {
-		renderer.src = (void*)data;
+		blitBitmapText(debug_text,-x,-y,renderer.src,pitch/2, width,height);
 	}
 	renderer.dst = screen->pixels;
 	// LOG_info("video_refresh_callback: %ix%i@%i %ix%i@%i\n",width,height,pitch,screen->w,screen->h,screen->pitch);
@@ -3575,12 +3591,14 @@ static int OptionShaders_parameters(MenuList* list, int i) {
 	return MENU_CALLBACK_NOP;
 }
 static int OptionShaders_saveConsole(MenuList* list, int i) {
-	Config_write(CONFIG_WRITE_ALL);
-	return Menu_message("Saved for console.", (char*[]){"B", "BACK", NULL});
+	int saved = Config_write(CONFIG_WRITE_ALL);
+	return Menu_message(saved ? "Saved for console." : "Could not save settings.\nCheck the SD card.",
+		(char*[]){"B", "BACK", NULL});
 }
 static int OptionShaders_saveGame(MenuList* list, int i) {
-	Config_write(CONFIG_WRITE_GAME);
-	return Menu_message("Saved for game.", (char*[]){"B", "BACK", NULL});
+	int saved = Config_write(CONFIG_WRITE_GAME);
+	return Menu_message(saved ? "Saved for game." : "Could not save settings.\nCheck the SD card.",
+		(char*[]){"B", "BACK", NULL});
 }
 static int OptionShaders_reset(MenuList* list, int i) {
 	for (int id = FE_OPT_EFFECT; id <= FE_OPT_GLOW; id++) {
@@ -3880,13 +3898,11 @@ static int OptionSaveChanges_onConfirm(MenuList* list, int i) {
 	char* message;
 	switch (i) {
 		case 0: {
-			Config_write(CONFIG_WRITE_ALL);
-			message = "Saved for console.";
+			message = Config_write(CONFIG_WRITE_ALL) ? "Saved for console." : "Could not save settings.\nCheck the SD card.";
 			break;
 		}
 		case 1: {
-			Config_write(CONFIG_WRITE_GAME);
-			message = "Saved for game.";
+			message = Config_write(CONFIG_WRITE_GAME) ? "Saved for game." : "Could not save settings.\nCheck the SD card.";
 			break;
 		}
 		default: {

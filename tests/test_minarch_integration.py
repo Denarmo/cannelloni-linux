@@ -141,38 +141,229 @@ int main(int argc, char **argv) {
             "shader_nds.conf": b"preset=zfast-lcd\r\nintensity=50\r\n",
         })
 
-    def test_padded_xrgb_frames_and_borrowed_menu_buffer(self):
+    def test_config_save_preserves_existing_files_on_failure(self):
+        source = (MINARCH / "minarch.c").read_text()
+        save_functions = "\n".join(function(source, name) for name in (
+            "Config_getPath", "Config_write"))
+        callbacks = "\n".join(function(source, name) for name in (
+            "OptionShaders_saveConsole", "OptionShaders_saveGame", "OptionSaveChanges_onConfirm"))
+        harness = r'''
+#include <assert.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#ifdef _WIN32
+#include <windows.h>
+#include <io.h>
+#define native_unlink _unlink
+#else
+#include <unistd.h>
+#define native_unlink unlink
+#endif
+#undef MAX_PATH
+#define MAX_PATH 1024
+#define LOG_info(...) ((void)0)
+#define LOCAL_BUTTON_COUNT 2
+enum { CONFIG_WRITE_ALL, CONFIG_WRITE_GAME };
+enum { CONFIG_NONE, CONFIG_CONSOLE, CONFIG_GAME };
+enum { MENU_CALLBACK_NOP, MENU_CALLBACK_EXIT };
+typedef struct { char *key; char **values; int value; } Option;
+typedef struct { Option *options; } OptionList;
+typedef struct { char *name; int local, mod; } ButtonMapping;
+typedef struct { int unused; } MenuList;
+static char *effect_values[] = {"None", "CRT-Cannelloni", NULL};
+static char *brightness_values[] = {"100%", "125%", NULL};
+static char *core_values[] = {"disabled", "enabled", NULL};
+static Option frontend_options[] = {{"minarch_screen_effect", effect_values, 1},
+    {"cannelloni_shader_brightness", brightness_values, 1}, {0}};
+static Option core_options[] = {{"test_core_option", core_values, 1}, {0}};
+static ButtonMapping controls[] = {{"A", 0, 0}, {0}};
+static ButtonMapping shortcuts[] = {{"Save State", -1, 0}, {0}};
+static char *button_labels[] = {"NONE", "A", "B", NULL};
+static int has_custom_controllers = 1, gamepad_type;
+static struct { char *config_dir; } core;
+static struct { char *name; } game = {"Test Game"};
+static struct {
+    char *device_tag; int loaded; OptionList frontend, core;
+    ButtonMapping *controls, *shortcuts;
+} config = {"unit", CONFIG_GAME, {frontend_options}, {core_options}, controls, shortcuts};
+static int fail_open, fail_stream, fail_close, fail_rename, fail_unlink;
+static FILE *save_fopen(const char *path, const char *mode) {
+    if (fail_open) { errno = EACCES; return NULL; }
+    return fopen(path, mode);
+}
+static int save_ferror(FILE *file) { return fail_stream || ferror(file); }
+static int save_fclose(FILE *file) {
+    int result = fclose(file); return fail_close ? EOF : result;
+}
+static int save_rename(const char *source, const char *target) {
+    if (fail_rename) { errno = EACCES; return -1; }
+#ifdef _WIN32
+    /* Match the device's POSIX rename replacement semantics on this host. */
+    if (!MoveFileExA(source, target, MOVEFILE_REPLACE_EXISTING)) {
+        errno = EACCES; return -1;
+    }
+    return 0;
+#else
+    return rename(source, target);
+#endif
+}
+static int save_unlink(const char *path) {
+    if (fail_unlink && !strstr(path, ".tmp")) { errno = EACCES; return -1; }
+    return native_unlink(path);
+}
+static void save_sync(void) {}
+#define fopen save_fopen
+#define ferror save_ferror
+#define fclose save_fclose
+#define rename save_rename
+#define unlink save_unlink
+#define sync save_sync
+''' + save_functions + r'''
+#undef fopen
+#undef ferror
+#undef fclose
+#undef rename
+#undef unlink
+#undef sync
+static char last_message[128];
+static int descriptions;
+static int Menu_message(char *message, char **pairs) {
+    snprintf(last_message, sizeof(last_message), "%s", message); return MENU_CALLBACK_NOP;
+}
+static void Config_restore(void) { assert(0); }
+static void OptionSaveChanges_updateDesc(void) { descriptions++; }
+''' + callbacks + r'''
+static char console_path[MAX_PATH], game_path[MAX_PATH], temporary[MAX_PATH+5];
+static void write_file(const char *path, const char *text) {
+    FILE *file = fopen(path, "wb"); assert(file);
+    assert(fputs(text, file) >= 0); assert(!fclose(file));
+}
+static int file_exists(const char *path) {
+    FILE *file = fopen(path, "rb");
+    if (!file) return 0;
+    fclose(file); return 1;
+}
+static void expect_file(const char *path, const char *expected) {
+    char data[2048] = {0}; FILE *file = fopen(path, "rb"); assert(file);
+    size_t size = fread(data, 1, sizeof(data)-1, file);
+    assert(!ferror(file)); assert(!fclose(file));
+    assert(size == strlen(expected) && !strcmp(data, expected));
+}
+static void reset_files(void) {
+    fail_open = fail_stream = fail_close = fail_rename = fail_unlink = 0;
+    config.loaded = CONFIG_GAME;
+    write_file(console_path, "old console\n"); write_file(game_path, "old game\n");
+    snprintf(temporary, sizeof(temporary), "%s.tmp", console_path); native_unlink(temporary);
+}
+static void expect_failure_preserved(void) {
+    assert(config.loaded == CONFIG_GAME);
+    expect_file(console_path, "old console\n"); expect_file(game_path, "old game\n");
+    assert(!file_exists(temporary));
+}
+int main(int argc, char **argv) {
+    core.config_dir = argv[1];
+    Config_getPath(console_path, CONFIG_WRITE_ALL); Config_getPath(game_path, CONFIG_WRITE_GAME);
+    const char *saved = "minarch_screen_effect = CRT-Cannelloni\n"
+        "cannelloni_shader_brightness = 125%\n"
+        "test_core_option = enabled\nminarch_gamepad_type = 0\n"
+        "bind A = A\nbind Save State = NONE\n";
+    reset_files(); fail_open = 1;
+    assert(!Config_write(CONFIG_WRITE_ALL)); expect_failure_preserved();
+    reset_files(); fail_stream = 1;
+    assert(!Config_write(CONFIG_WRITE_ALL)); expect_failure_preserved();
+    reset_files(); fail_close = 1;
+    assert(!Config_write(CONFIG_WRITE_ALL)); expect_failure_preserved();
+    reset_files(); fail_rename = 1;
+    assert(!Config_write(CONFIG_WRITE_ALL)); expect_failure_preserved();
+    reset_files();
+    assert(Config_write(CONFIG_WRITE_GAME)); assert(config.loaded == CONFIG_GAME);
+    expect_file(game_path, saved); expect_file(console_path, "old console\n");
+    reset_files();
+    assert(Config_write(CONFIG_WRITE_ALL));
+    assert(config.loaded == CONFIG_CONSOLE && !file_exists(game_path));
+    expect_file(console_path, saved); assert(!file_exists(temporary));
+    reset_files(); fail_unlink = 1;
+    assert(!Config_write(CONFIG_WRITE_ALL)); assert(config.loaded == CONFIG_GAME);
+    expect_file(game_path, "old game\n"); expect_file(console_path, saved);
+    reset_files(); fail_open = 1;
+    OptionShaders_saveConsole(NULL, 0);
+    assert(strstr(last_message, "Could not save")); expect_failure_preserved();
+    OptionShaders_saveGame(NULL, 0);
+    assert(strstr(last_message, "Could not save")); expect_failure_preserved();
+    OptionSaveChanges_onConfirm(NULL, 0);
+    assert(strstr(last_message, "Could not save")); expect_failure_preserved();
+    OptionSaveChanges_onConfirm(NULL, 1);
+    assert(strstr(last_message, "Could not save")); expect_failure_preserved();
+    assert(descriptions == 2);
+    reset_files();
+    OptionShaders_saveConsole(NULL, 0);
+    assert(!strcmp(last_message, "Saved for console."));
+    assert(config.loaded == CONFIG_CONSOLE && !file_exists(game_path));
+    OptionShaders_saveGame(NULL, 0);
+    assert(!strcmp(last_message, "Saved for game.")); expect_file(game_path, saved);
+    return 0;
+}
+'''
+        self.build_and_run(harness)
+
+    def test_pixel_format_negotiation_padded_frames_and_debug_overlay(self):
         source = (MINARCH / "minarch.c").read_text()
         buffer_functions = "\n".join(function(source, name) for name in ("buffer_dealloc", "buffer_realloc", "buffer_downsample"))
         callback = function(source, "video_refresh_callback_main")
+        environment = function(source, "environment_callback")
+        # Compile the production negotiation branch without unrelated core APIs.
+        pixel_format = environment[environment.index("\tcase RETRO_ENVIRONMENT_SET_PIXEL_FORMAT:"):
+                                   environment.index("\tcase RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:")]
         harness = r'''
 #include <assert.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #define FIXED_BPP 2
 #define LOG_info(...) ((void)0)
+#define RETRO_ENVIRONMENT_SET_PIXEL_FORMAT 10
+enum retro_pixel_format {
+    RETRO_PIXEL_FORMAT_0RGB1555 = 0,
+    RETRO_PIXEL_FORMAT_XRGB8888 = 1,
+    RETRO_PIXEL_FORMAT_RGB565 = 2
+};
 static void *buffer;
 static size_t buffer_size;
-static int downsample = 1, fast_forward, show_debug, thread_video, fps_ticks;
+static int downsample, fast_forward, show_debug, thread_video, fps_ticks;
 static double fps_double, cpu_double;
-static int use_double, resizes;
+static int use_double, resizes, debug_writes, expected_pitch = 4;
 static struct { int true_w,true_h,src_p,dst_p,src_x,src_y,src_w,src_h,dst_x,dst_y,dst_w,dst_h,scale; void *src,*dst; } renderer;
 static struct { void *pixels; } screen_data, *screen = &screen_data;
 static void Special_render(void) {}
 static uint32_t SDL_GetTicks(void) { return 50; }
 static void GFX_clearAll(void) {}
 static void GFX_flip(void *s) {}
-static void blitBitmapText(char *s,int x,int y,uint16_t *p,int pitch,int w,int h) {}
+static void blitBitmapText(char *s,int x,int y,uint16_t *p,int pitch,int w,int h) {
+    assert(downsample && p == buffer && pitch == 2 && w == 2 && h == 2);
+    p[0] = 0;
+    debug_writes++;
+}
+static bool environment_callback(unsigned cmd,void *data) {
+    switch (cmd) {
+''' + pixel_format + r'''
+    default: return false;
+    }
+    return true;
+}
 ''' + buffer_functions + r'''
 static void selectScaler(int w,int h,int pitch) {
-    buffer_realloc(w,h,pitch); resizes++;
+    if (downsample) buffer_realloc(w,h,pitch);
+    resizes++;
     renderer.true_w=w; renderer.true_h=h; renderer.src_p=pitch; renderer.dst_p=640;
 }
 static void Shader_blit(void) {
-    const uint16_t expected[] = {0xf800,0x07e0,0x001f,0xffff};
-    assert(renderer.src_p == 4);
+    uint16_t expected[] = {0xf800,0x07e0,0x001f,0xffff};
+    if (show_debug) expected[0] = 0;
+    assert(renderer.src_p == expected_pitch);
     for(int y=0;y<2;y++) for(int x=0;x<2;x++) {
         uint16_t actual;
         memcpy(&actual,(char*)renderer.src+y*renderer.src_p+x*2,2);
@@ -181,22 +372,55 @@ static void Shader_blit(void) {
 }
 ''' + callback + r'''
 int main(void) {
+    enum retro_pixel_format rgb565 = RETRO_PIXEL_FORMAT_RGB565;
+    enum retro_pixel_format xrgb8888 = RETRO_PIXEL_FORMAT_XRGB8888;
+    enum retro_pixel_format unsupported = RETRO_PIXEL_FORMAT_0RGB1555;
+    enum retro_pixel_format unknown = (enum retro_pixel_format)99;
+    uint16_t native[] = {0xf800,0x07e0,0x001f,0xffff};
+    assert(environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,&rgb565));
+    assert(!downsample);
+    video_refresh_callback_main(native,2,2,4);
+    assert(resizes == 1 && !buffer && renderer.src == native);
+    assert(!environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,&unsupported));
+    assert(!environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,&unknown));
+    assert(!environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,NULL));
+    assert(!downsample && renderer.dst_p == 640);
+
+    /* melonDS requests XRGB8888 during load_game. Its converted pitch matches
+       the preceding RGB565 frame, but negotiation must still allocate storage. */
+    assert(environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,&xrgb8888));
+    assert(downsample && renderer.dst_p == 0);
+    assert(!environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,&unsupported));
+    assert(downsample);
     /* Two pixels per row plus one padding word from the libretro core. */
-    const uint32_t input[] = {0x00ff0000,0x0000ff00,0xdeadbeef,0x000000ff,0x00ffffff,0xdeadbeef};
+    uint32_t input[] = {0x00ff0000,0x0000ff00,0xdeadbeef,0x000000ff,0x00ffffff,0xdeadbeef};
+    uint32_t original[6]; memcpy(original,input,sizeof(input));
     video_refresh_callback_main(input,2,2,12);
-    assert(resizes == 1);
+    assert(resizes == 2 && buffer && renderer.src == buffer);
     void *preview_pixels = buffer;
     uint16_t saved[4]; memcpy(saved,buffer,sizeof(saved));
     buffer_realloc(2,2,4);
     assert(buffer == preview_pixels && !memcmp(buffer,saved,sizeof(saved)));
+    assert(environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,&xrgb8888));
     video_refresh_callback_main(input,2,2,12);
-    assert(resizes == 1);
-    /* Native RGB565 cores may change stride without changing width/height. */
-    downsample = 0;
-    uint16_t native[] = {0xf800,0x07e0,0x001f,0xffff};
-    renderer.src_p = 6;
-    video_refresh_callback_main(native,2,2,4);
     assert(resizes == 2);
+    show_debug = 1;
+    video_refresh_callback_main(input,2,2,12);
+    assert(debug_writes == 4 && !memcmp(input,original,sizeof(input)));
+    show_debug = 0;
+
+    assert(environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,&rgb565));
+    assert(!downsample && renderer.dst_p == 0);
+    video_refresh_callback_main(native,2,2,4);
+    assert(resizes == 3 && renderer.src == native);
+    /* Native RGB565 cores may change stride without changing width/height. */
+    uint16_t padded[] = {0xf800,0x07e0,0xdead,0x001f,0xffff,0xbeef};
+    expected_pitch = 6;
+    video_refresh_callback_main(padded,2,2,6);
+    assert(resizes == 4 && renderer.src == padded);
+    expected_pitch = 4;
+    video_refresh_callback_main(native,2,2,4);
+    assert(resizes == 5 && renderer.src == native);
     buffer_dealloc();
     return 0;
 }
