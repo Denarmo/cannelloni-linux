@@ -129,6 +129,23 @@ void* inputThread(void* arg) {
 	}	
 }
 
+static void renderFrame(char* fb0_map, SDL_Surface* frame) {
+	if (!frame || !fb0_map) return;
+	uint8_t* dst = (uint8_t*)fb0_map; // rgba
+	uint8_t* src = (uint8_t*)frame->pixels; // bgr
+	src += ((frame->h * frame->w) - 1) * 3;
+	for (int y=0; y<frame->h; y++) {
+		for (int x=0; x<frame->w; x++) {
+			*(dst+0) = *(src+2); // r
+			*(dst+1) = *(src+1); // g
+			*(dst+2) = *(src+0); // b
+			*(dst+3) = 0xf; // alpha
+			dst += 4;
+			src -= 3;
+		}
+	}
+}
+
 int main(void) {
 	is_plus = access("/customer/app/axp_test", F_OK)==0;
 	int fb0_fd = open("/dev/fb0", O_RDWR);
@@ -146,23 +163,22 @@ int main(void) {
 	
 	memset(fb0_map, 0, map_size); // clear screen
 	
-	SDL_Surface* img = IMG_Load("/mnt/SDCARD/.system/res/charging-640-480.png"); // 24-bit opaque png
-	
-	uint8_t* dst = (uint8_t*)fb0_map; // rgba
-	uint8_t* src = (uint8_t*)img->pixels; // bgr
-	src += ((img->h * img->w) - 1) * 3;
-	for (int y=0; y<img->h; y++) {
-		for (int x=0; x<img->w; x++) {
-			*(dst+0) = *(src+2); // r
-			*(dst+1) = *(src+1); // g
-			*(dst+2) = *(src+0); // b
-			*(dst+3) = 0xf; // alpha
-			dst += 4;
-			src -= 3;
+	SDL_Surface* imgs[6] = {NULL};
+	int num_frames = 0;
+	char frame_path[256];
+	for (int f = 0; f < 6; f++) {
+		sprintf(frame_path, "/mnt/SDCARD/.system/res/charging_%02d.png", f);
+		if (access(frame_path, F_OK) == 0) {
+			imgs[f] = IMG_Load(frame_path);
+			if (imgs[f]) num_frames++;
 		}
 	}
-	SDL_FreeSurface(img);
-	
+	if (num_frames == 0) {
+		imgs[0] = IMG_Load("/mnt/SDCARD/.system/res/charging-640-480.png");
+		if (imgs[0]) num_frames = 1;
+	}
+
+	if (num_frames > 0) renderFrame(fb0_map, imgs[0]);
 	screenOn();
 	
 	input_fd = open("/dev/input/event0", O_RDONLY);
@@ -170,8 +186,23 @@ int main(void) {
 	
 	pthread_create(&charging_pt, NULL, &chargingThread, NULL);
 	
+	int cur_frame = 0;
+	unsigned long last_anim = SDL_GetTicks();
 	while (!launch && is_charging) {
-		if (screen_on && SDL_GetTicks()-screen_start>=3000) screenOff();
+		if (screen_on) {
+			if (SDL_GetTicks()-screen_start>=3000) {
+				screenOff();
+			} else if (num_frames > 1 && SDL_GetTicks()-last_anim>=300) {
+				cur_frame = (cur_frame + 1) % num_frames;
+				renderFrame(fb0_map, imgs[cur_frame]);
+				last_anim = SDL_GetTicks();
+			}
+		}
+		usleep(20000);
+	}
+
+	for (int f = 0; f < num_frames; f++) {
+		if (imgs[f]) SDL_FreeSurface(imgs[f]);
 	}
 	
 	close(input_fd);

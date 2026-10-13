@@ -68,6 +68,10 @@ log "Saves Path: $SAVES_PATH/$EMU_TAG"
 log "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
 log "PATH: $PATH"
 
+# Ensure fallback environment variables
+[ -z "$SDCARD_PATH" ] && SDCARD_PATH="/mnt/SDCARD"
+[ -z "$SHARED_USERDATA_PATH" ] && SHARED_USERDATA_PATH="$SDCARD_PATH/.userdata/shared"
+
 # Standalone DraStic check
 DRASTIC_EXE="$SDCARD_PATH/Emus/$PLATFORM/NDS-Drastic.pak/drastic"
 [ ! -f "$DRASTIC_EXE" ] && DRASTIC_EXE="$SDCARD_PATH/Emus/$PLATFORM/NDS.pak/drastic"
@@ -76,17 +80,16 @@ DRASTIC_EXE="$SDCARD_PATH/Emus/$PLATFORM/NDS-Drastic.pak/drastic"
 
 # Check emulator preference configured in Settings -> Emulators
 EMU_PREF_FILE="$SHARED_USERDATA_PATH/.cannelloni/emu_nds.txt"
-EMU_PREF="drastic"
+EMU_PREF=""
 [ -f "$EMU_PREF_FILE" ] && EMU_PREF=$(cat "$EMU_PREF_FILE" | tr -d '\r\n')
-[ -z "$EMU_PREF" ] && EMU_PREF="drastic"
 log "Emulator preference: $EMU_PREF"
 
 USE_DRASTIC=0
 if [ -f "$DRASTIC_EXE" ]; then
-    if [ "$EMU_PREF" = "drastic" ] || [ -z "$EMU_PREF" ]; then
+    if [ "$EMU_PREF" = "drastic" ]; then
         USE_DRASTIC=1
-    elif [ "$PLATFORM" = "miyoomini" ]; then
-        log "Prioritizing standalone DraStic on miyoomini (libretro NDS requires >128MB RAM)..."
+    elif [ -z "$EMU_PREF" ]; then
+        # Default to DraStic if preference not explicitly chosen
         USE_DRASTIC=1
     fi
 fi

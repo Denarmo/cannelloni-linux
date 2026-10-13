@@ -8,6 +8,7 @@ import urllib.request
 import tarfile
 import binascii
 import subprocess
+import glob
 
 RELEASE_TAG = "v20261012-0"
 RELEASE_NAME = "Cannelloni-20261012-0"
@@ -170,13 +171,39 @@ def patch_about_page(data, name):
     return bytes(b)
 
 def patch_minarch_shaders_label(data):
-    """Patches 'Screen Effect\x00' in minarch.elf to 'Shaders\x00\x00\x00\x00\x00\x00\x00' so that
-    in-game menu shows 'Shaders' instead of 'Screen Effect'."""
-    target = b"Screen Effect\x00"
-    replacement = b"Shaders\x00\x00\x00\x00\x00\x00\x00"
-    if target in data:
-        return data.replace(target, replacement)
-    return data
+    """Patches minarch.elf so that:
+    1. 'Screen Effect\x00' becomes 'Shaders\x00\x00\x00\x00\x00\x00\x00'
+    2. 'Line\x00' becomes 'CRT\x00\x00' and 'Grid\x00' becomes 'LCD\x00\x00'
+    3. Effect description is updated to reflect Android Cannelloni Denarmo Shaders & Parameters
+    """
+    b = bytearray(data)
+
+    target_lbl = b"Screen Effect\x00"
+    repl_lbl = b"Shaders\x00\x00\x00\x00\x00\x00\x00"
+    idx = b.find(target_lbl)
+    if idx != -1:
+        b[idx : idx + len(target_lbl)] = repl_lbl
+
+    target_line = b"Line\x00"
+    target_grid = b"Grid\x00"
+    idx_line = b.find(target_line)
+    if idx_line != -1:
+        b[idx_line : idx_line + 5] = b"CRT\x00\x00"
+    idx_grid = b.find(target_grid)
+    if idx_grid != -1:
+        b[idx_grid : idx_grid + 5] = b"LCD\x00\x00"
+
+    desc_target = b"Grid simulates an LCD grid.\nLine simulates CRT scanlines.\nEffects usually look best at native scaling.\x00"
+    if desc_target in b:
+        desc_repl = b"Android Cannelloni Shaders: CRT, LCD, Scanlines & custom presets.\nConfigure parameters in Settings -> Shaders.\x00"
+        if len(desc_repl) < len(desc_target):
+            desc_repl += b"\x00" * (len(desc_target) - len(desc_repl))
+        elif len(desc_repl) > len(desc_target):
+            desc_repl = desc_repl[:len(desc_target)-1] + b"\x00"
+        b_idx = b.find(desc_target)
+        b[b_idx : b_idx + len(desc_target)] = desc_repl
+
+    return bytes(b)
 
 
 def build_dmenu_rg35xxplus():
@@ -388,6 +415,13 @@ def build_release():
                 with open(gold_asset, "rb") as fp:
                     data = fp.read()
 
+        # Override stock MinUI charging screen with official Cannelloni charging screen
+        if name == ".system/res/charging-640-480.png":
+            ch_path = "skeleton/SYSTEM/res/charging-640-480.png"
+            if os.path.isfile(ch_path):
+                with open(ch_path, "rb") as fp:
+                    data = fp.read()
+
         # Patch ELF binaries to bake in Cannelloni Gold (#f1c40f) for selection pills and slider bars
         if name.endswith("/bin/minui.elf") or name.endswith("/bin/cannelloni.elf"):
             data = patch_binary_accent_color(data, 241, 196, 15)
@@ -420,6 +454,19 @@ def build_release():
                 zinfo.external_attr = 0o644 << 16
             out_cannelloni_zip.writestr(zinfo, data)
             written_entries.add(name)
+
+    # Bundle charging animation frames into .system/res/
+    for ch_f in sorted(glob.glob("skeleton/SYSTEM/res/charging_*.png")):
+        bn = os.path.basename(ch_f)
+        with open(ch_f, "rb") as fp:
+            ch_data = fp.read()
+        dest = f".system/res/{bn}"
+        if dest not in written_entries:
+            zi = zipfile.ZipInfo(dest)
+            zi.compress_type = zipfile.ZIP_DEFLATED
+            zi.external_attr = 0o644 << 16
+            out_cannelloni_zip.writestr(zi, ch_data)
+            written_entries.add(dest)
 
     # Inject NDS Libretro cores across all platforms in Cannelloni.zip
     print("Injecting clean NDS libretro cores into Cannelloni.zip...")
@@ -550,6 +597,11 @@ def build_release():
             out_cannelloni_zip.writestr(zinfo_pa, accent_sh_bytes)
 
 
+    # Add common shaders into .system/common/shaders/
+    shaders_dir = "skeleton/SYSTEM/common/shaders"
+    if os.path.isdir(shaders_dir):
+        add_dir_to_zip(out_cannelloni_zip, shaders_dir, ".system/common/shaders", written_entries)
+
     # Add network_store.sh across common and platforms
     net_sh_path = "skeleton/SYSTEM/common/network_store.sh"
     if os.path.isfile(net_sh_path):
@@ -665,6 +717,9 @@ def build_release():
         (".userdata/shared/.cannelloni/language.txt", b"en\n"),
         (".userdata/shared/.cannelloni/emu_nds.txt", b"drastic\n"),
         (".userdata/shared/.cannelloni/button_swap.txt", b"default\n"),
+        (".userdata/shared/.cannelloni/shader_preset.txt", b"crt-cannelloni\n"),
+        (".userdata/shared/.cannelloni/shader_intensity.txt", b"50\n"),
+        (".userdata/shared/.cannelloni/shader_curvature.txt", b"flat\n"),
     ]:
         if cfg_path not in written_entries:
             out_cannelloni_zip.writestr(cfg_path, cfg_val)
