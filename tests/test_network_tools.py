@@ -235,5 +235,58 @@ class BusyboxHttpTests(unittest.TestCase):
                 socket.create_connection(("127.0.0.1", port), timeout=0.2)
 
 
+@unittest.skipUnless(shutil.which("gcc"), "Native gcc is required")
+class NetworkMenuTests(unittest.TestCase):
+    def test_settings_launch_original_and_localized_network_paks(self):
+        source = (ROOT / "workspace/all/cannelloni/cannelloni.c").read_text()
+        function = re.search(r"^static void openNetworkPak\(.*?^\}", source, re.S | re.M).group()
+        harness = r'''
+#include <stdio.h>
+#include <string.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#define MAX_PATH 1024
+#define PLATFORM "miyoomini"
+static char* sd;
+#define SDCARD_PATH sd
+static char opened[MAX_PATH];
+static int exists(const char* path) { struct stat st; return stat(path, &st) == 0; }
+static void getFile(const char* path, char* out, size_t size) {
+    FILE* f = fopen(path, "r"); if (!f) return;
+    size_t n = fread(out, 1, size - 1, f); out[n] = 0; fclose(f);
+}
+static void trimTrailingNewlines(char* s) { s[strcspn(s, "\r\n")] = 0; }
+static void openPak(char* path) { snprintf(opened, sizeof(opened), "%s", path); }
+''' + function + r'''
+int main(int argc, char** argv) {
+    sd = argv[1];
+    openNetworkPak("Tools", "Nonna's Kitchen", "nonna");
+    if (!strstr(opened, "/Tools/miyoomini/Nonna's Kitchen.pak")) return 1;
+    opened[0] = 0;
+    openNetworkPak("Settings", "Wi-Fi", "wifi");
+    if (!strstr(opened, "/Settings/miyoomini/Red inalambrica.pak")) return 2;
+    opened[0] = 0;
+    openNetworkPak("Settings", "Missing", "not-present");
+    if (opened[0]) return 3;
+    return 0;
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for path, ident in (("Tools/miyoomini/Nonna's Kitchen.pak", "nonna"),
+                                ("Settings/miyoomini/Red inalambrica.pak", "wifi")):
+                folder = root / path
+                folder.mkdir(parents=True)
+                (folder / "launch.sh").write_text("#!/bin/sh\n")
+                (folder / ".pak_id").write_text(ident + "\n")
+            code = root / "menu.c"
+            code.write_text(harness)
+            binary = root / "menu.exe"
+            process = subprocess.run([shutil.which("gcc"), "-std=c99", str(code), "-o", str(binary)], capture_output=True)
+            self.assertEqual(process.returncode, 0, process.stderr)
+            process = subprocess.run([str(binary), root.as_posix()], capture_output=True)
+            self.assertEqual(process.returncode, 0, process.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
