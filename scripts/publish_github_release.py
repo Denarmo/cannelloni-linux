@@ -21,44 +21,44 @@ RELEASE_TITLE = "Cannelloni v20261012-0"
 UNIFIED_ZIP = "releases/Cannelloni-20261012-0.zip"
 ALIAS_ZIP = "releases/Cannelloni.zip"
 
+INSTALLER_ZIP = "releases/Cannelloni-Installer.zip"
+
 BODY = """# Cannelloni v20261012-0
 
 Welcome to Cannelloni for Linux handhelds (Anbernic, Miyoo, TrimUI, Powkiddy, MagicX, and GKD).
 
 ## What's New in this Release:
-- **Universal One-Zip Distribution**: All handheld platforms (Miyoo Mini, Mini Plus, A30, Flip, TrimUI, RG35XX, RG35XX Plus, RGB30, MagicX, GKD, M17) are packaged into a single unified archive. Users no longer need to find or copy platform-specific folders (`miyoo/`, `trimui/`, `rg35xx/`, etc.).
-- **Interactive 3-Step Setup Wizard**: On initial boot, Cannelloni presents an interactive setup wizard directly on screen in clear sequential steps:
-  1. **Language Selection**: Choose from 6 languages (English, Spanish, French, Portuguese - Brazil, German, Italian).
-  2. **Accent Color Theming**: Pick from 7 vibrant accent colors (Cannelloni Gold `#f1c40f`, Tomato Red, Basil Green, Sky Blue, and more), immediately applied to the interface.
-  3. **Handheld Console Selection**: Pick your exact device model from all 14 supported handhelds, automatically configuring the exact hardware drivers, bootloader dat assets, and optimized platform binaries.
-- **Language Setting & Full Localization**: Change language anytime directly from **Settings -> Language**. Comprehensive translation dictionaries included for English (`en`), Spanish (`es`), French (`fr`), Portuguese - Brazil (`pt_BR`), German (`de`), and Italian (`it`).
-- **Default Yellow Accent Color on First Boot**: Fixed first-boot theming by bundling pre-rendered `#f1c40f` spritesheets directly in the system assets and ensuring clean startup theme initialization without requiring manual color changing.
-- **Reliable Wi-Fi & Start-on-Boot**: Fixed Wi-Fi settings exiting immediately on launch, added hardware radio power management (`wifion`), and fixed automatic startup on boot paths in `auto.sh`.
-- **Denarmo Shaders & Shader Settings**: Integrated high-performance GLSL shaders directly from [Denarmo/cannelloni](https://github.com/Denarmo/cannelloni) (`crt-cannelloni`, `crt-cannelloni-lite`, `crt-easymode`, `crt-aperture`, `crt-geom`, `crt-lottes-fast`, `dot`, `lcd3x`, `scanline`, `sharp-bilinear-simple`, `zfast-crt`, `zfast-lcd`). Configure active preset and scope under **Settings -> Shaders**.
-- **Secure Wi-Fi Storage**: Wi-Fi credentials are stored encrypted/obfuscated in `.userdata/shared/.cannelloni/network.conf` with restricted `0600` permissions (never in plain text in the SD card root), with automatic background migration and sanitization from legacy `wifi.txt`.
-- **Official Boot Logo**: Centered cannelloni drawing with title **"Cannelloni"** and subtitle **"forked from MinUI/Cannoli"** across all handheld platforms, with automatic SPI flash programming on Miyoo Mini / Plus hardware.
-- **Attribution on About Page**: Pressing the Home (`MENU`) button displays **"Cannelloni"** and **"forked from MinUI/Cannoli"** cleanly without crashing.
-- **Permissive Licensing**: Explicit licensing terms establishing that upstream code is copyright Shaun Inman / MinUI contributors, while all Cannelloni additions and modifications are licensed under the permissive MIT License for anyone to freely use.
-- **Unified Single-Zip Distribution**: All core systems, emulators, tools, and platform installers delivered in one unified archive (`Cannelloni.zip` / `Cannelloni-20261012-0.zip`).
-- **New Top-Level Settings Menu**: Direct access from the main screen to:
-  - **Language**: Switch system language anytime on-device.
-  - **Wi-Fi**: Connect to wireless networks, view IP, and toggle auto-start on boot.
-  - **Accent Color**: Customize interface colors (Cannelloni Gold `#f1c40f`, Tomato Red, Basil Green, Sky Blue, and more).
-  - **Button Mapping**: Swap A/B and X/Y button layouts.
-  - **Emulators**: Choose preferred emulators per console (e.g. Libretro DeSmuME vs standalone DraStic for Nintendo DS).
-  - **Shaders**: Select shader preset and apply scope across consoles.
-  - **Device Model**: Interactively switch or reconfigure target handheld console hardware.
-- **Nonna's Kitchen (Web Dashboard)**: Wireless HTTP management service on port `1091` matching Android Cannelloni. Connect with any web browser to view storage, browse files, and drag-and-drop upload ROMs, BIOS, and Saves.
-- **Curated Tools Section**: Focused strictly on essential utilities: `Clock`, `Files`, `Input`, `IP`, and `Nonna's Kitchen`.
-- **Full Cannelloni Gold UI (#f1c40f)**: Uniform gold accent theming across all UI components, button badges `(A)`/`(B)`, battery fill and charging bolt, Wi-Fi icon, volume and brightness indicators, and solid gold selection pills across all screen scales (1x through 4x).
-- **Nintendo DS Emulation**: Libretro core implementation with in-game menu (`MENU` button) and save state support, alongside optional standalone DraStic.
+- **Portable Cross-Platform GUI SD Installer**: Delivered release archive includes a standalone, reactive GUI installer running seamlessly on both Windows and Linux with zero external dependencies:
+  - **Standalone Windows Executable (`Cannelloni-Installer.exe`)**: Double-clickable executable, no Python installation needed.
+  - **Windows Batch Launcher (`Cannelloni-Installer.bat`)** & **Linux Launcher (`Cannelloni-Installer.sh`)**.
+  - **Automatic Drive Detection**: Scans and identifies removable SD cards with storage metrics and manual browse fallback.
+  - **Live Dynamic Localization**: Switch between 6 languages (English, Spanish, French, Portuguese - Brazil, German, Italian) with instantaneous UI retranslation.
+  - **Live Accent Color Previews & Handheld Simulator**: Visual circular swatches with interactive retro handheld mockup reacting in real-time to color selections (Cannelloni Gold `#f1c40f`, Tomato Red, Basil Green, Sky Blue, Royal Purple, Carrot Orange, Clean White).
+  - **All 17 Supported Handheld Consoles**: Explicit profiles and hardware optimization for Miyoo Mini, Mini Plus, A30, Flip, TrimUI Smart, Smart Pro, Brick, Anbernic RG35XX, RG35XX Plus, RG35XX H, RG35XX SP, RG28XX, RG CubeXX, Powkiddy RGB30, MagicX XU10, GKD Pixel, and M17.
+  - **One-Click Automated Setup**: Extracts the full OS payload, writes hardware configuration flags, copies boot splash dat files, and pre-applies theme assets directly to the SD card.
+- **Universal Release Archive**: Archive contains `Cannelloni.zip` plus the portable installer and bootstrap files for instant one-click PC setup or direct on-device automatic unzipping.
+- **Interactive 3-Step Setup Wizard**: For direct on-device installs, Cannelloni presents an interactive setup wizard on initial boot (Language -> Accent Color -> Device Model).
+- **Full Localization**: Comprehensive translation dictionaries for English (`en`), Spanish (`es`), French (`fr`), Portuguese - Brazil (`pt_BR`), German (`de`), and Italian (`it`).
+- **Default Yellow Accent Color on First Boot**: High-contrast `#f1c40f` pre-rendered assets across all scales (1x through 4x).
+- **Reliable Wi-Fi & Start-on-Boot**: Hardware radio power management and auto-start services on boot.
+- **Denarmo Shaders & Shader Settings**: 12 GLSL CRT, scanline, and LCD shaders integrated under in-game menu and Settings -> Shaders.
+- **Secure Wi-Fi Storage**: Network credentials obfuscated in `.userdata/shared/.cannelloni/network.conf` with 0600 permissions.
+- **Nonna's Kitchen (Web Dashboard)**: Wireless HTTP management service on port 1091 for drag-and-drop uploading of ROMs, BIOS, and Saves.
+- **Nintendo DS Emulation**: Libretro core implementation with in-game menu and save state support, alongside optional standalone DraStic.
 
-## Installation:
+## Installation Methods:
+
+### Method 1: One-Click GUI Installer (Recommended)
+1. Extract the downloaded release archive (`Cannelloni.zip` or `Cannelloni-Installer.zip`).
+2. Run `Cannelloni-Installer.exe` (Windows) or `./Cannelloni-Installer.sh` (Linux).
+3. Select your SD card, Language, Accent Color, and Device Model.
+4. Click **Install Cannelloni to SD Card**.
+5. Safely eject the card, insert into your device, and power on!
+
+### Method 2: Direct On-Device Installation
 1. Format your SD card as FAT32 (MBR).
-2. Extract the single release archive (`Cannelloni.zip`) directly to the root of your SD card. No nested zips, and no need to hunt down device-specific folders—all platform bootstrap files are included!
-3. Insert the card into your handheld and power on.
-4. Cannelloni boots automatically and presents the interactive 3-step setup wizard on screen: select your Language, Accent Color, and Device Model!
-5. Unused platform folders and bootstrap files are automatically cleaned up and erased from the card.
+2. Copy `Cannelloni.zip` directly to the root of your SD card.
+3. Insert into your handheld and power on. Cannelloni extracts and configures automatically!
 """
 
 print(f"Creating or updating release {TAG} on {REPO}...")
@@ -122,8 +122,8 @@ except urllib.error.HTTPError as e:
     else:
         raise
 
-# 2. Upload single asset (Cannelloni.zip)
-assets_to_upload = [ALIAS_ZIP]
+# 2. Upload assets (Cannelloni.zip and Cannelloni-Installer.zip)
+assets_to_upload = [ALIAS_ZIP, INSTALLER_ZIP]
 
 # Fetch current assets list
 req_assets = urllib.request.Request(
@@ -193,3 +193,18 @@ for file_path in assets_to_upload:
         print(f"Successfully uploaded {asset_name} to GitHub Release {TAG}!")
 
 print(f"\nRelease published successfully: https://github.com/{REPO}/releases/tag/{TAG}")
+
+# Copy to E:\ if mounted
+if os.path.isdir("E:\\"):
+    import shutil
+    print("\nCopying release packages to mounted SD card at E:\\...")
+    try:
+        shutil.copy2(ALIAS_ZIP, "E:\\Cannelloni.zip")
+        shutil.copy2("dist/Cannelloni-Installer.exe", "E:\\Cannelloni-Installer.exe")
+        shutil.copy2("installer/Cannelloni-Installer.bat", "E:\\Cannelloni-Installer.bat")
+        shutil.copy2("installer/Cannelloni-Installer.sh", "E:\\Cannelloni-Installer.sh")
+        shutil.copy2("installer/cannelloni_installer.py", "E:\\cannelloni_installer.py")
+        print("Copied files to E:\\ successfully!")
+    except Exception as e:
+        print(f"Warning: Could not copy to E:\\: {e}")
+

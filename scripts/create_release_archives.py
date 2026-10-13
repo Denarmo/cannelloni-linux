@@ -1,4 +1,5 @@
 import os
+import sys
 import io
 import zipfile
 import shutil
@@ -6,6 +7,7 @@ import struct
 import urllib.request
 import tarfile
 import binascii
+import subprocess
 
 RELEASE_TAG = "v20261012-0"
 RELEASE_NAME = "Cannelloni-20261012-0"
@@ -15,6 +17,9 @@ SRC_BASE_ZIP = "build_release/temp/base.zip"
 SRC_EXTRAS_ZIP = "build_release/temp/extras.zip"
 OUT_DIR = "releases"
 OUT_UNIFIED_ZIP = os.path.join(OUT_DIR, f"{RELEASE_NAME}.zip")
+OUT_ALIAS_ZIP = os.path.join(OUT_DIR, "Cannelloni.zip")
+OUT_INSTALLER_ZIP = os.path.join(OUT_DIR, "Cannelloni-Installer.zip")
+PAYLOAD_ZIP = "build_release/temp/Cannelloni.zip"
 
 def add_dir_to_zip(zout, src_dir, zip_prefix, written_entries):
     """Recursively adds a local directory into a zip archive with proper permissions."""
@@ -289,8 +294,7 @@ def build_release():
         minui_zip_bytes = base_in.read("MinUI.zip")
 
     in_minui_zip = zipfile.ZipFile(io.BytesIO(minui_zip_bytes), "r")
-    out_cannelloni_release = os.path.join(OUT_DIR, "Cannelloni.zip")
-    out_cannelloni_zip = zipfile.ZipFile(out_cannelloni_release, "w", zipfile.ZIP_DEFLATED)
+    out_cannelloni_zip = zipfile.ZipFile(PAYLOAD_ZIP, "w", zipfile.ZIP_DEFLATED)
     written_entries = set()
 
     platforms = [
@@ -671,7 +675,7 @@ def build_release():
     # ----------------------------------------------------
     # 2. Add platform bootstrap files & user folders directly to single Cannelloni.zip
     # ----------------------------------------------------
-    print(f"Adding bootstrap files directly to single archive: {out_cannelloni_release}...")
+    print(f"Adding bootstrap files directly to single archive: {PAYLOAD_ZIP}...")
 
     BOOTSTRAP_DIRS = (
         "miyoo/", "miyoo354/", "miyoo355/", "miyoo285/", "trimui/",
@@ -820,9 +824,118 @@ def build_release():
     inject_spinner_frames(out_cannelloni_zip, written_entries)
 
     out_cannelloni_zip.close()
+    payload_size = os.path.getsize(PAYLOAD_ZIP)
+    print(f"Inner OS payload Cannelloni.zip built: {PAYLOAD_ZIP} ({payload_size} bytes, {len(written_entries)} entries)")
 
-    shutil.copyfile(out_cannelloni_release, OUT_UNIFIED_ZIP)
-    print(f"Single unified release archive completed: {out_cannelloni_release} ({os.path.getsize(out_cannelloni_release)} bytes, {len(written_entries)} entries)")
+    # ----------------------------------------------------
+    # 7. Build/ensure standalone Cannelloni-Installer.exe
+    # ----------------------------------------------------
+    installer_exe = "dist/Cannelloni-Installer.exe"
+    installer_script = "installer/cannelloni_installer.py"
+    if not os.path.isfile(installer_exe) or os.path.getmtime(installer_script) > os.path.getmtime(installer_exe):
+        print("Compiling standalone Cannelloni-Installer.exe with PyInstaller...")
+        subprocess.run([
+            sys.executable, "-m", "PyInstaller",
+            "--onefile", "--noconsole",
+            "--name", "Cannelloni-Installer",
+            installer_script
+        ], check=True)
+
+    # ----------------------------------------------------
+    # 8. Package final delivered release archives
+    # ----------------------------------------------------
+    print(f"Packaging final delivered release archives containing Cannelloni.zip + GUI installer...")
+    delivered_written = set()
+
+    with zipfile.ZipFile(OUT_UNIFIED_ZIP, "w", zipfile.ZIP_DEFLATED) as zout:
+        # A. Inner OS Payload
+        zinfo_payload = zipfile.ZipInfo("Cannelloni.zip")
+        zinfo_payload.compress_type = zipfile.ZIP_STORED  # Already deflated, avoid double compression
+        zinfo_payload.external_attr = 0o644 << 16
+        with open(PAYLOAD_ZIP, "rb") as f:
+            zout.writestr(zinfo_payload, f.read())
+        delivered_written.add("Cannelloni.zip")
+
+        # B. Portable Installer Executable (Windows)
+        with open(installer_exe, "rb") as f:
+            exe_bytes = f.read()
+        zinfo_exe = zipfile.ZipInfo("Cannelloni-Installer.exe")
+        zinfo_exe.compress_type = zipfile.ZIP_DEFLATED
+        zinfo_exe.external_attr = 0o755 << 16
+        zout.writestr(zinfo_exe, exe_bytes)
+        delivered_written.add("Cannelloni-Installer.exe")
+
+        # C. Windows Launcher
+        with open("installer/Cannelloni-Installer.bat", "rb") as f:
+            bat_bytes = f.read()
+        zinfo_bat = zipfile.ZipInfo("Cannelloni-Installer.bat")
+        zinfo_bat.compress_type = zipfile.ZIP_DEFLATED
+        zinfo_bat.external_attr = 0o644 << 16
+        zout.writestr(zinfo_bat, bat_bytes)
+        delivered_written.add("Cannelloni-Installer.bat")
+
+        # D. Linux Launcher
+        with open("installer/Cannelloni-Installer.sh", "rb") as f:
+            sh_bytes = f.read().replace(b"\r\n", b"\n")
+        zinfo_sh = zipfile.ZipInfo("Cannelloni-Installer.sh")
+        zinfo_sh.compress_type = zipfile.ZIP_DEFLATED
+        zinfo_sh.external_attr = 0o755 << 16
+        zout.writestr(zinfo_sh, sh_bytes)
+        delivered_written.add("Cannelloni-Installer.sh")
+
+        # E. Cross-platform Python Installer Script
+        with open("installer/cannelloni_installer.py", "rb") as f:
+            py_bytes = f.read().replace(b"\r\n", b"\n")
+        zinfo_py = zipfile.ZipInfo("cannelloni_installer.py")
+        zinfo_py.compress_type = zipfile.ZIP_DEFLATED
+        zinfo_py.external_attr = 0o755 << 16
+        zout.writestr(zinfo_py, py_bytes)
+        delivered_written.add("cannelloni_installer.py")
+
+        # F. README.txt
+        with open("skeleton/BASE/README.txt", "rb") as f:
+            readme_bytes = f.read().replace(b"\r\n", b"\n")
+        zinfo_readme = zipfile.ZipInfo("README.txt")
+        zinfo_readme.compress_type = zipfile.ZIP_DEFLATED
+        zinfo_readme.external_attr = 0o644 << 16
+        zout.writestr(zinfo_readme, readme_bytes)
+        delivered_written.add("README.txt")
+
+        # G. Platform bootstrap files & directories (for on-device direct boot)
+        with zipfile.ZipFile(PAYLOAD_ZIP, "r") as pz:
+            for item in pz.infolist():
+                name = item.filename
+                if name.startswith(BOOTSTRAP_DIRS) or name in (
+                    "dmenu.bin", "em_ui.sh",
+                    ".system/common/device_select.sh",
+                    ".system/miyoomini/paks/Cannelloni.pak/launch.sh"
+                ) or name.startswith("Emus/miyoomini/NDS-Drastic.pak/") or name.startswith("Emus/miyoomini/NDS.pak/") or name.startswith("Settings/") or name.startswith("Tools/"):
+                    if name not in delivered_written:
+                        zout.writestr(item, pz.read(name))
+                        delivered_written.add(name)
+
+    # Replicate delivered archive to Cannelloni.zip and Cannelloni-Installer.zip
+    shutil.copyfile(OUT_UNIFIED_ZIP, OUT_ALIAS_ZIP)
+    shutil.copyfile(OUT_UNIFIED_ZIP, OUT_INSTALLER_ZIP)
+
+    print(f"Delivered release archives completed:")
+    print(f" - {OUT_ALIAS_ZIP} ({os.path.getsize(OUT_ALIAS_ZIP)} bytes)")
+    print(f" - {OUT_UNIFIED_ZIP} ({os.path.getsize(OUT_UNIFIED_ZIP)} bytes)")
+    print(f" - {OUT_INSTALLER_ZIP} ({os.path.getsize(OUT_INSTALLER_ZIP)} bytes)")
+
+    # Copy to E:\ if mounted
+    if os.path.isdir("E:\\"):
+        print("Detected mounted SD drive at E:\\. Copying release packages...")
+        try:
+            shutil.copy2(OUT_ALIAS_ZIP, "E:\\Cannelloni.zip")
+            shutil.copy2(installer_exe, "E:\\Cannelloni-Installer.exe")
+            shutil.copy2("installer/Cannelloni-Installer.bat", "E:\\Cannelloni-Installer.bat")
+            shutil.copy2("installer/Cannelloni-Installer.sh", "E:\\Cannelloni-Installer.sh")
+            shutil.copy2("installer/cannelloni_installer.py", "E:\\cannelloni_installer.py")
+            print("Successfully copied release files to E:\\")
+        except Exception as e:
+            print(f"Warning: Could not copy to E:\\: {e}")
+
     print("Release archive built successfully!")
 
 if __name__ == "__main__":

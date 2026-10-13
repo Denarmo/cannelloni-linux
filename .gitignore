@@ -12,6 +12,8 @@ build_release
 releases
 toolchains
 libretro-common
+dist
+*.spec
 
 **/cores/src
 **/cores/output

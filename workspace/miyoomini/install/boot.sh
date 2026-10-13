@@ -86,6 +86,11 @@ if [ -f "$UPDATE_PATH" ] || [ "$FIRST_BOOT" = true ]; then
 		UNZIP_RESULT=$?
 		log "unzip exited with code: $UNZIP_RESULT"
 		
+		if [ -f "$SDCARD_PATH/Cannelloni.zip" ] && [ "$UPDATE_PATH" != "$SDCARD_PATH/Cannelloni.zip" ]; then
+			log "Found nested Cannelloni.zip, extracting..."
+			unzip -o "$SDCARD_PATH/Cannelloni.zip" -d "$SDCARD_PATH" >> "$LOG_FILE" 2>&1
+		fi
+		
 		log "Cleaning up archive..."
 		rm -f "$UPDATE_PATH"
 		rm -f "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null

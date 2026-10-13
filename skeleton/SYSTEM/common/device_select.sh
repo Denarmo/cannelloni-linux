@@ -51,6 +51,12 @@ log "Resolved LIST_BIN: '$LIST_BIN' (executable: $([ -x "$LIST_BIN" ] && echo YE
 
 MODE="$1"
 
+# Check if pre-configured by PC SD Installer
+if [ -z "$MODE" ] && [ -f "$DEVICE_TXT" ] && [ -f "$LANG_TXT" ] && [ -f "$COLOR_TXT" ]; then
+    log "Device, language, and theme are already pre-configured by SD Installer. Skipping wizard."
+    exit 0
+fi
+
 # ----------------------------------------------------
 # STEP 1: Language Selection (Skip if --device-only)
 # ----------------------------------------------------
@@ -203,10 +209,13 @@ TrimUI Smart
 TrimUI Smart Pro
 TrimUI Brick
 Anbernic RG35XX (Original)
-Anbernic RG35XX Plus / H / SP
+Anbernic RG35XX Plus
+Anbernic RG35XX H
+Anbernic RG35XX SP
+Anbernic RG28XX
+Anbernic RG CubeXX
 Powkiddy RGB30
-MagicX XU Mini M
-MagicX Mini Zero 28
+MagicX XU10
 GKD Pixel
 M17
 EOF
@@ -247,7 +256,7 @@ if [ -z "$SELECTED" ]; then
                 SELECTED="TrimUI Smart Pro"
             fi
             ;;
-        *"0xd03"*) SELECTED="MagicX Mini Zero 28" ;;
+        *"0xd03"*) SELECTED="MagicX XU10" ;;
         *)
             if [ -f /customer/app/axp_test ]; then
                 SELECTED="Miyoo Mini Plus (v4 / Wi-Fi)"
@@ -302,6 +311,22 @@ case "$SELECTED" in
         TARGET_PLATFORM="rg35xxplus"
         TARGET_DEVICE="rg35xxplus"
         ;;
+    *"Anbernic RG35XX H"*)
+        TARGET_PLATFORM="rg35xxplus"
+        TARGET_DEVICE="rg35xxh"
+        ;;
+    *"Anbernic RG35XX SP"*)
+        TARGET_PLATFORM="rg35xxplus"
+        TARGET_DEVICE="rg35xxsp"
+        ;;
+    *"Anbernic RG28XX"*)
+        TARGET_PLATFORM="rg35xxplus"
+        TARGET_DEVICE="rg28xx"
+        ;;
+    *"Anbernic RG CubeXX"*)
+        TARGET_PLATFORM="rg35xxplus"
+        TARGET_DEVICE="rgcubexx"
+        ;;
     *"Anbernic RG35XX ("*)
         TARGET_PLATFORM="rg35xx"
         TARGET_DEVICE="rg35xx"
@@ -310,13 +335,9 @@ case "$SELECTED" in
         TARGET_PLATFORM="rgb30"
         TARGET_DEVICE="rgb30"
         ;;
-    *"MagicX XU Mini M"*)
+    *"MagicX XU10"*|*"MagicX"*)
         TARGET_PLATFORM="magicmini"
         TARGET_DEVICE="magicmini"
-        ;;
-    *"MagicX Mini Zero 28"*)
-        TARGET_PLATFORM="zero28"
-        TARGET_DEVICE="zero28"
         ;;
     *"GKD Pixel"*)
         TARGET_PLATFORM="gkdpixel"

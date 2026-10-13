@@ -6,15 +6,25 @@ https://github.com/Denarmo/cannelloni-linux
 ----------------------------------------
 Installing
 
-UNIVERSAL ONE-ZIP INSTALLATION
+METHOD 1: ONE-CLICK GUI INSTALLER (RECOMMENDED)
 
-Cannelloni features a universal single-zip installation method. You are no longer required to identify or manually copy device-specific folders!
+The release archive includes a portable GUI installer for Windows and Linux with zero external dependencies:
+1. Insert your FAT32 formatted SD card into your PC.
+2. Launch the installer:
+   - On Windows: Double-click 'Cannelloni-Installer.exe' (or 'Cannelloni-Installer.bat')
+   - On Linux: Run './Cannelloni-Installer.sh' (or 'python3 cannelloni_installer.py')
+3. Select your SD card drive, Language, Accent Color, and Handheld Device Model.
+4. Click 'Install Cannelloni to SD Card'.
+5. Safely eject the card, insert into your handheld, and power on!
 
+METHOD 2: UNIVERSAL ON-DEVICE INSTALLATION
+
+Cannelloni also supports direct on-device automatic installation:
 1. Format your SD card as FAT32 (MBR).
-2. Simply drop the downloaded Cannelloni release zip (Cannelloni.zip or Cannelloni-20261012-0.zip) directly to the root of your SD card. No manual extraction on PC required!
+2. Drop 'Cannelloni.zip' directly onto the root of your SD card.
 3. Insert the SD card into your device and power it on.
-4. Cannelloni will automatically detect the archive, extract all system and platform files, run the interactive 3-step setup wizard (Language -> Accent Color -> Device Model), and completely erase the zip file from your SD card once finished!
-5. If you ever want to reconfigure your hardware or switch devices, simply navigate to Settings -> Device Model.
+4. Cannelloni will automatically extract system files, run the setup wizard, and clean up the archive!
+5. Reconfigure anytime under Settings -> Device Model, Accent Color, or Language.
 
 SUPPORTED HARDWARE:
 - Miyoo Mini (v1 / v2 / v3)
