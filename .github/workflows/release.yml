@@ -4,15 +4,77 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g. 20261012-0)'
-        required: true
-        default: '20261012-0'
+        description: 'Semantic version (e.g. 1.0.0); leave blank to use VERSION'
+        required: false
   push:
     tags:
       - 'v*'
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate semantic release version
+        id: version
+        env:
+          RELEASE_VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+        run: python scripts/release_version.py --github-output
+      - run: python -m unittest discover -s tests -v
+
+  frontends:
+    needs: test
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [gkdpixel, m17, magicmini, miyoomini, my282, my355, rg35xx, rg35xxplus, rgb30, tg5040, trimuismart, zero28]
+        runner: [ubuntu-latest]
+        exclude:
+          - {platform: magicmini, runner: ubuntu-latest}
+          - {platform: my355, runner: ubuntu-latest}
+          - {platform: zero28, runner: ubuntu-latest}
+        include:
+          - {platform: magicmini, runner: ubuntu-24.04-arm}
+          - {platform: my355, runner: ubuntu-24.04-arm}
+          - {platform: zero28, runner: ubuntu-24.04-arm}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile current launcher, emulator frontend and DS core
+        run: sh scripts/build_release_frontends.sh '${{ matrix.platform }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontends-${{ matrix.platform }}
+          if-no-files-found: error
+          path: |
+            workspace/all/cannelloni/build/${{ matrix.platform }}/cannelloni.elf
+            workspace/all/minarch/build/${{ matrix.platform }}/minarch.elf
+            workspace/${{ matrix.platform }}/cores/output/*_libretro.so
+
+  windows-installer:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pyinstaller
+      - run: python -m PyInstaller --onefile --noconsole --add-data "VERSION;." --name Cannelloni-Installer installer/cannelloni_installer.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/Cannelloni-Installer.exe
+          if-no-files-found: error
+
   release:
+    needs: [test, frontends, windows-installer]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -28,18 +90,34 @@ jobs:
         with:
           python-version: '3.12'
 
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: frontends-*
+          path: workspace
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: dist
+
       - name: Build Release Archives
+        env:
+          RELEASE_VERSION: ${{ needs.test.outputs.version }}
         run: |
           python scripts/create_release_archives.py
+          python scripts/verify_release_archive.py releases/Cannelloni-Installer.zip --built-workspace workspace
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.version && format('v{0}', github.event.inputs.version) || github.ref_name }}
-          name: Cannelloni ${{ github.event.inputs.version && format('v{0}', github.event.inputs.version) || github.ref_name }}
+          tag_name: ${{ needs.test.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Cannelloni ${{ needs.test.outputs.version }}
+          body_path: RELEASE_NOTES.md
           draft: false
           prerelease: false
+          make_latest: true
           generate_release_notes: true
           files: |
-            releases/*-base.zip
-            releases/*-extras.zip
+            releases/*.zip

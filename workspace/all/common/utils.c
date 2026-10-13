@@ -102,15 +102,10 @@ void getEmuName(const char* in_name, char* out_name) { // NOTE: both char arrays
 }
 void getEmuPath(char* emu_name, char* pak_path) {
 	if (strcmp(emu_name, "NDS") == 0) {
-		char pref_path[256];
-		sprintf(pref_path, "%s/.cannelloni/emu_nds.txt", SHARED_USERDATA_PATH);
-		char pref[32] = {0};
-		getFile(pref_path, pref, sizeof(pref));
-		trimTrailingNewlines(pref);
-		if (strcmp(pref, "libretro") == 0) {
-			sprintf(pak_path, "%s/Emus/%s.pak/launch.sh", PAKS_PATH, emu_name);
-			if (exists(pak_path)) return;
-		}
+		// The bundled launcher handles emulator selection and preference migration.
+		// Older external NDS.pak launchers run DraStic directly and bypass the OS menu.
+		sprintf(pak_path, "%s/Emus/%s.pak/launch.sh", PAKS_PATH, emu_name);
+		if (exists(pak_path)) return;
 	}
 	sprintf(pak_path, "%s/Emus/%s/%s.pak/launch.sh", SDCARD_PATH, PLATFORM, emu_name);
 	if (exists(pak_path)) return;

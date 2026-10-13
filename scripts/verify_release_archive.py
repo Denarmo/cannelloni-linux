@@ -1,63 +1,85 @@
-import zipfile, io, struct
+"""Verify rebuilt release payloads without relying on old MinUI ELF offsets."""
+import argparse
+from contextlib import ExitStack
+from pathlib import Path
+import shutil
+import struct
+import tempfile
+import zipfile
 
-print("=== VERIFYING RELEASES/Cannelloni-20261012-0.zip ===")
-with zipfile.ZipFile('releases/Cannelloni-20261012-0.zip') as root_z:
-    root_names = root_z.namelist()
-    print(f"Total entries in root zip: {len(root_names)}")
-    
-    # 1. Check Cannelloni.zip
-    assert "Cannelloni.zip" in root_names, "Cannelloni.zip missing!"
-    cz_bytes = root_z.read("Cannelloni.zip")
-    
-    with zipfile.ZipFile(io.BytesIO(cz_bytes)) as cz:
-        cz_names = cz.namelist()
-        print(f"Total entries in Cannelloni.zip: {len(cz_names)}")
-        
-        # Check cannelloni.elf
-        elf_data = cz.read(".system/miyoomini/bin/cannelloni.elf")
-        w1 = struct.unpack_from('<I', elf_data, 0x18648)[0]
-        w2 = struct.unpack_from('<I', elf_data, 0x18650)[0]
-        w3 = struct.unpack_from('<I', elf_data, 0x18654)[0]
-        print(f"cannelloni.elf ARM gold patch: 0x18648={hex(w1)}, 0x18650={hex(w2)}, 0x18654={hex(w3)}")
-        assert w1 == 0xe3a0300f, f"Expected 0xe3a0300f, got {hex(w1)}"
-        assert w2 == 0xe3a020c4, f"Expected 0xe3a020c4, got {hex(w2)}"
-        assert w3 == 0xe3a010f1, f"Expected 0xe3a010f1, got {hex(w3)}"
-        print("  -> cannelloni.elf is 100% CANNELLONI GOLD (no white pill center)!")
-        
-        # Check themes
-        themes = [n for n in cz_names if n.startswith(".system/res/themes/")]
-        print(f"Found {len(themes)} theme files in .system/res/themes/")
-        assert len(themes) >= 28, f"Expected at least 28 theme files (7 themes * 4 sizes), got {len(themes)}"
-        
-        # Check apply_accent_color.sh
-        assert ".system/bin/apply_accent_color.sh" in cz_names, "apply_accent_color.sh missing in .system/bin/"
-        
-        # Check cores
-        assert ".system/miyoomini/cores/desmume2015_libretro.so" in cz_names, "desmume2015_libretro.so missing!"
-        assert ".system/miyoomini/cores/melonds_libretro.so" in cz_names, "melonds_libretro.so missing!"
-        assert ".system/miyoomini/lib/libstdc++.so.6" in cz_names, "libstdc++.so.6 missing!"
-        print("  -> NDS libretro cores and libstdc++ are present!")
-        
-    # Check DraStic standalone in root zip
-    drastic_files = [n for n in root_names if n.startswith("Emus/miyoomini/NDS-Drastic.pak/")]
-    print(f"NDS-Drastic.pak files count: {len(drastic_files)}")
-    assert "Emus/miyoomini/NDS-Drastic.pak/drastic" in root_names, "drastic executable missing!"
-    assert "Emus/miyoomini/NDS-Drastic.pak/game_database.xml" in root_names, "game_database.xml missing!"
-    assert "Emus/miyoomini/NDS-Drastic.pak/libs/libSDL2-2.0.so.0" in root_names, "libSDL2 missing!"
-    assert "Emus/miyoomini/NDS-Drastic.pak/libs/libasound.so.2" in root_names, "libasound missing!"
-    
-    # Check executable bit on drastic
-    zinfo = root_z.getinfo("Emus/miyoomini/NDS-Drastic.pak/drastic")
-    perm = zinfo.external_attr >> 16
-    print(f"DraStic binary permissions: {oct(perm)}")
-    assert perm & 0o111, "drastic binary is not executable!"
-    
-    # Check NDS.pak launch.sh
-    assert "Emus/miyoomini/NDS.pak/launch.sh" in root_names, "NDS.pak launch.sh missing!"
-    nds_sh = root_z.read("Emus/miyoomini/NDS.pak/launch.sh").decode('utf-8')
-    assert "SDL_VIDEODRIVER=mmiyoo" in nds_sh, "mmiyoo video driver missing in NDS.pak/launch.sh!"
-    assert "audioserver" in nds_sh, "audioserver handling missing in NDS.pak/launch.sh!"
-    assert "minarch.elf" in nds_sh, "minarch.elf missing in NDS.pak/launch.sh!"
-    print("  -> NDS.pak launch.sh verified with both Libretro and DraStic support!")
+from create_release_archives import PLATFORMS, load_built_frontends
+from nds_cores import NDS_CORES
+from release_version import release_version
 
-print("\nALL VERIFICATION CHECKS PASSED SUCCESSFULLY!")
+
+def elf_target(data):
+    if len(data) < 20 or data[:4] != b"\x7fELF" or data[4] not in (1, 2) or data[5] not in (1, 2):
+        raise ValueError("Invalid ELF header in release")
+    return data[4], data[5], struct.unpack_from("<H" if data[5] == 1 else ">H", data, 18)[0]
+
+
+def verify_payload(payload, platforms=PLATFORMS, builds=None):
+    names = payload.namelist()
+    if payload.read(".system/version.txt").decode("utf-8").splitlines()[0] != release_version():
+        raise ValueError("OS version does not match VERSION")
+    for platform in platforms:
+        base = f".system/{platform}/"
+        for name in ("cannelloni", "minarch"):
+            filename = base + f"bin/{name}.elf"
+            if names.count(filename) != 1:
+                raise ValueError(f"Missing or duplicate frontend: {filename}")
+            data = payload.read(filename)
+            elf_target(data)
+            if builds is not None and data != builds[(platform, name)]:
+                raise ValueError(f"Frontend differs from current build: {filename}")
+        frontend = payload.read(base + "bin/minarch.elf")
+        if b"cannelloni_shader_mask" not in frontend:
+            raise ValueError(f"Shader-enabled minarch missing for {platform}")
+        cores = [base + "cores/" + name for name in NDS_CORES if base + "cores/" + name in names]
+        if not cores:
+            raise ValueError(f"NDS libretro core missing for {platform}")
+        for core in cores:
+            if names.count(core) != 1 or elf_target(payload.read(core)) != elf_target(frontend):
+                raise ValueError(f"Duplicate or incompatible NDS core: {core}")
+        launcher = payload.read(base + "paks/Emus/NDS.pak/launch.sh")
+        if b'EMU_PREF="libretro"' not in launcher or b"minarch.elf" not in launcher:
+            raise ValueError(f"NDS launcher does not default to minarch: {platform}")
+        if b"-minarch_screen_effect" in payload.read(base + "system.cfg"):
+            raise ValueError(f"Obsolete hardware effect lock: {platform}")
+    for filename in (".system/common/shaders/README.txt", ".system/common/shaders/LICENSE.txt"):
+        payload.getinfo(filename)
+    for filename in names:
+        if filename.startswith(".system/res/themes/") and Path(filename).name in ("minarch.elf", "minui.elf", "cannelloni.elf"):
+            raise ValueError(f"Theme may overwrite current frontend: {filename}")
+
+
+def verify_archive(path, workspace=None):
+    builds = load_built_frontends(PLATFORMS, workspace) if workspace is not None else None
+    with ExitStack() as stack:
+        archive = stack.enter_context(zipfile.ZipFile(path))
+        if Path(path).name == "Cannelloni-Installer.zip":
+            allowed = {"Cannelloni.zip", "Cannoli.zip", "Cannelloni-Installer.exe",
+                       "Cannelloni-Installer.bat", "Cannelloni-Installer.sh", "cannelloni_installer.py", "README.txt", "VERSION"}
+            if set(archive.namelist()) - allowed:
+                raise ValueError("Installer contains loose OS files outside its payload")
+            if archive.read("VERSION").decode("utf-8").strip() != release_version():
+                raise ValueError("Installer version does not match VERSION")
+        for _ in range(3):
+            nested = next((name for name in ("Cannelloni.zip", "Cannoli.zip") if name in archive.namelist()), None)
+            if nested is None:
+                break
+            temporary = stack.enter_context(tempfile.TemporaryFile())
+            with archive.open(nested) as source:
+                shutil.copyfileobj(source, temporary)
+            temporary.seek(0)
+            archive = stack.enter_context(zipfile.ZipFile(temporary))
+        verify_payload(archive, builds=builds)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("archive", type=Path)
+    parser.add_argument("--built-workspace", type=Path, help="Compare frontend bytes against this build workspace")
+    args = parser.parse_args()
+    verify_archive(args.archive, args.built_workspace)
+    print(f"Verified current frontends, NDS cores and shader assets: {args.archive}")

@@ -12,7 +12,15 @@ endif
 
 ###########################################################
 
-.PHONY: all
+.PHONY: all frontends
+.DEFAULT_GOAL := all
+
+frontends:
+	cd ./$(PLATFORM)/libmsettings && make
+	cd ./$(PLATFORM) && make early
+	cd ./all/cannelloni && make
+	cd ./all/minarch && make
+	cd ./$(PLATFORM)/cores && make nds
 
 all:
 	cd ./$(PLATFORM)/libmsettings && make

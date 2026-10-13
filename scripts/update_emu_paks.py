@@ -140,7 +140,7 @@ EOF
 
         case "$CHOICE" in
             *"DraStic"*|*"Drastic"*)
-                echo "drastic" > "$NDS_CFG"
+                echo "drastic-standalone" > "$NDS_CFG"
                 MSG="$MSG_DRA"
                 ;;
             *)

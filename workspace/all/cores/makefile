@@ -12,6 +12,24 @@ endif
 
 # overrides shared by all cores
 
+# Upstream melonDS has a generic Unix target, not Cannelloni platform targets.
+# Passing e.g. platform=miyoomini otherwise selects its Windows fallback.
+melonds_HASH = 66b5d2634cd0a79030562811e6e05f5532f800ba
+melonds_ARCH = $(firstword $(subst -, ,$(shell $(CROSS_COMPILE)gcc -dumpmachine)))
+melonds_MAKE = $(MAKE) platform=unix ARCH=$(subst aarch64,arm64,$(melonds_ARCH)) CC=$(CROSS_COMPILE)gcc CXX="$(CROSS_COMPILE)g++ -static-libgcc -static-libstdc++" AR=$(CROSS_COMPILE)ar HAVE_OPENGL=0 HAVE_OPENGLES3=0
+
+desmume2015_HASH = 422b688009ccb9f2917c086a8fe79c8cecb030ae
+desmume2015_BUILD_PATH = desmume2015/desmume
+desmume2015_MAKE = $(MAKE) -f Makefile.libretro platform=unix CC=$(CROSS_COMPILE)gcc CXX="$(CROSS_COMPILE)g++ -static-libgcc -static-libstdc++" AR=$(CROSS_COMPILE)ar DESMUME_JIT=0 DESMUME_JIT_ARM=0
+
+# C++17 support differs across official device toolchains. Both choices use
+# minarch and the same OS menu; the core filename always identifies its build.
+NDS_CORE := $(shell CROSS_COMPILE='$(CROSS_COMPILE)' sh ../../all/cores/select-nds-core.sh)
+ifeq (,$(NDS_CORE))
+$(error Unable to select an NDS core; check CROSS_COMPILE and the device C++ compiler)
+endif
+override CORES := $(filter-out melonds desmume2015,$(CORES)) $(NDS_CORE)
+
 # commits after this one break save states (as of 20231025)
 # gpsp_HASH = 1d1c719
 
@@ -68,7 +86,10 @@ endef
 
 all: cores
 
-$(foreach CORE,$(CORES),$(eval $(call TEMPLATE,$(CORE))))
+$(foreach CORE,$(sort $(CORES) melonds desmume2015),$(eval $(call TEMPLATE,$(CORE))))
+
+.PHONY: nds
+nds: $(NDS_CORE)
 
 cores: $(foreach CORE,$(CORES),$(CORE))
 	

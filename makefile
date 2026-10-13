@@ -17,11 +17,8 @@ endif
 ###########################################################
 
 BUILD_HASH:=$(shell git rev-parse --short HEAD)
-RELEASE_TIME:=$(shell TZ=GMT date +%Y%m%d)
-RELEASE_BETA=
-RELEASE_BASE=Cannelloni-$(RELEASE_TIME)$(RELEASE_BETA)
-RELEASE_DOT:=$(shell find -E ./releases/. -regex ".*/${RELEASE_BASE}-[0-9]+-base\.zip" | wc -l | sed 's/ //g')
-RELEASE_NAME=$(RELEASE_BASE)-$(RELEASE_DOT)
+RELEASE_VERSION:=$(strip $(shell cat VERSION))
+RELEASE_NAME=Cannelloni-$(RELEASE_VERSION)
 
 ###########################################################
 
@@ -65,7 +62,7 @@ cores: # TODO: can't assume every platform will have the same stock cores (platf
 	cp ./workspace/$(PLATFORM)/cores/output/picodrive_libretro.so ./build/SYSTEM/$(PLATFORM)/cores
 	cp ./workspace/$(PLATFORM)/cores/output/snes9x2005_plus_libretro.so ./build/SYSTEM/$(PLATFORM)/cores
 	cp ./workspace/$(PLATFORM)/cores/output/pcsx_rearmed_libretro.so ./build/SYSTEM/$(PLATFORM)/cores
-	cp ./workspace/$(PLATFORM)/cores/output/melonds_libretro.so ./build/SYSTEM/$(PLATFORM)/cores
+	cp $(wildcard ./workspace/$(PLATFORM)/cores/output/melonds_libretro.so ./workspace/$(PLATFORM)/cores/output/desmume2015_libretro.so ./workspace/$(PLATFORM)/cores/output/desmume_libretro.so) ./build/SYSTEM/$(PLATFORM)/cores
 	
 	# extras
 ifeq ($(PLATFORM), trimuismart)
@@ -152,7 +149,7 @@ package: tidy
 	cp ./workspace/readmes/EXTRAS-out.txt ./build/EXTRAS/README.txt
 	rm -rf ./workspace/readmes
 	
-	cd ./build/SYSTEM && echo "$(RELEASE_NAME)\n$(BUILD_HASH)" > version.txt
+	printf '%s\n%s\n' "$(RELEASE_VERSION)" "$(BUILD_HASH)" > ./build/SYSTEM/version.txt
 	./commits.sh > ./build/SYSTEM/commits.txt
 	cd ./build && find . -type f -name '.DS_Store' -delete
 	mkdir -p ./build/PAYLOAD

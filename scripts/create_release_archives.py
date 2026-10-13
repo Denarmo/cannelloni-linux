@@ -10,9 +10,12 @@ import binascii
 import subprocess
 import glob
 
-RELEASE_TAG = "v20261012-0"
-RELEASE_NAME = "Cannelloni-20261012-0"
-COMMIT_HASH = "daeb0044fa9202568778f309a96eec5d36e885d9"
+from nds_cores import collect_nds_cores
+from release_version import release_version
+
+RELEASE_VERSION = release_version()
+RELEASE_TAG = "v" + RELEASE_VERSION
+RELEASE_NAME = "Cannelloni-" + RELEASE_VERSION
 
 SRC_BASE_ZIP = "build_release/temp/base.zip"
 SRC_EXTRAS_ZIP = "build_release/temp/extras.zip"
@@ -21,6 +24,36 @@ OUT_UNIFIED_ZIP = os.path.join(OUT_DIR, f"{RELEASE_NAME}.zip")
 OUT_ALIAS_ZIP = os.path.join(OUT_DIR, "Cannelloni.zip")
 OUT_INSTALLER_ZIP = os.path.join(OUT_DIR, "Cannelloni-Installer.zip")
 PAYLOAD_ZIP = "build_release/temp/Cannelloni.zip"
+
+def add_installer_files(zout, payload_path, installer_exe):
+    """Store one OS payload alongside the installer, without loose OS copies."""
+    zout.write(payload_path, "Cannelloni.zip", compress_type=zipfile.ZIP_STORED)
+    installer_files = [
+        ("VERSION", "VERSION", 0o644),
+        ("installer/Cannelloni-Installer.bat", "Cannelloni-Installer.bat", 0o644),
+        ("installer/Cannelloni-Installer.sh", "Cannelloni-Installer.sh", 0o755),
+        ("installer/cannelloni_installer.py", "cannelloni_installer.py", 0o755),
+        ("installer/README.txt", "README.txt", 0o644),
+    ]
+    if installer_exe is not None:
+        installer_files.append((installer_exe, "Cannelloni-Installer.exe", 0o755))
+    for path, name, mode in installer_files:
+        with open(path, "rb") as source:
+            data = source.read()
+        if name.endswith((".sh", ".py", ".txt")):
+            data = data.replace(b"\r\n", b"\n")
+        info = zipfile.ZipInfo(name)
+        info.create_system = 3
+        info.compress_type = zipfile.ZIP_DEFLATED
+        info.external_attr = mode << 16
+        zout.writestr(info, data)
+
+
+def build_installer_archive(output_path, payload_path, installer_exe):
+    """The desktop installer consumes the archive; it needs no bootstraps."""
+    with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as archive:
+        add_installer_files(archive, payload_path, installer_exe)
+
 
 def add_dir_to_zip(zout, src_dir, zip_prefix, written_entries):
     """Recursively adds a local directory into a zip archive with proper permissions."""
@@ -31,6 +64,8 @@ def add_dir_to_zip(zout, src_dir, zip_prefix, written_entries):
             full_path = os.path.join(root, f)
             rel = os.path.relpath(full_path, src_dir).replace("\\", "/")
             dest = f"{zip_prefix}/{rel}".strip("/")
+            if dest.startswith(".system/res/themes/") and f in ("cannelloni.elf", "minui.elf", "minarch.elf"):
+                continue  # Frontends read the selected accent at runtime.
             if dest in written_entries:
                 continue
             with open(full_path, "rb") as fp:
@@ -141,71 +176,6 @@ def patch_binary_accent_color(data, r=0xf1, g=0xc4, b=0x0f):
 
     return bytes(barr)
 
-def patch_minui_settings(data, platform):
-    """Patches minui.elf so that /mnt/SDCARD/Settings/<platform> is discovered and
-    added to root alongside Tools."""
-    if platform != 'miyoomini':
-        return data
-    b = bytearray(data)
-    hook_offset = 0x1bb98
-    jump_offset = 0x54ac
-    hook_bin_path = 'build_release/temp/hook_resolved.bin'
-    if os.path.isfile(hook_bin_path) and len(b) > hook_offset + 300:
-        if b[jump_offset:jump_offset+4] == b'\xb4\x00\x0b\xe3':
-            with open(hook_bin_path, 'rb') as f:
-                hook = f.read()
-            b[hook_offset : hook_offset + len(hook)] = hook
-            b_inst = 0xea000000 | 0x59b9
-            b[jump_offset : jump_offset + 4] = struct.pack('<I', b_inst)
-            print("Patched Settings menu hook into miyoomini ELF!")
-    return bytes(b)
-
-def patch_about_page(data, name):
-    """Patches minui.elf to display About and Fork labels on the About page.
-    Leaves the version.txt path completely untouched to prevent any crash."""
-    b = bytearray(data)
-    idx = b.find(b"Release\x00Commit\x00\x00")
-    if idx != -1:
-        b[idx : idx+8] = b"About\x00\x00\x00"
-        b[idx+8 : idx+16] = b"Fork\x00\x00\x00\x00"
-    return bytes(b)
-
-def patch_minarch_shaders_label(data):
-    """Patches minarch.elf so that:
-    1. 'Screen Effect\x00' becomes 'Shaders\x00\x00\x00\x00\x00\x00\x00'
-    2. 'Line\x00' becomes 'CRT\x00\x00' and 'Grid\x00' becomes 'LCD\x00\x00'
-    3. Effect description is updated to reflect Android Cannelloni Denarmo Shaders & Parameters
-    """
-    b = bytearray(data)
-
-    target_lbl = b"Screen Effect\x00"
-    repl_lbl = b"Shaders\x00\x00\x00\x00\x00\x00\x00"
-    idx = b.find(target_lbl)
-    if idx != -1:
-        b[idx : idx + len(target_lbl)] = repl_lbl
-
-    target_line = b"Line\x00"
-    target_grid = b"Grid\x00"
-    idx_line = b.find(target_line)
-    if idx_line != -1:
-        b[idx_line : idx_line + 5] = b"CRT\x00\x00"
-    idx_grid = b.find(target_grid)
-    if idx_grid != -1:
-        b[idx_grid : idx_grid + 5] = b"LCD\x00\x00"
-
-    desc_target = b"Grid simulates an LCD grid.\nLine simulates CRT scanlines.\nEffects usually look best at native scaling.\x00"
-    if desc_target in b:
-        desc_repl = b"Android Cannelloni Shaders: CRT, LCD, Scanlines & custom presets.\nConfigure parameters in Settings -> Shaders.\x00"
-        if len(desc_repl) < len(desc_target):
-            desc_repl += b"\x00" * (len(desc_target) - len(desc_repl))
-        elif len(desc_repl) > len(desc_target):
-            desc_repl = desc_repl[:len(desc_target)-1] + b"\x00"
-        b_idx = b.find(desc_target)
-        b[b_idx : b_idx + len(desc_target)] = desc_repl
-
-    return bytes(b)
-
-
 def build_dmenu_rg35xxplus():
     """Builds RG35XX Plus/H/SP/CubeXX/28XX dmenu.bin with official Cannelloni assets."""
     with zipfile.ZipFile(SRC_BASE_ZIP) as z:
@@ -300,7 +270,48 @@ def inject_spinner_frames(zout, written_entries):
                         zout.writestr(zi, frame_bytes)
                         written_entries.add(dest)
 
+PLATFORMS = (
+    'gkdpixel', 'm17', 'magicmini', 'miyoomini', 'my282', 'my355',
+    'rg35xx', 'rg35xxplus', 'rgb30', 'tg5040', 'trimuismart', 'zero28',
+)
+
+
+def load_built_frontends(platforms, workspace="workspace"):
+    """Never ship an old MinUI binary in place of the modified source."""
+    binaries = {}
+    for platform in platforms:
+        for name in ("cannelloni", "minarch"):
+            path = os.path.join(workspace, "all", name, "build", platform, name + ".elf")
+            if not os.path.isfile(path):
+                raise FileNotFoundError(
+                    f"Missing rebuilt {name} for {platform}: {path}. "
+                    "Run scripts/build_release_frontends.sh in its device toolchain first."
+                )
+            with open(path, "rb") as source:
+                data = source.read()
+            if len(data) < 52 or data[:4] != b"\x7fELF":
+                raise ValueError(f"Not a Linux ELF executable: {path}")
+            binaries[(platform, name)] = data
+    return binaries
+
+
+def add_built_frontends(archive, binaries, written_entries):
+    """Install exact current binaries even if a template omits a platform."""
+    for (platform, name), data in binaries.items():
+        filenames = ("cannelloni.elf", "minui.elf") if name == "cannelloni" else ("minarch.elf",)
+        for filename in filenames:
+            destination = f".system/{platform}/bin/{filename}"
+            info = zipfile.ZipInfo(destination)
+            info.create_system = 3
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o755 << 16
+            archive.writestr(info, data)
+            written_entries.add(destination)
+
+
 def build_release():
+    platforms = PLATFORMS
+    frontends = load_built_frontends(platforms)
     os.makedirs("build_release/temp", exist_ok=True)
     os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -324,15 +335,31 @@ def build_release():
     out_cannelloni_zip = zipfile.ZipFile(PAYLOAD_ZIP, "w", zipfile.ZIP_DEFLATED)
     written_entries = set()
 
-    platforms = [
-        'gkdpixel', 'm17', 'magicmini', 'miyoomini', 'my282', 'my355',
-        'rg35xx', 'rg35xxplus', 'rgb30', 'tg5040', 'trimuismart', 'zero28'
-    ]
+    nds_cores = collect_nds_cores(platforms)
+    add_built_frontends(out_cannelloni_zip, frontends, written_entries)
+    commit_hash = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
+    out_cannelloni_zip.writestr(".system/version.txt", f"{RELEASE_VERSION}\n{commit_hash}\n")
+    written_entries.add(".system/version.txt")
+
+    # Current platform options include the portable shader renderer. Do not
+    # restore old template locks for platforms without hardware Line/Grid.
+    for platform in platforms:
+        for config_path in sorted(glob.glob(f"skeleton/SYSTEM/{platform}/system*.cfg")):
+            destination = f".system/{platform}/{os.path.basename(config_path)}"
+            with open(config_path, "rb") as config_file:
+                config_data = config_file.read().replace(b"\r\n", b"\n")
+            out_cannelloni_zip.writestr(destination, config_data)
+            written_entries.add(destination)
 
     # Read all entries from MinUI.zip, adapting and updating
     for item in in_minui_zip.infolist():
         name = item.filename
         data = in_minui_zip.read(name)
+        if name in nds_cores or name in written_entries:
+            continue
+
+        if name.startswith(".system/res/themes/") and name.endswith(("/minarch.elf", "/minui.elf", "/cannelloni.elf")):
+            continue
 
         # Skip MinUI.pak entries from upstream as they are superseded by skeleton Cannelloni.pak
         if "paks/MinUI.pak" in name:
@@ -372,10 +399,6 @@ def build_release():
                 data = content.encode("utf-8")
             except UnicodeDecodeError:
                 pass
-
-        # Update version.txt
-        if name == ".system/version.txt":
-            data = b"Cannelloni\nforked from MinUI/Cannoli\n"
 
         # Update dat boot logo files with official Cannelloni assets
         if name == ".system/miyoomini/dat/image1.jpg":
@@ -422,29 +445,6 @@ def build_release():
                 with open(ch_path, "rb") as fp:
                     data = fp.read()
 
-        # Patch ELF binaries to bake in Cannelloni Gold (#f1c40f) for selection pills and slider bars
-        if name.endswith("/bin/minui.elf") or name.endswith("/bin/cannelloni.elf"):
-            data = patch_binary_accent_color(data, 241, 196, 15)
-        elif name.endswith("/bin/minarch.elf"):
-            data = patch_binary_accent_color(data, 241, 196, 15)
-            data = patch_minarch_shaders_label(data)
-
-        # Patch About page and Settings menu hook into ELF
-        if name.endswith("/bin/minui.elf"):
-            data = patch_about_page(data, name)
-            if name == ".system/miyoomini/bin/minui.elf":
-                data = patch_minui_settings(data, "miyoomini")
-
-        # Ensure cannelloni.elf exists alongside minui.elf
-        if name.endswith("/bin/minui.elf"):
-            cannelloni_name = name.replace("/bin/minui.elf", "/bin/cannelloni.elf")
-            if cannelloni_name not in written_entries:
-                zinfo_c = zipfile.ZipInfo(cannelloni_name)
-                zinfo_c.compress_type = zipfile.ZIP_DEFLATED
-                zinfo_c.external_attr = 0o755 << 16
-                out_cannelloni_zip.writestr(zinfo_c, data)
-                written_entries.add(cannelloni_name)
-
         if name not in written_entries:
             zinfo = zipfile.ZipInfo(name)
             zinfo.compress_type = zipfile.ZIP_DEFLATED
@@ -468,34 +468,18 @@ def build_release():
             out_cannelloni_zip.writestr(zi, ch_data)
             written_entries.add(dest)
 
-    # Inject NDS Libretro cores across all platforms in Cannelloni.zip
-    print("Injecting clean NDS libretro cores into Cannelloni.zip...")
-    core_file = "build_release/temp/cores/desmume2015_libretro.so"
-    if os.path.isfile(core_file):
-        with open(core_file, "rb") as f:
-            core_bytes = f.read()
-        for p in platforms:
-            if p == 'rg35xxplus':
-                c_file = "build_release/temp/cores/melonds_libretro_aarch64.so"
-                c_bytes = open(c_file, "rb").read() if os.path.isfile(c_file) else core_bytes
-            else:
-                c_bytes = core_bytes
+    # Package each real platform build under its own core name. Renaming one
+    # DeSmuME binary to melonDS (or copying it across architectures) is invalid.
+    print("Injecting platform-built NDS libretro cores into Cannelloni.zip...")
+    for core_path, core_bytes in nds_cores.items():
+        zinfo_core = zipfile.ZipInfo(core_path)
+        zinfo_core.compress_type = zipfile.ZIP_DEFLATED
+        zinfo_core.external_attr = 0o755 << 16
+        out_cannelloni_zip.writestr(zinfo_core, core_bytes)
+        written_entries.add(core_path)
 
-            for core_name in ["melonds_libretro.so", "desmume2015_libretro.so", "desmume_libretro.so"]:
-                zinfo_core = zipfile.ZipInfo(f".system/{p}/cores/{core_name}")
-                zinfo_core.compress_type = zipfile.ZIP_DEFLATED
-                zinfo_core.external_attr = 0o755 << 16
-                out_cannelloni_zip.writestr(zinfo_core, c_bytes)
-
-    # Bundle clean libstdc++.so.6 (patched to GLIBC_2.4) for miyoomini
-    libstdc_path = "build_release/temp/libstdc++.so.6"
-    if os.path.isfile(libstdc_path):
-        with open(libstdc_path, "rb") as f:
-            libstdc_bytes = f.read()
-        zinfo_s = zipfile.ZipInfo(".system/miyoomini/lib/libstdc++.so.6")
-        zinfo_s.compress_type = zipfile.ZIP_DEFLATED
-        zinfo_s.external_attr = 0o755 << 16
-        out_cannelloni_zip.writestr(zinfo_s, libstdc_bytes)
+    # NDS builds link the toolchain's C++ runtime statically. Do not inject an
+    # arbitrary patched libstdc++ that may not match the target device libc.
 
     # Add NDS.pak across all platforms from skeleton
     for p in platforms:
@@ -520,54 +504,28 @@ def build_release():
         ("#ffffff", 255, 255, 255),
     ]
     for p in platforms:
-        minui_path = f".system/{p}/bin/minui.elf"
-        minarch_path = f".system/{p}/bin/minarch.elf"
-        if minui_path in in_minui_zip.namelist() and minarch_path in in_minui_zip.namelist():
-            raw_minui = in_minui_zip.read(minui_path)
-            raw_minarch = in_minui_zip.read(minarch_path)
-            base_minui = patch_about_page(raw_minui, minui_path)
-            if p == "miyoomini":
-                base_minui = patch_minui_settings(base_minui, "miyoomini")
-            base_minarch = patch_minarch_shaders_label(raw_minarch)
+        # Native frontends load the selected accent color at runtime. Only
+        # the external list widget still needs pre-tinted theme binaries.
+        raw_list = None
+        list_path = f"skeleton/EXTRAS/Settings/{p}/Wi-Fi.pak/bin/{p}/cannelloni-list"
+        if not os.path.isfile(list_path):
+            list_path = f"skeleton/EXTRAS/Settings/miyoomini/Wi-Fi.pak/bin/{p}/cannelloni-list"
+        if os.path.isfile(list_path):
+            with open(list_path, "rb") as fp:
+                raw_list = fp.read()
 
-            raw_list = None
-            list_path = f"skeleton/EXTRAS/Settings/{p}/Wi-Fi.pak/bin/{p}/cannelloni-list"
-            if not os.path.isfile(list_path):
-                list_path = f"skeleton/EXTRAS/Settings/miyoomini/Wi-Fi.pak/bin/{p}/cannelloni-list"
-            if os.path.isfile(list_path):
-                with open(list_path, "rb") as fp:
-                    raw_list = fp.read()
-
-            for hex_code, tr, tg, tb in THEME_COLORS:
-                thm_minui = patch_binary_accent_color(base_minui, tr, tg, tb)
-                thm_minarch = patch_binary_accent_color(base_minarch, tr, tg, tb)
-
-                zi = zipfile.ZipInfo(f".system/res/themes/{hex_code}/bin/{p}/cannelloni.elf")
+        for hex_code, tr, tg, tb in THEME_COLORS:
+            if raw_list:
+                thm_list = patch_binary_accent_color(raw_list, tr, tg, tb)
+                zi = zipfile.ZipInfo(f".system/res/themes/{hex_code}/bin/{p}/cannelloni-list")
                 zi.compress_type = zipfile.ZIP_DEFLATED
                 zi.external_attr = 0o755 << 16
-                out_cannelloni_zip.writestr(zi, thm_minui)
+                out_cannelloni_zip.writestr(zi, thm_list)
 
-                zi = zipfile.ZipInfo(f".system/res/themes/{hex_code}/bin/{p}/minui.elf")
+                zi = zipfile.ZipInfo(f".system/res/themes/{hex_code}/bin/{p}/minui-list")
                 zi.compress_type = zipfile.ZIP_DEFLATED
                 zi.external_attr = 0o755 << 16
-                out_cannelloni_zip.writestr(zi, thm_minui)
-
-                zi = zipfile.ZipInfo(f".system/res/themes/{hex_code}/bin/{p}/minarch.elf")
-                zi.compress_type = zipfile.ZIP_DEFLATED
-                zi.external_attr = 0o755 << 16
-                out_cannelloni_zip.writestr(zi, thm_minarch)
-
-                if raw_list:
-                    thm_list = patch_binary_accent_color(raw_list, tr, tg, tb)
-                    zi = zipfile.ZipInfo(f".system/res/themes/{hex_code}/bin/{p}/cannelloni-list")
-                    zi.compress_type = zipfile.ZIP_DEFLATED
-                    zi.external_attr = 0o755 << 16
-                    out_cannelloni_zip.writestr(zi, thm_list)
-
-                    zi = zipfile.ZipInfo(f".system/res/themes/{hex_code}/bin/{p}/minui-list")
-                    zi.compress_type = zipfile.ZIP_DEFLATED
-                    zi.external_attr = 0o755 << 16
-                    out_cannelloni_zip.writestr(zi, thm_list)
+                out_cannelloni_zip.writestr(zi, thm_list)
 
     # Bundle bootlogo flashing tools and image into .system/miyoomini/
     for lf in ["logoread.elf", "logomake.elf", "logowrite.elf"]:
@@ -715,9 +673,9 @@ def build_release():
     for cfg_path, cfg_val in [
         (".userdata/shared/.cannelloni/accent_color.txt", b"#f1c40f\n"),
         (".userdata/shared/.cannelloni/language.txt", b"en\n"),
-        (".userdata/shared/.cannelloni/emu_nds.txt", b"drastic\n"),
+        (".userdata/shared/.cannelloni/emu_nds.txt", b"libretro\n"),
         (".userdata/shared/.cannelloni/button_swap.txt", b"default\n"),
-        (".userdata/shared/.cannelloni/shader_preset.txt", b"crt-cannelloni\n"),
+        (".userdata/shared/.cannelloni/shader_preset.txt", b"none\n"),
         (".userdata/shared/.cannelloni/shader_intensity.txt", b"50\n"),
         (".userdata/shared/.cannelloni/shader_curvature.txt", b"flat\n"),
     ]:
@@ -887,12 +845,16 @@ def build_release():
     # ----------------------------------------------------
     installer_exe = "dist/Cannelloni-Installer.exe"
     installer_script = "installer/cannelloni_installer.py"
-    if not os.path.isfile(installer_exe) or os.path.getmtime(installer_script) > os.path.getmtime(installer_exe):
+    if not os.path.isfile(installer_exe):
+        if sys.platform != "win32":
+            raise FileNotFoundError("Build dist/Cannelloni-Installer.exe on Windows first (or download the windows-installer CI artifact).")
+    if sys.platform == "win32" and (not os.path.isfile(installer_exe) or max(os.path.getmtime(installer_script), os.path.getmtime("VERSION")) > os.path.getmtime(installer_exe)):
         print("Compiling standalone Cannelloni-Installer.exe with PyInstaller...")
         subprocess.run([
             sys.executable, "-m", "PyInstaller",
             "--onefile", "--noconsole",
             "--name", "Cannelloni-Installer",
+            "--add-data", "VERSION;.",
             installer_script
         ], check=True)
 
@@ -903,58 +865,8 @@ def build_release():
     delivered_written = set()
 
     with zipfile.ZipFile(OUT_UNIFIED_ZIP, "w", zipfile.ZIP_DEFLATED) as zout:
-        # A. Inner OS Payload
-        zinfo_payload = zipfile.ZipInfo("Cannelloni.zip")
-        zinfo_payload.compress_type = zipfile.ZIP_STORED  # Already deflated, avoid double compression
-        zinfo_payload.external_attr = 0o644 << 16
-        with open(PAYLOAD_ZIP, "rb") as f:
-            zout.writestr(zinfo_payload, f.read())
-        delivered_written.add("Cannelloni.zip")
-
-        # B. Portable Installer Executable (Windows)
-        with open(installer_exe, "rb") as f:
-            exe_bytes = f.read()
-        zinfo_exe = zipfile.ZipInfo("Cannelloni-Installer.exe")
-        zinfo_exe.compress_type = zipfile.ZIP_DEFLATED
-        zinfo_exe.external_attr = 0o755 << 16
-        zout.writestr(zinfo_exe, exe_bytes)
-        delivered_written.add("Cannelloni-Installer.exe")
-
-        # C. Windows Launcher
-        with open("installer/Cannelloni-Installer.bat", "rb") as f:
-            bat_bytes = f.read()
-        zinfo_bat = zipfile.ZipInfo("Cannelloni-Installer.bat")
-        zinfo_bat.compress_type = zipfile.ZIP_DEFLATED
-        zinfo_bat.external_attr = 0o644 << 16
-        zout.writestr(zinfo_bat, bat_bytes)
-        delivered_written.add("Cannelloni-Installer.bat")
-
-        # D. Linux Launcher
-        with open("installer/Cannelloni-Installer.sh", "rb") as f:
-            sh_bytes = f.read().replace(b"\r\n", b"\n")
-        zinfo_sh = zipfile.ZipInfo("Cannelloni-Installer.sh")
-        zinfo_sh.compress_type = zipfile.ZIP_DEFLATED
-        zinfo_sh.external_attr = 0o755 << 16
-        zout.writestr(zinfo_sh, sh_bytes)
-        delivered_written.add("Cannelloni-Installer.sh")
-
-        # E. Cross-platform Python Installer Script
-        with open("installer/cannelloni_installer.py", "rb") as f:
-            py_bytes = f.read().replace(b"\r\n", b"\n")
-        zinfo_py = zipfile.ZipInfo("cannelloni_installer.py")
-        zinfo_py.compress_type = zipfile.ZIP_DEFLATED
-        zinfo_py.external_attr = 0o755 << 16
-        zout.writestr(zinfo_py, py_bytes)
-        delivered_written.add("cannelloni_installer.py")
-
-        # F. README.txt
-        with open("skeleton/BASE/README.txt", "rb") as f:
-            readme_bytes = f.read().replace(b"\r\n", b"\n")
-        zinfo_readme = zipfile.ZipInfo("README.txt")
-        zinfo_readme.compress_type = zipfile.ZIP_DEFLATED
-        zinfo_readme.external_attr = 0o644 << 16
-        zout.writestr(zinfo_readme, readme_bytes)
-        delivered_written.add("README.txt")
+        add_installer_files(zout, PAYLOAD_ZIP, installer_exe)
+        delivered_written.update(zout.namelist())
 
         # G. Platform bootstrap files & directories (for on-device direct boot)
         with zipfile.ZipFile(PAYLOAD_ZIP, "r") as pz:
@@ -969,27 +881,15 @@ def build_release():
                         zout.writestr(item, pz.read(name))
                         delivered_written.add(name)
 
-    # Replicate delivered archive to Cannelloni.zip and Cannelloni-Installer.zip
+    # Keep the legacy direct-boot release alias, but omit duplicated OS files
+    # from the desktop installer package. Its only OS source is the payload.
     shutil.copyfile(OUT_UNIFIED_ZIP, OUT_ALIAS_ZIP)
-    shutil.copyfile(OUT_UNIFIED_ZIP, OUT_INSTALLER_ZIP)
+    build_installer_archive(OUT_INSTALLER_ZIP, PAYLOAD_ZIP, installer_exe)
 
     print(f"Delivered release archives completed:")
     print(f" - {OUT_ALIAS_ZIP} ({os.path.getsize(OUT_ALIAS_ZIP)} bytes)")
     print(f" - {OUT_UNIFIED_ZIP} ({os.path.getsize(OUT_UNIFIED_ZIP)} bytes)")
     print(f" - {OUT_INSTALLER_ZIP} ({os.path.getsize(OUT_INSTALLER_ZIP)} bytes)")
-
-    # Copy to E:\ if mounted
-    if os.path.isdir("E:\\"):
-        print("Detected mounted SD drive at E:\\. Copying release packages...")
-        try:
-            shutil.copy2(OUT_ALIAS_ZIP, "E:\\Cannelloni.zip")
-            shutil.copy2(installer_exe, "E:\\Cannelloni-Installer.exe")
-            shutil.copy2("installer/Cannelloni-Installer.bat", "E:\\Cannelloni-Installer.bat")
-            shutil.copy2("installer/Cannelloni-Installer.sh", "E:\\Cannelloni-Installer.sh")
-            shutil.copy2("installer/cannelloni_installer.py", "E:\\cannelloni_installer.py")
-            print("Successfully copied release files to E:\\")
-        except Exception as e:
-            print(f"Warning: Could not copy to E:\\: {e}")
 
     print("Release archive built successfully!")
 

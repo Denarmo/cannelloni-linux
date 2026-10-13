@@ -40,13 +40,17 @@ if [ -d "$THEME_DIR" ] && [ -d "$RES_DIR" ]; then
     echo "Copied assets for theme $HEX"
 fi
 
-# 2. Update pre-compiled binaries for the current theme if available
+# 2. Native frontends read accent_color.txt themselves. Older cards may still
+# contain theme copies of MinUI/minarch; never copy those over the current OS.
 BIN_SRC="$THEME_DIR/bin/$PLATFORM"
 BIN_DST="$SDCARD_PATH/.system/$PLATFORM/bin"
 if [ -d "$BIN_SRC" ] && [ -d "$BIN_DST" ]; then
-    cp -f "$BIN_SRC/"* "$BIN_DST/" 2>/dev/null
-    chmod +x "$BIN_DST/"* 2>/dev/null
-    echo "Updated binaries for $PLATFORM theme $HEX"
+    for widget in cannelloni-list minui-list; do
+        if [ -f "$BIN_SRC/$widget" ]; then
+            cp -f "$BIN_SRC/$widget" "$BIN_DST/$widget"
+            chmod +x "$BIN_DST/$widget"
+        fi
+    done
 fi
 
 # 3. Update Settings Wi-Fi list tool if present

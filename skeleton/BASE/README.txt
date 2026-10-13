@@ -1,4 +1,6 @@
-Cannelloni is a minimal launcher for the Trimui Smart (and Pro) and Brick, the Miyoo Mini (and Plus), A30, and Flip, the Powkiddy RGB30, the M17, the MagicX XU Mini M and Mini Zero 28, and the Anbernic RG*XX family--all from the same SD card. Why? Why not?
+Cannelloni 1.0.0
+
+Cannelloni is a focused retro gaming launcher and libretro frontend for supported Linux handhelds. The release includes separate platform builds, a desktop SD installer, Nintendo DS integration, and configurable software shader effects.
 
 Source:
 https://github.com/Denarmo/cannelloni-linux
@@ -6,59 +8,85 @@ https://github.com/Denarmo/cannelloni-linux
 ----------------------------------------
 Installing
 
-METHOD 1: ONE-CLICK GUI INSTALLER (RECOMMENDED)
+DESKTOP INSTALLER (WINDOWS / LINUX)
 
-The release archive includes a portable GUI installer for Windows and Linux with zero external dependencies:
-1. Insert your FAT32 formatted SD card into your PC.
-2. Launch the installer:
-   - On Windows: Double-click 'Cannelloni-Installer.exe' (or 'Cannelloni-Installer.bat')
-   - On Linux: Run './Cannelloni-Installer.sh' (or 'python3 cannelloni_installer.py')
-3. Select your SD card drive, Language, Accent Color, and Handheld Device Model.
-4. Click 'Install Cannelloni to SD Card'.
-5. Safely eject the card, insert into your handheld, and power on!
+Download Cannelloni-Installer.zip from:
+https://github.com/Denarmo/cannelloni-linux/releases/tag/v1.0.0
 
-METHOD 2: UNIVERSAL ON-DEVICE INSTALLATION
+1. Extract the installer package to a folder on your computer. Keep its bundled
+   Cannelloni.zip beside the installer, compressed. Cannoli.zip is also accepted.
+   This archive is the only OS payload; no loose duplicate OS files are needed.
+2. Prepare a FAT32 SD card for your device. The installer does not format the
+   card or replace its underlying firmware. Back up existing Saves and .userdata
+   first; installation replaces system files and applies fresh settings.
+3. Windows: launch Cannelloni-Installer.exe (no Python required), or the .bat.
+   Linux: run bash Cannelloni-Installer.sh (requires Python 3).
+   Python source: run python3 cannelloni_installer.py.
+   Install Tkinter for the native window, or add --web for the local browser UI.
+4. Select the SD card drive/mount directory, language, accent color, and handheld.
+5. Check the destination, then click Install Cannelloni to SD Card.
+6. Wait for success. Add your games and BIOS files, safely eject the card, and
+   complete any separate boot-card setup before starting the handheld.
 
-Cannelloni also supports direct on-device automatic installation:
-1. Format your SD card as FAT32 (MBR).
-2. Drop 'Cannelloni.zip' directly onto the root of your SD card.
-3. Insert the SD card into your device and power it on.
-4. Cannelloni will automatically extract system files, run the setup wizard, and clean up the archive!
-5. Reconfigure anytime under Settings -> Device Model, Accent Color, or Language.
+If the source ZIP is in the destination SD root, a successful installation
+renames it to .zip.installed (adding a number when needed). Its bytes are
+preserved, and it will not trigger another installation at first boot. The
+installer can reuse it later. ZIPs on your computer keep their original names.
 
-SUPPORTED HARDWARE:
-- Miyoo Mini (v1 / v2 / v3)
-- Miyoo Mini Plus (v4 / Wi-Fi)
-- Miyoo A30 (my282)
-- Miyoo Flip (my355)
-- TrimUI Smart
-- TrimUI Smart Pro
-- TrimUI Brick
-- Anbernic RG35XX (Original)
-- Anbernic RG35XX Plus / H / SP / CubeXX / 28XX
-- Powkiddy RGB30
-- MagicX XU Mini M
-- MagicX Mini Zero 28
-- GKD Pixel
-- M17
+MANUAL FIRST INSTALLATION
 
-TWO-CARD DEVICES (RG35XX / RGB30 / MagicX):
-- For devices using two SD cards, the primary Cannelloni installation goes on the TF2 card.
-- For RG35XX Plus/H/SP, dmenu.bin is included in the root of the archive and can be placed on the TF1 card.
+1. Download Cannelloni-1.0.0.zip and extract the outer archive to the card root,
+   including hidden folders. Leave the inner Cannelloni.zip compressed.
+2. Retain the supplied boot files appropriate to your device. A blank card with
+   only a ZIP is not sufficient on all handhelds.
+3. Complete the device boot setup and start the handheld. Where supported, its
+   updater extracts the OS payload and starts the device setup screen.
 
-FEATURES & SETTINGS:
-- Shaders: 12 high-performance CRT, scanline, and LCD shaders from Denarmo/cannelloni, configurable under Settings -> Shaders.
-- Secure Wi-Fi: Network credentials are obfuscated and stored securely in .userdata/shared/.cannelloni/network.conf with 0600 permissions.
-- Theme Accents: Solid accent colors configurable under Settings -> Accent Color.
-- Emulators: Choose between Libretro core and DraStic for NDS under Settings -> Emulators.
-- Button Swapping: Swap A/B and X/Y under Settings -> Button Mapping.
+SUPPORTED PLATFORM TARGETS
+
+- Miyoo Mini / Mini Plus (miyoomini), A30 (my282), Flip (my355)
+- TrimUI Smart (trimuismart), Smart Pro / Brick (tg5040)
+- Original Anbernic RG35XX (rg35xx)
+- Anbernic H700 RG*XX family, including Plus / H / SP / CubeXX / 28XX (rg35xxplus)
+- Powkiddy RGB30 (rgb30)
+- MagicX XU Mini M (magicmini), Mini Zero 28 (zero28)
+- GKD Pixel (gkdpixel), M17 (m17)
+
+TWO-CARD DEVICES
+
+Cannelloni is a frontend/data-card installation, not a replacement firmware
+image. Devices such as RGB30 and MagicX require their compatible boot card.
+On a two-card Anbernic setup, install the OS/data to TF2 and use the matching
+boot files on TF1. The supplied root dmenu.bin is for supported H700 models,
+including RG35XX Plus/H/SP; do not use it for the original RG35XX.
+
+FEATURES AND SETTINGS
+
+- Nintendo DS defaults to a libretro core through minarch and the OS menu.
+  Builds use melonDS with modern C++17 toolchains and DeSmuME2015 with older
+  toolchains. Compatibility and speed depend on the core and handheld.
+- Old packaged DraStic defaults migrate to libretro. On Miyoo Mini devices with
+  DraStic installed, Settings -> Emulators explicitly selects standalone mode.
+  DraStic and libretro save states are not interchangeable.
+- In-game MENU -> Shaders selects CRT, LCD, scanline, and pixel effects. Parameters
+  exposes the selected preset's intensity, curvature, brightness, mask, and glow
+  controls. Resume to see changes. Save for game/console saves all current
+  frontend/core options, including shaders; Reset shaders restores defaults.
+- Settings -> Shaders chooses shared defaults, below saved console/game choices.
+  Effects are software adaptations of Denarmo/cannelloni, not GPU GLSL execution.
+  They start disabled; heavy effects may reduce performance. See
+  .system/common/shaders/README.txt for adaptation details and licenses.
+- Change accent color, language, model, and A/B or X/Y mapping from Settings.
+- Wi-Fi controls and Nonna's Kitchen are available on supported network devices.
 
 ----------------------------------------
 Updating
 
-ALL
-
-Copy "Cannelloni.zip" (without unzipping) to the root of the SD card containing your Roms.
+Back up Saves and .userdata before updating. Extract the downloaded release or
+installer package on your computer. Copy the INNER OS payload Cannelloni.zip,
+without unzipping it, to the root of your already working Cannelloni card and
+boot the handheld. The downloadable release asset named Cannelloni.zip is an
+alias of the OUTER package; extract that package first to obtain the payload.
 
 ----------------------------------------
 Shortcuts
@@ -258,4 +286,3 @@ Check out Jim's music:
 
   https://ourghosts.bandcamp.com/music
   https://www.patreon.com/ourghosts/
- 

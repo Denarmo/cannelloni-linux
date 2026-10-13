@@ -11,7 +11,7 @@ if [ -z "$PLATFORM" ]; then
 fi
 [ -z "$PLATFORM" ] && PLATFORM="miyoomini"
 
-SAY="/mnt/SDCARD/.system/$PLATFORM/bin/say.elf"
+SAY="$SDCARD_PATH/.system/$PLATFORM/bin/say.elf"
 [ ! -x "$SAY" ] && SAY="say.elf"
 
 # Locate cannelloni-list binary
@@ -25,6 +25,46 @@ mkdir -p "$CFG_DIR"
 SHADER_CONF="$CFG_DIR/shader.conf"
 LANG_TXT="$CFG_DIR/language.txt"
 
+# Shared defaults are read by minarch before console/game overrides. Never
+# rewrite minarch.cfg here: those files also hold the user's other settings.
+set_shader_value() {
+    touch "$1"
+    sed -i "/^$2=/d" "$1"
+    printf '%s=%s\n' "$2" "$3" >> "$1"
+}
+
+write_shader_preset() {
+    PRESET_ID="$2"
+    case "$PRESET_ID" in
+        none) EFFECT=0 ;;
+        line) EFFECT=1 ;;
+        grid) EFFECT=2 ;;
+        crt-cannelloni) EFFECT=3 ;;
+        crt-cannelloni-lite) EFFECT=4 ;;
+        crt-easymode) EFFECT=5 ;;
+        crt-aperture) EFFECT=6 ;;
+        crt-geom) EFFECT=7 ;;
+        crt-lottes-fast) EFFECT=8 ;;
+        zfast-crt) EFFECT=9 ;;
+        lcd3x) EFFECT=10 ;;
+        zfast-lcd) EFFECT=11 ;;
+        dot) EFFECT=12 ;;
+        scanline) EFFECT=13 ;;
+        sharp-bilinear-simple) EFFECT=14 ;;
+        *) return 1 ;;
+    esac
+    set_shader_value "$1" preset "$PRESET_ID"
+    set_shader_value "$1" effect "$EFFECT"
+    sed -i '/^glslp=/d' "$1"
+    case "$PRESET_ID" in
+        none|line|grid) ;;
+        crt-cannelloni-lite)
+            set_shader_value "$1" glslp "$SDCARD_PATH/.system/common/shaders/crt-cannelloni/crt-cannelloni-lite.glslp"
+            ;;
+        *) set_shader_value "$1" glslp "$SDCARD_PATH/.system/common/shaders/$PRESET_ID/$PRESET_ID.glslp" ;;
+    esac
+}
+
 CURRENT_LANG="en"
 [ -f "$LANG_TXT" ] && CURRENT_LANG=$(cat "$LANG_TXT" | head -n1 | tr -d '\r\n')
 
@@ -36,7 +76,7 @@ case "$CURRENT_LANG" in
         TITLE_PRESET="Elegir Ajuste de Shader"
         TITLE_PARAM="Parámetros de Shader"
         TITLE_SYS="Shaders por Consola"
-        MSG_RESET="Todos los shaders restablecidos a desactivado."
+        MSG_RESET="Shaders globales desactivados. Se conservan los ajustes de cada juego."
         MSG_CONF_PRESET="Shader establecido a:"
         MSG_CONF_PARAM="Parámetro configurado:"
         ;;
@@ -47,7 +87,7 @@ case "$CURRENT_LANG" in
         TITLE_PRESET="Choisir le Préréglage"
         TITLE_PARAM="Paramètres du Shader"
         TITLE_SYS="Shaders par Console"
-        MSG_RESET="Tous les shaders réinitialisés par défaut (Désactivé)."
+        MSG_RESET="Shaders globaux désactivés. Les réglages par jeu sont conservés."
         MSG_CONF_PRESET="Shader défini sur :"
         MSG_CONF_PARAM="Paramètre configuré :"
         ;;
@@ -58,7 +98,7 @@ case "$CURRENT_LANG" in
         TITLE_PRESET="Escolha a Predefinição"
         TITLE_PARAM="Parâmetros do Shader"
         TITLE_SYS="Shaders por Console"
-        MSG_RESET="Todos os shaders restaurados para o padrão."
+        MSG_RESET="Shaders globais desativados. Ajustes por jogo preservados."
         MSG_CONF_PRESET="Shader definido para:"
         MSG_CONF_PARAM="Parâmetro configurado:"
         ;;
@@ -69,7 +109,7 @@ case "$CURRENT_LANG" in
         TITLE_PRESET="Shader-Profil wählen"
         TITLE_PARAM="Shader-Parameter"
         TITLE_SYS="Konsolen-Shader"
-        MSG_RESET="Alle Shader auf Standard (Aus) zurückgesetzt."
+        MSG_RESET="Globale Shader ausgeschaltet. Spieleinstellungen bleiben erhalten."
         MSG_CONF_PRESET="Shader eingestellt auf:"
         MSG_CONF_PARAM="Parameter konfiguriert:"
         ;;
@@ -80,7 +120,7 @@ case "$CURRENT_LANG" in
         TITLE_PRESET="Scegli Profilo Shader"
         TITLE_PARAM="Parametri Shader"
         TITLE_SYS="Shader per Console"
-        MSG_RESET="Tutti gli shader ripristinati come predefiniti (Off)."
+        MSG_RESET="Shader globali disattivati. Impostazioni dei giochi conservate."
         MSG_CONF_PRESET="Shader impostato su:"
         MSG_CONF_PARAM="Parametro configurato:"
         ;;
@@ -91,7 +131,7 @@ case "$CURRENT_LANG" in
         TITLE_PRESET="Choose Shader Preset"
         TITLE_PARAM="Shader Parameters"
         TITLE_SYS="System Shaders"
-        MSG_RESET="All shaders reset to default (Off)."
+        MSG_RESET="Shared shader defaults reset (Off). Game overrides are preserved."
         MSG_CONF_PRESET="Shader set to:"
         MSG_CONF_PARAM="Parameter configured:"
         ;;
@@ -107,7 +147,7 @@ case "$CURRENT_LANG" in
 1. Seleccionar Ajuste de Shader
 2. Configurar Parámetros de Shader
 3. Asignar Shaders por Consola
-4. Restablecer Shaders por Defecto
+4. Restablecer Shaders Globales
 EOF
         ;;
     "fr")
@@ -115,7 +155,7 @@ EOF
 1. Sélectionner le Préréglage
 2. Configurer les Paramètres
 3. Attribuer par Console
-4. Réinitialiser par Défaut
+4. Réinitialiser les Shaders Globaux
 EOF
         ;;
     "pt_BR")
@@ -123,7 +163,7 @@ EOF
 1. Selecionar Predefinição de Shader
 2. Configurar Parâmetros de Shader
 3. Atribuir Shaders por Console
-4. Restaurar Shaders para Padrões
+4. Restaurar Shaders Globais
 EOF
         ;;
     "de")
@@ -131,7 +171,7 @@ EOF
 1. Aktives Shader-Profil wählen
 2. Shader-Parameter konfigurieren
 3. Shader nach Konsole zuweisen
-4. Alle Shader zurücksetzen
+4. Globale Shader zurücksetzen
 EOF
         ;;
     "it")
@@ -139,7 +179,7 @@ EOF
 1. Seleziona Profilo Shader
 2. Configura Parametri Shader
 3. Assegna Shader per Console
-4. Ripristina Shader Predefiniti
+4. Ripristina Shader Globali
 EOF
         ;;
     *)
@@ -147,7 +187,7 @@ EOF
 1. Select Active Shader Preset
 2. Configure Shader Parameters
 3. Assign Shaders by Console System
-4. Reset All Shaders to Default
+4. Reset Shared Shader Defaults
 EOF
         ;;
 esac
@@ -170,6 +210,8 @@ case "$MENU_CHOICE" in
         rm -f "$PRESET_OUT"
         cat << 'EOF' > "$PRESET_LIST"
 None (Off / Crisp Native Pixels)
+Simple Scanlines
+Simple LCD Grid
 CRT-Cannelloni (Denarmo Signature Composite CRT)
 CRT-Cannelloni Lite (Fast Composite CRT)
 CRT-EasyMode (Clean Scanlines)
@@ -187,93 +229,27 @@ EOF
         [ $? -ne 0 ] || [ ! -f "$PRESET_OUT" ] && exit 0
         CHOICE=$(cat "$PRESET_OUT" | head -n1)
 
-        PRESET="none"
-        EFFECT="0"
-        SHARPNESS="0"
         case "$CHOICE" in
-            *"CRT-Cannelloni Lite"*)
-                PRESET="crt-cannelloni-lite"
-                EFFECT="1"
-                SHARPNESS="1"
-                ;;
-            *"CRT-Cannelloni"*)
-                PRESET="crt-cannelloni"
-                EFFECT="1"
-                SHARPNESS="1"
-                ;;
-            *"CRT-EasyMode"*)
-                PRESET="crt-easymode"
-                EFFECT="1"
-                SHARPNESS="0"
-                ;;
-            *"CRT-Aperture"*)
-                PRESET="crt-aperture"
-                EFFECT="1"
-                SHARPNESS="1"
-                ;;
-            *"CRT-Geom"*)
-                PRESET="crt-geom"
-                EFFECT="1"
-                SHARPNESS="1"
-                ;;
-            *"CRT-Lottes"*)
-                PRESET="crt-lottes-fast"
-                EFFECT="1"
-                SHARPNESS="2"
-                ;;
-            *"Zfast-CRT"*)
-                PRESET="zfast-crt"
-                EFFECT="1"
-                SHARPNESS="0"
-                ;;
-            *"LCD3x"*)
-                PRESET="lcd3x"
-                EFFECT="2"
-                SHARPNESS="1"
-                ;;
-            *"Zfast-LCD"*)
-                PRESET="zfast-lcd"
-                EFFECT="2"
-                SHARPNESS="0"
-                ;;
-            *"Dot Matrix"*)
-                PRESET="dot"
-                EFFECT="2"
-                SHARPNESS="0"
-                ;;
-            *"Scanlines"*)
-                PRESET="scanline"
-                EFFECT="1"
-                SHARPNESS="0"
-                ;;
-            *"Sharp Bilinear"*)
-                PRESET="sharp-bilinear-simple"
-                EFFECT="0"
-                SHARPNESS="1"
-                ;;
-            *)
-                PRESET="none"
-                EFFECT="0"
-                SHARPNESS="0"
-                ;;
+            *"Simple Scanlines"*) PRESET="line" ;;
+            *"Simple LCD Grid"*) PRESET="grid" ;;
+            *"CRT-Cannelloni Lite"*) PRESET="crt-cannelloni-lite" ;;
+            *"CRT-Cannelloni"*) PRESET="crt-cannelloni" ;;
+            *"CRT-EasyMode"*) PRESET="crt-easymode" ;;
+            *"CRT-Aperture"*) PRESET="crt-aperture" ;;
+            *"CRT-Geom"*) PRESET="crt-geom" ;;
+            *"CRT-Lottes"*) PRESET="crt-lottes-fast" ;;
+            *"Zfast-CRT"*) PRESET="zfast-crt" ;;
+            *"LCD3x"*) PRESET="lcd3x" ;;
+            *"Zfast-LCD"*) PRESET="zfast-lcd" ;;
+            *"Dot Matrix"*) PRESET="dot" ;;
+            *"Scanlines"*) PRESET="scanline" ;;
+            *"Sharp Bilinear"*) PRESET="sharp-bilinear-simple" ;;
+            *) PRESET="none" ;;
         esac
-
-        echo "preset=$PRESET" > "$SHADER_CONF"
-        echo "effect=$EFFECT" >> "$SHADER_CONF"
-        echo "sharpness=$SHARPNESS" >> "$SHADER_CONF"
-        echo "glslp=$SDCARD_PATH/.system/common/shaders/$PRESET/$PRESET.glslp" >> "$SHADER_CONF"
-
-        for cfg in "$SDCARD_PATH/.userdata/$PLATFORM/"*/minarch.cfg "$SDCARD_PATH/.userdata/$PLATFORM/minarch.cfg"; do
-            if [ -f "$cfg" ]; then
-                sed -i "/minarch_screen_effect/d" "$cfg" 2>/dev/null
-                sed -i "/minarch_screen_sharpness/d" "$cfg" 2>/dev/null
-                echo "minarch_screen_effect = \"$EFFECT\"" >> "$cfg"
-                echo "minarch_screen_sharpness = \"$SHARPNESS\"" >> "$cfg"
-            fi
-        done
+        write_shader_preset "$SHADER_CONF" "$PRESET"
 
         sync
-        $SAY "$MSG_CONF_PRESET
+        "$SAY" "$MSG_CONF_PRESET
 $CHOICE"
         ;;
 
@@ -292,6 +268,21 @@ Curvature: Arcade CRT Tube (15%)
 Sharpness: Sharp (Nearest Neighbor)
 Sharpness: Crisp (Integer Bilinear)
 Sharpness: Soft (Bilinear Blur)
+Brightness: Dim (50%)
+Brightness: Low (75%)
+Brightness: Normal (100%)
+Brightness: Bright (125%)
+Brightness: Maximum (150%)
+Mask Strength: Off (0%)
+Mask Strength: Light (25%)
+Mask Strength: Balanced (50%)
+Mask Strength: Strong (75%)
+Mask Strength: Maximum (100%)
+Glow: Off (0%)
+Glow: Light (25%)
+Glow: Balanced (50%)
+Glow: Strong (75%)
+Glow: Maximum (100%)
 EOF
         "$LIST_BIN" --disable-auto-sleep --file "$PARAM_LIST" --format text --confirm-text "$CONFIRM_APPLY" --title "$TITLE_PARAM" --write-location "$PARAM_OUT"
         [ $? -ne 0 ] || [ ! -f "$PARAM_OUT" ] && exit 0
@@ -301,35 +292,36 @@ EOF
             *"Scanline Intensity"*)
                 INT=$(echo "$P_CHOICE" | grep -o "[0-9]\+%" | tr -d '%')
                 [ -z "$INT" ] && INT="50"
-                sed -i "/intensity=/d" "$SHADER_CONF" 2>/dev/null
-                echo "intensity=$INT" >> "$SHADER_CONF"
+                set_shader_value "$SHADER_CONF" intensity "$INT"
                 MSG="$MSG_CONF_PARAM Scanlines: $INT%"
                 ;;
             *"Curvature"*)
                 CURV="flat"
                 echo "$P_CHOICE" | grep -q "Subtle" && CURV="subtle"
                 echo "$P_CHOICE" | grep -q "Arcade" && CURV="arcade"
-                sed -i "/curvature=/d" "$SHADER_CONF" 2>/dev/null
-                echo "curvature=$CURV" >> "$SHADER_CONF"
+                set_shader_value "$SHADER_CONF" curvature "$CURV"
                 MSG="$MSG_CONF_PARAM Curvature: $CURV"
                 ;;
             *"Sharpness"*)
                 SHP="0"
                 echo "$P_CHOICE" | grep -q "Crisp" && SHP="1"
                 echo "$P_CHOICE" | grep -q "Soft" && SHP="2"
-                sed -i "/sharpness=/d" "$SHADER_CONF" 2>/dev/null
-                echo "sharpness=$SHP" >> "$SHADER_CONF"
-                for cfg in "$SDCARD_PATH/.userdata/$PLATFORM/"*/minarch.cfg "$SDCARD_PATH/.userdata/$PLATFORM/minarch.cfg"; do
-                    if [ -f "$cfg" ]; then
-                        sed -i "/minarch_screen_sharpness/d" "$cfg" 2>/dev/null
-                        echo "minarch_screen_sharpness = \"$SHP\"" >> "$cfg"
-                    fi
-                done
+                set_shader_value "$SHADER_CONF" sharpness "$SHP"
+                MSG="$MSG_CONF_PARAM $P_CHOICE"
+                ;;
+            *"Brightness"*|*"Mask Strength"*|*"Glow"*)
+                VALUE=$(echo "$P_CHOICE" | sed -n 's/.*(\([0-9]*\)%).*/\1/p')
+                case "$P_CHOICE" in
+                    *"Brightness"*) KEY="brightness" ;;
+                    *"Mask Strength"*) KEY="mask" ;;
+                    *"Glow"*) KEY="glow" ;;
+                esac
+                set_shader_value "$SHADER_CONF" "$KEY" "$VALUE"
                 MSG="$MSG_CONF_PARAM $P_CHOICE"
                 ;;
         esac
         sync
-        $SAY "$MSG"
+        "$SAY" "$MSG"
         ;;
 
     *"3."*|*"Assign"*|*"Asignar"*|*"Attribuer"*|*"Atribuir"*|*"zuweisen"*|*"Assegna"*)
@@ -347,54 +339,28 @@ EOF
 
         case "$S_CHOICE" in
             *"Nintendo DS"*)
-                echo "preset=zfast-lcd" > "$CFG_DIR/shader_nds.conf"
-                echo "effect=2" >> "$CFG_DIR/shader_nds.conf"
-                NDS_CFG="$SDCARD_PATH/.userdata/$PLATFORM/NDS/minarch.cfg"
-                mkdir -p "$(dirname "$NDS_CFG")"
-                sed -i "/minarch_screen_effect/d" "$NDS_CFG" 2>/dev/null
-                echo 'minarch_screen_effect = "2"' >> "$NDS_CFG"
+                write_shader_preset "$CFG_DIR/shader_nds.conf" zfast-lcd
                 MSG="NDS: LCD Grid"
                 ;;
             *"Game Boy"*)
-                echo "preset=lcd3x" > "$CFG_DIR/shader_handheld.conf"
-                echo "effect=2" >> "$CFG_DIR/shader_handheld.conf"
-                for tag in GB GBC GBA GG; do
-                    H_CFG="$SDCARD_PATH/.userdata/$PLATFORM/$tag/minarch.cfg"
-                    mkdir -p "$(dirname "$H_CFG")"
-                    sed -i "/minarch_screen_effect/d" "$H_CFG" 2>/dev/null
-                    echo 'minarch_screen_effect = "2"' >> "$H_CFG"
-                done
+                write_shader_preset "$CFG_DIR/shader_handheld.conf" lcd3x
                 MSG="GB/GBA: LCD3x"
                 ;;
             *"Retro Home Consoles"*)
-                echo "preset=crt-cannelloni" > "$CFG_DIR/shader_console.conf"
-                echo "effect=1" >> "$CFG_DIR/shader_console.conf"
-                for tag in FC SFC MD PS; do
-                    C_CFG="$SDCARD_PATH/.userdata/$PLATFORM/$tag/minarch.cfg"
-                    mkdir -p "$(dirname "$C_CFG")"
-                    sed -i "/minarch_screen_effect/d" "$C_CFG" 2>/dev/null
-                    echo 'minarch_screen_effect = "1"' >> "$C_CFG"
-                done
+                write_shader_preset "$CFG_DIR/shader_console.conf" crt-cannelloni
                 MSG="Home Consoles: CRT-Cannelloni"
                 ;;
         esac
         sync
-        $SAY "$MSG_CONF_PARAM
+        "$SAY" "$MSG_CONF_PARAM
 $MSG"
         ;;
 
     *"4."*|*"Reset"*|*"Restablecer"*|*"Réinitialiser"*|*"Restaurar"*|*"zurücksetzen"*|*"Ripristina"*)
-        rm -f "$SHADER_CONF" "$CFG_DIR/shader_"*.conf
-        for cfg in "$SDCARD_PATH/.userdata/$PLATFORM/"*/minarch.cfg "$SDCARD_PATH/.userdata/$PLATFORM/minarch.cfg"; do
-            if [ -f "$cfg" ]; then
-                sed -i "/minarch_screen_effect/d" "$cfg" 2>/dev/null
-                sed -i "/minarch_screen_sharpness/d" "$cfg" 2>/dev/null
-                echo 'minarch_screen_effect = "0"' >> "$cfg"
-                echo 'minarch_screen_sharpness = "0"' >> "$cfg"
-            fi
-        done
+        rm -f "$SHADER_CONF" "$CFG_DIR/shader_nds.conf" "$CFG_DIR/shader_handheld.conf" "$CFG_DIR/shader_console.conf"
+        write_shader_preset "$SHADER_CONF" none
         sync
-        $SAY "$MSG_RESET"
+        "$SAY" "$MSG_RESET"
         ;;
 esac
 

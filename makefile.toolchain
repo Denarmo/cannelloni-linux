@@ -7,13 +7,14 @@ $(error please specify PLATFORM, eg. make PLATFORM=trimui)
 endif
 
 HOST_WORKSPACE=$(shell pwd)/workspace
+HOST_VERSION=$(shell pwd)/VERSION
 GUEST_WORKSPACE=/root/workspace
 
 GIT_IF_NECESSARY=toolchains/$(PLATFORM)-toolchain
 INIT_IF_NECESSARY=toolchains/$(PLATFORM)-toolchain/.build
 
 all: $(INIT_IF_NECESSARY)
-	docker run -it --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) $(PLATFORM)-toolchain /bin/bash
+	docker run -it --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) -v $(HOST_VERSION):/root/VERSION:ro $(PLATFORM)-toolchain /bin/bash
 
 $(INIT_IF_NECESSARY): $(GIT_IF_NECESSARY)
 	cd toolchains/$(PLATFORM)-toolchain && make .build
@@ -26,4 +27,9 @@ clean:
 	cd toolchains/$(PLATFORM)-toolchain && make clean
 
 build: $(INIT_IF_NECESSARY)
-	docker run -it --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) $(PLATFORM)-toolchain /bin/bash -c '. ~/.bashrc && cd /root/workspace && make'
+	docker run -it --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) -v $(HOST_VERSION):/root/VERSION:ro $(PLATFORM)-toolchain /bin/bash -c '. ~/.bashrc && cd /root/workspace && make'
+
+# Non-interactive CI build of the source changed by this release. The upstream
+# archive supplies device boot files and unchanged cores, never the frontends.
+frontends: $(INIT_IF_NECESSARY)
+	docker run --rm -v $(HOST_WORKSPACE):$(GUEST_WORKSPACE) -v $(HOST_VERSION):/root/VERSION:ro $(PLATFORM)-toolchain /bin/bash -c 'if [ -f /root/setup-env.sh ]; then . /root/setup-env.sh; fi; : "$${CROSS_COMPILE:?Missing cross compiler environment}"; : "$${PREFIX:?Missing toolchain sysroot}"; cd /root/workspace && make frontends PLATFORM=$(PLATFORM)'

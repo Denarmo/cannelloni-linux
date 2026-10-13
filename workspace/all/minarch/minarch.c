@@ -18,6 +18,7 @@
 #include "api.h"
 #include "utils.h"
 #include "scaler.h"
+#include "shader.h"
 
 ///////////////////////////////////////
 
@@ -47,6 +48,11 @@ enum {
 static int screen_scaling = SCALE_ASPECT;
 static int screen_sharpness = SHARPNESS_SOFT;
 static int screen_effect = EFFECT_NONE;
+static ShaderSettings shader_settings = {SHADER_NONE, 50, 0, 100, 50, 25};
+static ShaderContext shader_context;
+static GFX_Renderer shader_renderer; // SDL2 retains this until the next flip.
+static SDL_Surface* shader_screen;
+static unsigned shader_frame;
 static int prevent_tearing = 1; // lenient
 static int show_debug = 0;
 static int max_ff_speed = 3; // 4x
@@ -657,6 +663,13 @@ static char* curvature_labels[] = {
 	"Arcade (15%)",
 	NULL
 };
+static char* curvature_display[] = {"Flat", "Subtle", "Arcade", NULL};
+static char* percent_labels[] = {
+	"0%", "25%", "50%", "75%", "100%", NULL
+};
+static char* brightness_labels[] = {
+	"50%", "75%", "100%", "125%", "150%", NULL
+};
 static char* sharpness_labels[] = {
 	"Sharp",
 	"Crisp",
@@ -688,6 +701,9 @@ enum {
 	FE_OPT_EFFECT,
 	FE_OPT_INTENSITY,
 	FE_OPT_CURVATURE,
+	FE_OPT_BRIGHTNESS,
+	FE_OPT_MASK,
+	FE_OPT_GLOW,
 	FE_OPT_SHARPNESS,
 	FE_OPT_TEARING,
 	FE_OPT_OVERCLOCK,
@@ -884,11 +900,11 @@ static struct Config {
 			},
 			[FE_OPT_EFFECT] = {
 				.key	= "minarch_screen_effect",
-				.name	= "Shaders",
-				.desc	= "Denarmo shaders and CRT/LCD presets from Android Cannelloni.\nSimulates CRT scanlines, aperture grills, and handheld subpixels.",
+				.name	= "Preset",
+				.desc	= "Choose a CRT or LCD look.\nSoftware adaptations of Cannelloni shaders.",
 				.default_value = 0,
 				.value = 0,
-				.count = 15,
+				.count = SHADER_COUNT,
 				.values = effect_labels,
 				.labels = effect_labels,
 			},
@@ -910,7 +926,28 @@ static struct Config {
 				.value = 0,
 				.count = 3,
 				.values = curvature_labels,
-				.labels = curvature_labels,
+				.labels = curvature_display,
+			},
+			[FE_OPT_BRIGHTNESS] = {
+				.key = "cannelloni_shader_brightness",
+				.name = "Brightness",
+				.desc = "Adjust the brightness of the filtered image.",
+				.default_value = 2, .value = 2, .count = 5,
+				.values = brightness_labels, .labels = brightness_labels,
+			},
+			[FE_OPT_MASK] = {
+				.key = "cannelloni_shader_mask",
+				.name = "Mask Strength",
+				.desc = "Adjust phosphor masks and LCD subpixel grids.",
+				.default_value = 2, .value = 2, .count = 5,
+				.values = percent_labels, .labels = percent_labels,
+			},
+			[FE_OPT_GLOW] = {
+				.key = "cannelloni_shader_glow",
+				.name = "Glow",
+				.desc = "Adjust the light bleeding from bright pixels.",
+				.default_value = 1, .value = 1, .count = 5,
+				.values = percent_labels, .labels = percent_labels,
 			},
 			[FE_OPT_SHARPNESS] = {
 				.key	= "minarch_screen_sharpness",
@@ -1006,8 +1043,7 @@ static int Config_getValue(char* cfg, const char* key, char* out_value, int* loc
 	
 	strncpy(out_value, tmp, 256);
 	out_value[256 - 1] = '\0';
-	tmp = strchr(out_value, '\n');
-	if (!tmp) tmp = strchr(out_value, '\r');
+	tmp = strpbrk(out_value, "\r\n");
 	if (tmp) *tmp = '\0';
 
 	// LOG_info("\t%s = %s (%s)\n", key, out_value, (lock && *lock) ? "hidden":"shown");
@@ -1035,48 +1071,34 @@ static void Config_syncFrontend(char* key, int value) {
 		i = FE_OPT_SCALING;
 	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_EFFECT].key)) {
-		screen_effect = value;
-		if (value == 0) GFX_setEffect(EFFECT_NONE);
-		else if (value == 1) GFX_setEffect(EFFECT_LINE);
-		else if (value == 2) GFX_setEffect(EFFECT_GRID);
-		else if (value >= 10 && value <= 12) GFX_setEffect(EFFECT_GRID);
-		else GFX_setEffect(EFFECT_LINE);
+		if (value < 0 || value >= SHADER_COUNT) value = SHADER_NONE;
+		screen_effect = shader_settings.preset = value;
+		// The portable shader renderer handles all effects; never pass shader
+		// IDs to the platform's three-value Line/Grid API.
+		GFX_setEffect(EFFECT_NONE);
 		renderer.dst_p = 0;
 		i = FE_OPT_EFFECT;
-
-		char conf_path[MAX_PATH];
-		sprintf(conf_path, "%s/.cannelloni/shader.conf", SHARED_USERDATA_PATH);
-		FILE* sf = fopen(conf_path, "w");
-		if (sf) {
-			const char* preset_ids[] = {
-				"none", "line", "grid", "crt-cannelloni", "crt-cannelloni-lite",
-				"crt-easymode", "crt-aperture", "crt-geom", "crt-lottes-fast",
-				"zfast-crt", "lcd3x", "zfast-lcd", "dot", "scanline", "sharp-bilinear-simple"
-			};
-			const char* pid = (value >= 0 && value < 15) ? preset_ids[value] : "none";
-			fprintf(sf, "preset=%s\n", pid);
-			fprintf(sf, "effect=%d\n", value <= 2 ? value : (value >= 10 && value <= 12 ? 2 : 1));
-			fprintf(sf, "glslp=%s/.system/common/shaders/%s/%s.glslp\n", SDCARD_PATH, pid, pid);
-			fclose(sf);
-		}
 	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_INTENSITY].key)) {
 		i = FE_OPT_INTENSITY;
-		const char* intensities[] = { "25", "50", "75", "100" };
-		if (value >= 0 && value < 4) {
-			char conf_path[MAX_PATH];
-			sprintf(conf_path, "%s/.cannelloni/shader_intensity.txt", SHARED_USERDATA_PATH);
-			putFile(conf_path, (char*)intensities[value]);
-		}
+		shader_settings.intensity = (value + 1) * 25;
 	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_CURVATURE].key)) {
 		i = FE_OPT_CURVATURE;
-		const char* curvatures[] = { "flat", "subtle", "arcade" };
-		if (value >= 0 && value < 3) {
-			char conf_path[MAX_PATH];
-			sprintf(conf_path, "%s/.cannelloni/shader_curvature.txt", SHARED_USERDATA_PATH);
-			putFile(conf_path, (char*)curvatures[value]);
-		}
+		const int amounts[] = {0, 40, 85};
+		shader_settings.curvature = amounts[value >= 0 && value < 3 ? value : 0];
+	}
+	else if (exactMatch(key,config.frontend.options[FE_OPT_BRIGHTNESS].key)) {
+		i = FE_OPT_BRIGHTNESS;
+		shader_settings.brightness = 50 + value * 25;
+	}
+	else if (exactMatch(key,config.frontend.options[FE_OPT_MASK].key)) {
+		i = FE_OPT_MASK;
+		shader_settings.mask = value * 25;
+	}
+	else if (exactMatch(key,config.frontend.options[FE_OPT_GLOW].key)) {
+		i = FE_OPT_GLOW;
+		shader_settings.glow = value * 25;
 	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_SHARPNESS].key)) {
 		screen_sharpness = value;
@@ -1205,8 +1227,24 @@ static void Config_readOptionsString(char* cfg) {
 	for (int i=0; config.frontend.options[i].key; i++) {
 		Option* option = &config.frontend.options[i];
 		if (!Config_getValue(cfg, option->key, value, &option->lock)) continue;
-		OptionList_setOptionValue(&config.frontend, option->key, value);
-		Config_syncFrontend(option->key, option->value);
+		// Older Settings paks wrote quoted numeric indexes; native minarch
+		// writes labels. Accept both without turning an unknown value into Off.
+		char* raw = value;
+		if (*raw == '"') {
+			raw++;
+			char* end = strrchr(raw, '"');
+			if (end) *end = '\0';
+		}
+		int parsed = -1;
+		for (int j = 0; j < option->count; j++) {
+			if (!strcmp(option->values[j], raw)) { parsed = j; break; }
+		}
+		if (parsed < 0) {
+			char* end;
+			long number = strtol(raw, &end, 10);
+			if (end != raw && !*end && number >= 0 && number < option->count) parsed = number;
+		}
+		if (parsed >= 0) Config_syncFrontend(option->key, parsed);
 	}
 	
 	if (has_custom_controllers && Config_getValue(cfg,"minarch_gamepad_type",value,NULL)) {
@@ -1352,9 +1390,66 @@ static void Config_free(void) {
 	if (config.default_cfg) free(config.default_cfg);
 	if (config.user_cfg) free(config.user_cfg);
 }
+// Settings paks provide defaults. Console/game configurations retain
+// precedence and reading options never writes a shared preference file.
+static void Config_readShaderFile(const char* name) {
+	char path[MAX_PATH];
+	snprintf(path, sizeof(path), "%s/.cannelloni/%s", SHARED_USERDATA_PATH, name);
+	FILE* file = fopen(path, "r");
+	if (!file) return;
+	char line[256];
+	while (fgets(line, sizeof(line), file)) {
+		normalizeNewline(line);
+		trimTrailingNewlines(line);
+		char* value = strchr(line, '=');
+		if (!value) continue;
+		*value++ = '\0';
+		int id = -1, index = -1;
+		if (!strcmp(line, "preset")) {
+			id = FE_OPT_EFFECT;
+			for (int j = 0; j < SHADER_COUNT; j++)
+				if (!strcmp(value, Shader_getPreset(j)->id)) { index = j; break; }
+		}
+		else if (!strcmp(line, "curvature")) {
+			id = FE_OPT_CURVATURE;
+			if (!strcmp(value, "flat")) index = 0;
+			else if (!strcmp(value, "subtle")) index = 1;
+			else if (!strcmp(value, "arcade")) index = 2;
+		}
+		else {
+			char* end;
+			long n = strtol(value, &end, 10);
+			if (end == value || *end) continue;
+			if (!strcmp(line, "intensity") && n >= 25 && n <= 100) {
+				id = FE_OPT_INTENSITY; index = n / 25 - 1;
+			}
+			else if (!strcmp(line, "brightness") && n >= 50 && n <= 150) {
+				id = FE_OPT_BRIGHTNESS; index = (n - 50) / 25;
+			}
+			else if (!strcmp(line, "mask") && n >= 0 && n <= 100) {
+				id = FE_OPT_MASK; index = n / 25;
+			}
+			else if (!strcmp(line, "glow") && n >= 0 && n <= 100) {
+				id = FE_OPT_GLOW; index = n / 25;
+			}
+			else if (!strcmp(line, "sharpness") && n >= 0 && n < 3) {
+				id = FE_OPT_SHARPNESS; index = n;
+			}
+		}
+		if (id >= 0 && index >= 0 && !config.frontend.options[id].lock)
+			Config_syncFrontend(config.frontend.options[id].key, index);
+	}
+	fclose(file);
+}
 static void Config_readOptions(void) {
 	Config_readOptionsString(config.system_cfg);
 	Config_readOptionsString(config.default_cfg);
+	Config_readShaderFile("shader.conf");
+	if (!strcmp(core.tag, "NDS")) Config_readShaderFile("shader_nds.conf");
+	else if (!strcmp(core.tag, "GB") || !strcmp(core.tag, "GBC") ||
+		!strcmp(core.tag, "GBA") || !strcmp(core.tag, "GG")) Config_readShaderFile("shader_handheld.conf");
+	else if (!strcmp(core.tag, "FC") || !strcmp(core.tag, "SFC") ||
+		!strcmp(core.tag, "MD") || !strcmp(core.tag, "PS")) Config_readShaderFile("shader_console.conf");
 	Config_readOptionsString(config.user_cfg);
 
 	// screen_scaling = SCALE_NATIVE; // TODO: tmp
@@ -1814,7 +1909,7 @@ static void input_poll_callback(void) {
 						break;
 					case SHORTCUT_CYCLE_EFFECT:
 						screen_effect += 1;
-						if (screen_effect>=EFFECT_COUNT) screen_effect -= EFFECT_COUNT;
+						if (screen_effect>=SHADER_COUNT) screen_effect = SHADER_NONE;
 						Config_syncFrontend(config.frontend.options[FE_OPT_EFFECT].key, screen_effect);
 						break;
 					default: break;
@@ -2596,14 +2691,21 @@ static uint32_t sec_start = 0;
 
 // buffer to convert xrgb8888 to rgb565
 static void* buffer = NULL;
+static size_t buffer_size;
 static void buffer_dealloc(void) {
 	if (!buffer) return;
 	free(buffer);
 	buffer = NULL;
+	buffer_size = 0;
 }
 static void buffer_realloc(int w, int h, int p) {
+	size_t needed = (size_t)w * FIXED_BPP * h;
+	// Menu previews borrow this buffer while scaling options are changed.
+	// Geometry changes alone must not invalidate the last converted frame.
+	if (buffer && buffer_size >= needed) return;
 	buffer_dealloc();
-	buffer = malloc((w * FIXED_BPP) * h);
+	buffer = malloc(needed);
+	if (buffer) buffer_size = needed;
 	// LOG_info("buffer_realloc(%i,%i,%i)\n", w,h,p);
 }
 static void buffer_downsample(const void *data, unsigned width, unsigned height, size_t pitch) {
@@ -2859,8 +2961,71 @@ static void selectScaler(int src_w, int src_h, int src_p) {
 	}
 	
 	// if (screen->w!=dst_w || screen->h!=dst_w || screen->pitch!=dst_p) {
-		screen = GFX_resize(dst_w,dst_h,dst_p);
+		if (screen_effect != SHADER_NONE)
+			screen = GFX_resize(DEVICE_WIDTH, DEVICE_HEIGHT, DEVICE_PITCH);
+		else screen = GFX_resize(dst_w,dst_h,dst_p);
 	// }
+}
+
+// Render effects at display resolution so masks and scanlines keep their
+// intended size on both SDL1 blitters and SDL2 texture renderers. The original
+// core frame remains untouched for save previews and returning from the menu.
+static void Shader_blit(void) {
+	if (screen_effect == SHADER_NONE) {
+		renderer.dst = screen->pixels;
+		GFX_blitRenderer(&renderer);
+		return;
+	}
+	if (!shader_screen || shader_screen->w != DEVICE_WIDTH || shader_screen->h != DEVICE_HEIGHT) {
+		if (shader_screen) SDL_FreeSurface(shader_screen);
+		shader_screen = SDL_CreateRGBSurface(SDL_SWSURFACE, DEVICE_WIDTH, DEVICE_HEIGHT,
+			16, RGBA_MASK_565);
+	}
+	if (!shader_screen) return;
+	int sw = renderer.true_w, sh = renderer.true_h, sx = 0, sy = 0;
+	int dw = DEVICE_WIDTH, dh = DEVICE_HEIGHT;
+	int scaling = screen_scaling;
+	if (scaling == SCALE_CROPPED && DEVICE_WIDTH == HDMI_WIDTH) scaling = SCALE_NATIVE;
+	if (scaling == SCALE_NATIVE || scaling == SCALE_CROPPED) {
+		int scale = scaling == SCALE_CROPPED
+			? MIN(CEIL_DIV(dw, sw), CEIL_DIV(dh, sh)) : MIN(dw / sw, dh / sh);
+		if (scale < 1) scale = 1;
+		int cw = MIN(sw, dw / scale), ch = MIN(sh, dh / scale);
+		sx = (sw - cw) / 2;
+		sy = (sh - ch) / 2;
+		sw = cw; sh = ch;
+		dw = sw * scale; dh = sh * scale;
+	}
+	else if (scaling == SCALE_ASPECT && core.aspect_ratio > 0) {
+		dw = dh * core.aspect_ratio;
+		if (dw > DEVICE_WIDTH) {
+			dw = DEVICE_WIDTH;
+			dh = dw / core.aspect_ratio;
+		}
+	}
+	if (sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0) return;
+	const uint8_t* source = (const uint8_t*)renderer.src + sy * renderer.src_p + sx * 2;
+	const uint16_t* pixels = Shader_process(&shader_context, &shader_settings,
+		source, sw, sh, renderer.src_p, dw, dh, shader_frame++);
+	if (!pixels) {
+		LOG_error("Unable to allocate shader frame; disabling shaders.\n");
+		Config_syncFrontend(config.frontend.options[FE_OPT_EFFECT].key, SHADER_NONE);
+		return;
+	}
+	SDL_FillRect(shader_screen, NULL, 0);
+	int dx = (DEVICE_WIDTH - dw) / 2, dy = (DEVICE_HEIGHT - dh) / 2;
+	for (int y = 0; y < dh; y++) {
+		memcpy((uint8_t*)shader_screen->pixels + (y + dy) * shader_screen->pitch + dx * 2,
+			pixels + y * dw, dw * 2);
+	}
+	shader_renderer = (GFX_Renderer){
+		.src = shader_screen->pixels, .dst = screen->pixels, .aspect = -1, .scale = 1,
+		.true_w = DEVICE_WIDTH, .true_h = DEVICE_HEIGHT,
+		.src_w = DEVICE_WIDTH, .src_h = DEVICE_HEIGHT, .src_p = shader_screen->pitch,
+		.dst_w = DEVICE_WIDTH, .dst_h = DEVICE_HEIGHT, .dst_p = screen->pitch
+	};
+	shader_renderer.blit = GFX_getScaler(&shader_renderer);
+	GFX_blitRenderer(&shader_renderer);
 }
 static void video_refresh_callback_main(const void *data, unsigned width, unsigned height, size_t pitch) {
 	// return;
@@ -2892,11 +3057,13 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 
 	fps_ticks += 1;
 	
-	if (downsample) pitch /= 2; // everything expects 16 but we're downsampling from 32
+	size_t input_pitch = pitch;
+	// Conversion writes tightly packed RGB565 rows, regardless of core padding.
+	if (downsample) pitch = width * FIXED_BPP;
 	
 	// if source has changed size (or forced by dst_p==0)
 	// eg. true src + cropped src + fixed dst + cropped dst
-	if (renderer.dst_p==0 || width!=renderer.true_w || height!=renderer.true_h) {
+	if (renderer.dst_p==0 || width!=renderer.true_w || height!=renderer.true_h || pitch!=renderer.src_p) {
 		selectScaler(width, height, pitch);
 		GFX_clearAll();
 	}
@@ -2923,7 +3090,7 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	}
 	
 	if (downsample) {
-		buffer_downsample(data,width,height,pitch*2);
+		buffer_downsample(data,width,height,input_pitch);
 		renderer.src = buffer;
 	}
 	else {
@@ -2932,7 +3099,7 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	renderer.dst = screen->pixels;
 	// LOG_info("video_refresh_callback: %ix%i@%i %ix%i@%i\n",width,height,pitch,screen->w,screen->h,screen->pitch);
 	
-	GFX_blitRenderer(&renderer);
+	Shader_blit();
 	
 	if (!thread_video) GFX_flip(screen);
 	last_flip_time = SDL_GetTicks();
@@ -3107,7 +3274,8 @@ void Core_close(void) {
 
 ///////////////////////////////////////
 
-#define MENU_ITEM_COUNT 5
+#define MENU_ITEM_COUNT 6
+#define MENU_VISIBLE_ITEMS 5
 #define MENU_SLOT_COUNT 8
 
 enum {
@@ -3115,6 +3283,7 @@ enum {
 	ITEM_SAVE,
 	ITEM_LOAD,
 	ITEM_OPTS,
+	ITEM_SHADERS,
 	ITEM_QUIT,
 };
 
@@ -3156,6 +3325,7 @@ static struct {
 		[ITEM_SAVE] = "Save",
 		[ITEM_LOAD] = "Load",
 		[ITEM_OPTS] = "Options",
+		[ITEM_SHADERS] = "Shaders",
 		[ITEM_QUIT] = "Quit",
 	}
 };
@@ -3299,6 +3469,9 @@ static int OptionFrontend_optionChanged(MenuList* list, int i) {
 	Config_syncFrontend(item->key, item->value);
 	return MENU_CALLBACK_NOP;
 }
+static int Option_isShader(int id) {
+	return id >= FE_OPT_EFFECT && id <= FE_OPT_GLOW;
+}
 static MenuList OptionFrontend_menu = {
 	.type = MENU_VAR,
 	.on_change = OptionFrontend_optionChanged,
@@ -3310,14 +3483,14 @@ static int OptionFrontend_openMenu(MenuList* list, int i) {
 		if (!config.frontend.enabled_count) {
 			int enabled_count = 0;
 			for (int i=0; i<config.frontend.count; i++) {
-				if (!config.frontend.options[i].lock) enabled_count += 1;
+				if (!Option_isShader(i) && !config.frontend.options[i].lock) enabled_count += 1;
 			}
 			config.frontend.enabled_count = enabled_count;
 			config.frontend.enabled_options = calloc(enabled_count+1, sizeof(Option*));
 			int j = 0;
 			for (int i=0; i<config.frontend.count; i++) {
 				Option* item = &config.frontend.options[i];
-				if (item->lock) continue;
+				if (Option_isShader(i) || item->lock) continue;
 				config.frontend.enabled_options[j] = item;
 				j += 1;
 			}
@@ -3344,6 +3517,90 @@ static int OptionFrontend_openMenu(MenuList* list, int i) {
 	}
 	
 	Menu_options(&OptionFrontend_menu);
+	return MENU_CALLBACK_NOP;
+}
+
+// Build the parameter list for the current preset. Only controls used
+// by the selected shader are offered, and every value goes through Config.
+static int OptionShaders_openMenu(MenuList* list, int i);
+static int OptionShaders_changed(MenuList* list, int i) {
+	OptionFrontend_optionChanged(list, i);
+	return MENU_CALLBACK_NOP;
+}
+static int OptionShaders_choosePreset(MenuList* list, int i) {
+	MenuItem item = {0};
+	Option* option = &config.frontend.options[FE_OPT_EFFECT];
+	if (option->lock || i < 0 || i >= SHADER_COUNT) return MENU_CALLBACK_EXIT;
+	item.key = option->key;
+	item.value = i;
+	MenuList choice = {.items = &item};
+	OptionShaders_changed(&choice, 0);
+	return MENU_CALLBACK_EXIT;
+}
+static int OptionShaders_presets(MenuList* list, int i) {
+	if (config.frontend.options[FE_OPT_EFFECT].lock)
+		return Menu_message("This shader setting is locked for this console.",
+			(char*[]){"B", "BACK", NULL});
+	MenuItem items[SHADER_COUNT + 1] = {0};
+	for (int j = 0; j < SHADER_COUNT; j++) {
+		const ShaderPreset* preset = Shader_getPreset(j);
+		items[j].name = (char*)preset->name;
+		items[j].desc = (char*)preset->description;
+	}
+	MenuList presets = {.type = MENU_LIST, .items = items,
+		.on_confirm = OptionShaders_choosePreset};
+	Menu_options(&presets);
+	list->items[i].desc = (char*)Shader_getPreset(screen_effect)->name;
+	return MENU_CALLBACK_NOP;
+}
+static int OptionShaders_parameters(MenuList* list, int i) {
+	const unsigned flags[] = {
+		SHADER_PARAM_INTENSITY, SHADER_PARAM_CURVATURE,
+		SHADER_PARAM_BRIGHTNESS, SHADER_PARAM_MASK, SHADER_PARAM_GLOW
+	};
+	const ShaderPreset* preset = Shader_getPreset(screen_effect);
+	MenuItem items[6] = {0};
+	int count = 0;
+	for (int id = FE_OPT_INTENSITY; id <= FE_OPT_GLOW; id++) {
+		Option* option = &config.frontend.options[id];
+		if (option->lock || !(preset->parameters & flags[id - FE_OPT_INTENSITY])) continue;
+		items[count++] = (MenuItem){.name = option->name, .desc = option->desc,
+			.key = option->key, .value = option->value, .values = option->labels};
+	}
+	if (!count) return Menu_message("This preset has no adjustable parameters.",
+		(char*[]){"B", "BACK", NULL});
+	MenuList parameters = {.type = MENU_VAR, .items = items,
+		.on_change = OptionShaders_changed};
+	Menu_options(&parameters);
+	return MENU_CALLBACK_NOP;
+}
+static int OptionShaders_saveConsole(MenuList* list, int i) {
+	Config_write(CONFIG_WRITE_ALL);
+	return Menu_message("Saved for console.", (char*[]){"B", "BACK", NULL});
+}
+static int OptionShaders_saveGame(MenuList* list, int i) {
+	Config_write(CONFIG_WRITE_GAME);
+	return Menu_message("Saved for game.", (char*[]){"B", "BACK", NULL});
+}
+static int OptionShaders_reset(MenuList* list, int i) {
+	for (int id = FE_OPT_EFFECT; id <= FE_OPT_GLOW; id++) {
+		Option* option = &config.frontend.options[id];
+		if (!option->lock) Config_syncFrontend(option->key, option->default_value);
+	}
+	list->items[0].desc = (char*)Shader_getPreset(screen_effect)->name;
+	return MENU_CALLBACK_NOP;
+}
+static int OptionShaders_openMenu(MenuList* list, int i) {
+	MenuItem items[] = {
+		{"Preset", (char*)Shader_getPreset(screen_effect)->name, .on_confirm=OptionShaders_presets},
+		{"Parameters", .on_confirm=OptionShaders_parameters},
+		{"Save for console", "Save all current options for this console.", .on_confirm=OptionShaders_saveConsole},
+		{"Save for game", "Save all current options for this game.", .on_confirm=OptionShaders_saveGame},
+		{"Reset shaders", "Turn shaders off and reset their values.", .on_confirm=OptionShaders_reset},
+		{NULL}
+	};
+	MenuList shaders = {.type=MENU_LIST, .items=items};
+	Menu_options(&shaders);
 	return MENU_CALLBACK_NOP;
 }
 
@@ -3668,7 +3925,7 @@ static int OptionQuicksave_onConfirm(MenuList* list, int i) {
 static MenuList options_menu = {
 	.type = MENU_LIST,
 	.items = (MenuItem[]) {
-		{"Frontend", "Cannelloni (" BUILD_DATE " " BUILD_HASH ")",.on_confirm=OptionFrontend_openMenu},
+		{"Frontend", "Cannelloni " CANNELLONI_VERSION,.on_confirm=OptionFrontend_openMenu},
 		{"Emulator",.on_confirm=OptionEmulator_openMenu},
 		{"Controls",.on_confirm=OptionControls_openMenu},
 		{"Shortcuts",.on_confirm=OptionShortcuts_openMenu}, 
@@ -4483,6 +4740,10 @@ static void Menu_loop(void) {
 					}
 				}
 				break;
+				case ITEM_SHADERS:
+					OptionShaders_openMenu(NULL, 0);
+					dirty = 1;
+					break;
 				case ITEM_QUIT:
 					status = STATUS_QUIT;
 					show_menu = 0;
@@ -4531,9 +4792,11 @@ static void Menu_loop(void) {
 			else GFX_blitButtonGroup((char*[]){ BTN_SLEEP==BTN_POWER?"POWER":"MENU","SLEEP", NULL }, 0, screen, 0);
 			GFX_blitButtonGroup((char*[]){ "B","BACK", "A","OKAY", NULL }, 1, screen, 1);
 			
-			// list
-			oy = (((DEVICE_HEIGHT / FIXED_SCALE) - PADDING * 2) - (MENU_ITEM_COUNT * PILL_SIZE)) / 2;
-			for (int i=0; i<MENU_ITEM_COUNT; i++) {
+			// Keep five visible rows on the smallest screens; scroll to Quit.
+			if (selected < menu_start) menu_start = selected;
+			if (selected >= menu_start + MENU_VISIBLE_ITEMS) menu_start = selected - MENU_VISIBLE_ITEMS + 1;
+			oy = (((DEVICE_HEIGHT / FIXED_SCALE) - PADDING * 2) - (MENU_VISIBLE_ITEMS * PILL_SIZE)) / 2;
+			for (int i=menu_start; i<MIN(MENU_ITEM_COUNT, menu_start + MENU_VISIBLE_ITEMS); i++) {
 				char* item = menu.items[i];
 				SDL_Color text_color = COLOR_WHITE;
 				
@@ -4560,7 +4823,7 @@ static void Menu_loop(void) {
 					// pill
 					GFX_blitPill(ASSET_WHITE_PILL, screen, &(SDL_Rect){
 						SCALE1(PADDING),
-						SCALE1(oy + PADDING + (i * PILL_SIZE)),
+						SCALE1(oy + PADDING + ((i - menu_start) * PILL_SIZE)),
 						ow,
 						SCALE1(PILL_SIZE)
 					});
@@ -4571,7 +4834,7 @@ static void Menu_loop(void) {
 					text = TTF_RenderUTF8_Blended(font.large, item, COLOR_BLACK);
 					SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
 						SCALE1(2 + PADDING + BUTTON_PADDING),
-						SCALE1(1 + PADDING + oy + (i * PILL_SIZE) + 4)
+						SCALE1(1 + PADDING + oy + ((i - menu_start) * PILL_SIZE) + 4)
 					});
 					SDL_FreeSurface(text);
 				}
@@ -4580,7 +4843,7 @@ static void Menu_loop(void) {
 				text = TTF_RenderUTF8_Blended(font.large, item, text_color);
 				SDL_BlitSurface(text, NULL, screen, &(SDL_Rect){
 					SCALE1(PADDING + BUTTON_PADDING),
-					SCALE1(oy + PADDING + (i * PILL_SIZE) + 4)
+					SCALE1(oy + PADDING + ((i - menu_start) * PILL_SIZE) + 4)
 				});
 				SDL_FreeSurface(text);
 			}
@@ -4649,9 +4912,11 @@ static void Menu_loop(void) {
 		if (restore_w!=DEVICE_WIDTH || restore_h!=DEVICE_HEIGHT) {
 			screen = GFX_resize(restore_w,restore_h,restore_p);
 		}
-		GFX_setEffect(screen_effect);
+		GFX_setEffect(EFFECT_NONE);
+		// Force geometry to refresh on the next core frame. Re-entering the
+		// video callback here would downsample an already RGB565 frame twice.
+		renderer.dst_p = 0;
 		GFX_clear(screen);
-		video_refresh_callback(renderer.src, renderer.true_w, renderer.true_h, renderer.src_p);
 		
 		setOverclock(overclock); // restore overclock value
 		if (rumble_strength) VIB_setStrength(rumble_strength);
@@ -4907,6 +5172,8 @@ int main(int argc , char* argv[]) {
 		hdmimon();
 	}
 	
+	Shader_destroy(&shader_context);
+	if (shader_screen) SDL_FreeSurface(shader_screen);
 	Menu_quit();
 	QuitSettings();
 	

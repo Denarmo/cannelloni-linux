@@ -1,6 +1,7 @@
 import os
 import sys
-import io
+import tempfile
+from contextlib import contextmanager, ExitStack
 import time
 import json
 import zipfile
@@ -10,6 +11,7 @@ import subprocess
 import webbrowser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import urllib.parse
+from pathlib import Path
 
 # -----------------------------------------------------------------------------
 # Cannelloni Universal SD Installer
@@ -17,9 +19,18 @@ import urllib.parse
 # Supports native Tkinter desktop GUI and lightweight local Web GUI fallback.
 # -----------------------------------------------------------------------------
 
-VERSION = "20261012-0"
+def installer_version():
+    """Read the same VERSION file in source checkouts, ZIPs and frozen builds."""
+    directory = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    for path in (directory / "VERSION", directory.parent / "VERSION"):
+        if path.is_file():
+            return path.read_text(encoding="utf-8").strip()
+    raise FileNotFoundError("VERSION is missing. Extract the complete Cannelloni installer archive.")
 
-# 17 Supported Handhelds
+
+VERSION = installer_version()
+
+# Supported handheld profiles
 DEVICES = [
     {
         "id": "miyoomini",
@@ -135,11 +146,19 @@ DEVICES = [
     },
     {
         "id": "magicmini",
-        "name": "MagicX XU10",
+        "name": "MagicX XU Mini M",
         "platform": "magicmini",
         "device": "magicmini",
         "brand": "MagicX",
-        "desc": "3.5\" 640x480 • Rockchip RK3326S • Dual Analog Sticks • Vertical",
+        "desc": "MagicX XU Mini M • Compact Horizontal • magicmini platform",
+    },
+    {
+        "id": "zero28",
+        "name": "MagicX Mini Zero 28",
+        "platform": "zero28",
+        "device": "zero28",
+        "brand": "MagicX",
+        "desc": "MagicX Mini Zero 28 • Compact Horizontal • zero28 platform",
     },
     {
         "id": "gkdpixel",
@@ -409,33 +428,120 @@ def format_size(bytes_num):
         bytes_num /= 1024.0
     return f"{bytes_num:.1f} PB"
 
+PAYLOAD_NAMES = ("Cannelloni.zip", "Cannoli.zip")
+
+
 def find_cannelloni_zip():
-    """Locates Cannelloni.zip payload across common paths."""
-    candidates = []
-    # If frozen (PyInstaller executable)
-    if getattr(sys, 'frozen', False):
+    """Prefer the bundled payload beside the installer over development builds."""
+    directories = []
+    if getattr(sys, "frozen", False):
         exe_dir = os.path.dirname(sys.executable)
-        candidates.append(os.path.join(exe_dir, "Cannelloni.zip"))
-        candidates.append(os.path.join(exe_dir, f"Cannelloni-{VERSION}.zip"))
-        candidates.append(os.path.join(exe_dir, "releases", "Cannelloni.zip"))
-        if hasattr(sys, '_MEIPASS'):
-            candidates.append(os.path.join(sys._MEIPASS, "Cannelloni.zip"))
+        directories.extend((exe_dir, os.path.join(exe_dir, "releases")))
+        if hasattr(sys, "_MEIPASS"):
+            directories.append(sys._MEIPASS)
 
-    # Script location
     curr_dir = os.path.dirname(os.path.abspath(__file__))
-    candidates.append(os.path.join(curr_dir, "Cannelloni.zip"))
-    candidates.append(os.path.join(curr_dir, f"Cannelloni-{VERSION}.zip"))
-    candidates.append(os.path.join(curr_dir, "..", "build_release", "temp", "Cannelloni.zip"))
-    candidates.append(os.path.join(curr_dir, "..", "releases", "Cannelloni.zip"))
-    candidates.append(os.path.join(curr_dir, "releases", "Cannelloni.zip"))
-    candidates.append(os.path.join(os.getcwd(), "build_release", "temp", "Cannelloni.zip"))
-    candidates.append(os.path.join(os.getcwd(), "Cannelloni.zip"))
-    candidates.append(os.path.join(os.getcwd(), "releases", "Cannelloni.zip"))
-
-    for c in candidates:
-        if os.path.isfile(c):
-            return os.path.abspath(c)
+    directories.extend((
+        curr_dir,
+        os.path.join(curr_dir, "releases"),
+        os.path.join(curr_dir, "..", "releases"),
+        os.getcwd(),
+        os.path.join(os.getcwd(), "releases"),
+        os.path.join(curr_dir, "..", "build_release", "temp"),
+        os.path.join(os.getcwd(), "build_release", "temp"),
+    ))
+    names = PAYLOAD_NAMES + (f"Cannelloni-{VERSION}.zip", "Cannelloni-Installer.zip")
+    for directory in directories:
+        for name in names:
+            candidate = os.path.join(directory, name)
+            if os.path.isfile(candidate):
+                return os.path.abspath(candidate)
+        # A completed same-card install retains its source with a suffix that
+        # device boot scripts do not mistake for a pending ZIP update.
+        try:
+            entries = os.listdir(directory)
+        except OSError:
+            continue
+        for name in names:
+            completed = name + ".installed"
+            matches = []
+            for entry in entries:
+                if entry == completed:
+                    matches.append((0, entry))
+                elif entry.startswith(completed + ".") and entry[len(completed) + 1:].isdigit():
+                    matches.append((int(entry[len(completed) + 1:]), entry))
+            for _, entry in sorted(matches, reverse=True):
+                candidate = os.path.join(directory, entry)
+                if os.path.isfile(candidate):
+                    return os.path.abspath(candidate)
     return None
+
+
+def preserve_completed_source(zip_path, target_path):
+    """Rename a consumed root ZIP so first boot cannot reinstall its defaults."""
+    if not zip_path.lower().endswith(".zip"):
+        return  # Already preserved by an earlier successful installation.
+    if os.path.realpath(os.path.dirname(zip_path)) != os.path.realpath(target_path):
+        return  # Sources on the computer or in another folder remain in place.
+    suffix = 0
+    while True:
+        destination = zip_path + ".installed" + (f".{suffix}" if suffix else "")
+        try:
+            # Reserve a unique destination before replacing our own empty
+            # placeholder; never overwrite an earlier preserved archive.
+            with open(destination, "xb"):
+                pass
+        except FileExistsError:
+            suffix += 1
+            continue
+        try:
+            os.replace(zip_path, destination)
+        except OSError:
+            os.remove(destination)
+            raise
+        return
+
+
+@contextmanager
+def open_os_payload(zip_path):
+    """Open the OS archive, ignoring loose copies in legacy release wrappers.
+
+    Large nested archives spill to temporary storage instead of holding the
+    whole OS in RAM. ExitStack also closes every nested archive on failure.
+    """
+    with ExitStack() as stack:
+        archive = stack.enter_context(zipfile.ZipFile(zip_path))
+        for depth in range(8):
+            nested = next((name for name in PAYLOAD_NAMES if name in archive.namelist()), None)
+            if nested is None:
+                if not any(name.startswith(".system/") for name in archive.namelist()):
+                    raise ValueError("The archive does not contain a Cannelloni OS payload.")
+                yield archive
+                return
+            storage = stack.enter_context(tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024))
+            with archive.open(nested) as source:
+                shutil.copyfileobj(source, storage)
+            storage.seek(0)
+            archive = stack.enter_context(zipfile.ZipFile(storage))
+        raise ValueError("Too many nested Cannelloni payload archives.")
+
+
+def payload_members(archive, target_path):
+    """Validate all output paths before copying anything to the SD card."""
+    target_root = os.path.realpath(target_path)
+    members = []
+    for member in archive.infolist():
+        name = member.filename
+        if name.startswith(("Cannelloni-Installer", "cannelloni_installer")) or name in PAYLOAD_NAMES:
+            continue
+        parts = name.replace("\\", "/").split("/")
+        if name.startswith(("/", "\\")) or ".." in parts or any(":" in part for part in parts):
+            raise ValueError(f"Unsafe path in OS payload: {name}")
+        destination = os.path.realpath(os.path.join(target_root, *parts))
+        if os.path.commonpath((target_root, destination)) != target_root:
+            raise ValueError(f"OS payload path escapes the target directory: {name}")
+        members.append(member)
+    return members
 
 def detect_drives():
     """Returns list of detected removable/external drives on Windows and Linux."""
@@ -553,7 +659,7 @@ def detect_drives():
 
 def perform_installation(target_path, lang_code, accent_hex, device_id, progress_callback, status_callback):
     """
-    Extracts Cannelloni.zip to target_path and sets up:
+    Extracts the bundled Cannelloni.zip or Cannoli.zip to target_path and sets up:
     - .userdata/shared/.cannelloni/language.txt
     - .userdata/shared/.cannelloni/accent_color.txt
     - .userdata/shared/.cannelloni/device_model.txt
@@ -565,7 +671,7 @@ def perform_installation(target_path, lang_code, accent_hex, device_id, progress
     """
     zip_path = find_cannelloni_zip()
     if not zip_path:
-        raise FileNotFoundError("Cannelloni.zip OS payload not found.")
+        raise FileNotFoundError("Cannelloni.zip or Cannoli.zip OS payload not found next to the installer.")
 
     if not os.path.isdir(target_path):
         os.makedirs(target_path, exist_ok=True)
@@ -580,38 +686,27 @@ def perform_installation(target_path, lang_code, accent_hex, device_id, progress
     target_name = dev_obj["name"]
 
     # 1. Unzip Cannelloni payload with progress
-    with zipfile.ZipFile(zip_path, 'r') as outer_zf:
-        if "Cannelloni.zip" in outer_zf.namelist():
-            status_callback("Extracting nested Cannelloni OS payload...")
-            payload_data = outer_zf.read("Cannelloni.zip")
-            zf = zipfile.ZipFile(io.BytesIO(payload_data), 'r')
-        else:
-            zf = outer_zf
-
-        infolist = [
-            m for m in zf.infolist()
-            if not m.filename.startswith(("Cannelloni-Installer", "cannelloni_installer"))
-            and m.filename != "Cannelloni.zip"
-        ]
+    with open_os_payload(zip_path) as zf:
+        infolist = payload_members(zf, target_path)
         total_items = len(infolist)
         extracted = 0
 
         for member in infolist:
-            zf.extract(member, target_path)
+            destination = zf.extract(member, target_path)
+            permissions = (member.external_attr >> 16) & 0o777
+            if sys.platform != "win32" and permissions:
+                try:
+                    os.chmod(destination, permissions)
+                except OSError:
+                    pass  # FAT cards may not support POSIX permissions.
             extracted += 1
             if extracted % 25 == 0 or extracted == total_items:
                 pct = int((extracted / total_items) * 85)
                 progress_callback(pct)
                 status_callback(f"Extracting {member.filename} ({extracted}/{total_items})...")
 
-    # Clean up any misplaced installer binaries or zip from target root if present
-    for bad_file in ("Cannelloni.zip", "Cannelloni-Installer.exe", "Cannelloni-Installer.bat", "Cannelloni-Installer.sh", "cannelloni_installer.py"):
-        bf_path = os.path.join(target_path, bad_file)
-        if os.path.isfile(bf_path):
-            try:
-                os.remove(bf_path)
-            except Exception:
-                pass
+    # Installer files are never extracted. The source archive is preserved
+    # after successful configuration, including when installing from the card.
 
     progress_callback(86)
     status_callback("Configuring system preferences and hardware profile...")
@@ -670,7 +765,9 @@ def perform_installation(target_path, lang_code, accent_hex, device_id, progress
     progress_callback(94)
     status_callback(f"Applying accent theme ({accent_hex})...")
 
-    # 5. Pre-apply accent color spritesheets and binaries
+    # 5. Pre-apply accent color spritesheets and external list widgets.
+    # The current native frontends read accent_color.txt themselves; stale
+    # theme binaries from an older card/archive must never replace them.
     theme_dir = os.path.join(target_path, ".system", "res", "themes", accent_hex)
     res_dir = os.path.join(target_path, ".system", "res")
     if os.path.isdir(theme_dir) and os.path.isdir(res_dir):
@@ -684,7 +781,9 @@ def perform_installation(target_path, lang_code, accent_hex, device_id, progress
         theme_bin = os.path.join(theme_dir, "bin", target_platform)
         plat_bin = os.path.join(target_path, ".system", target_platform, "bin")
         if os.path.isdir(theme_bin) and os.path.isdir(plat_bin):
-            for bitem in os.listdir(theme_bin):
+            for bitem in ("cannelloni-list", "minui-list"):
+                if not os.path.isfile(os.path.join(theme_bin, bitem)):
+                    continue
                 try:
                     shutil.copy2(os.path.join(theme_bin, bitem), os.path.join(plat_bin, bitem))
                 except Exception:
@@ -703,6 +802,7 @@ def perform_installation(target_path, lang_code, accent_hex, device_id, progress
         except Exception:
             pass
 
+    preserve_completed_source(zip_path, target_path)
     progress_callback(100)
     status_callback("Installation Completed Successfully!")
     return True
@@ -734,7 +834,7 @@ if TKINTER_AVAILABLE:
             self.text_primary = "#f4f4f5"
             self.text_muted = "#9ca3af"
 
-            self.root.title("Cannelloni SD Installer")
+            self.root.title(f"Cannelloni SD Installer {VERSION}")
             self.root.geometry("820x680")
             self.root.minsize(780, 620)
             self.root.configure(bg=self.bg_main)
@@ -1116,7 +1216,7 @@ if TKINTER_AVAILABLE:
                     btn.configure(bg=self.bg_card_inner, fg=self.text_primary)
 
             self.lbl_title.configure(text=f"🍝 {self.t('title').upper()}")
-            self.lbl_subtitle.configure(text=self.t("subtitle"))
+            self.lbl_subtitle.configure(text=f"{self.t('subtitle')} · v{VERSION}")
             self.lbl_card1_title.configure(text=self.t("drive_section"))
             self.btn_refresh.configure(text=self.t("refresh"))
             self.btn_browse.configure(text=self.t("browse"))
@@ -1403,6 +1503,7 @@ let devices = [];
 let colors = [];
 let drives = [];
 let translations = {};
+let version = '';
 
 async function init() {
   const res = await fetch('/api/init');
@@ -1411,6 +1512,8 @@ async function init() {
   colors = data.colors || [];
   drives = data.drives || [];
   translations = data.languages || {};
+  version = data.version || '';
+  document.title = 'Cannelloni SD Installer ' + version;
   
   // Render drives
   renderDrives();
@@ -1488,7 +1591,7 @@ function applyLang() {
   const dict = translations[currentLang] || translations['en'] || {};
   const t = (k, def) => dict[k] || def;
   document.getElementById('app-title').textContent = '🍝 ' + (t('title', 'Cannelloni SD Installer')).toUpperCase();
-  document.getElementById('app-sub').textContent = t('subtitle', 'Universal Retro Handheld Setup Tool');
+  document.getElementById('app-sub').textContent = t('subtitle', 'Universal Retro Handheld Setup Tool') + ' · v' + version;
   document.getElementById('card-drive-title').textContent = t('drive_section', '1. Target SD Card');
   document.getElementById('card-drive-desc').textContent = t('drive_desc', 'Select the removable drive for your handheld\'s SD card.');
   document.getElementById('card-color-title').textContent = t('color_section', '2. Accent Color Theme');
@@ -1584,6 +1687,7 @@ class WebHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             payload = {
+                "version": VERSION,
                 "devices": DEVICES,
                 "colors": ACCENT_COLORS,
                 "drives": detect_drives(),
