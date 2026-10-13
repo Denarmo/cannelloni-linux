@@ -1,0 +1,19 @@
+diff --git a/desmume/src/emufile.h b/desmume/src/emufile.h
+--- a/desmume/src/emufile.h
++++ b/desmume/src/emufile.h
+@@ -38,6 +38,15 @@
+ 
+ #include "types.h"
+ 
++// uClibc exposes these as function-like macros. They collide with the
++// EMUFILE methods below; use the standard library functions instead.
++#ifdef fgetc
++#undef fgetc
++#endif
++#ifdef fputc
++#undef fputc
++#endif
++
+ #ifdef HOST_WINDOWS 
+ #include <io.h>
+ #else

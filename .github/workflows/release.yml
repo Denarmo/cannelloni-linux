@@ -48,6 +48,45 @@ jobs:
           - {platform: tg5040, runner: ubuntu-24.04-arm}
     steps:
       - uses: actions/checkout@v4
+      - name: Resolve upstream toolchain revision
+        id: toolchain
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          mkdir -p toolchains
+          git clone --depth 1 "https://github.com/shauninman/union-${PLATFORM}-toolchain/" "toolchains/${PLATFORM}-toolchain"
+          revision=$(git -C "toolchains/${PLATFORM}-toolchain" rev-parse HEAD)
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+      - name: Restore compiled toolchain image
+        id: toolchain-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/toolchain-image.tar.gz
+          key: toolchain-v1-${{ matrix.platform }}-${{ matrix.runner }}-${{ steps.toolchain.outputs.revision }}-${{ hashFiles('makefile.toolchain', 'scripts/prepare_toolchain.py') }}
+      - name: Load cached toolchain image
+        if: steps.toolchain-cache.outputs.cache-hit == 'true'
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          gzip -dc "$RUNNER_TEMP/toolchain-image.tar.gz" | docker load
+          docker image inspect "${PLATFORM}-toolchain" > /dev/null
+          touch "toolchains/${PLATFORM}-toolchain/.build"
+      - name: Build and archive toolchain image
+        if: steps.toolchain-cache.outputs.cache-hit != 'true'
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          make -f makefile.toolchain PLATFORM="$PLATFORM" "toolchains/${PLATFORM}-toolchain/.build"
+          docker image inspect "${PLATFORM}-toolchain" > /dev/null
+          docker save "${PLATFORM}-toolchain" | gzip -1 > "$RUNNER_TEMP/toolchain-image.tar.gz"
+      - name: Cache successful toolchain before compiling frontends
+        if: steps.toolchain-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/toolchain-image.tar.gz
+          key: ${{ steps.toolchain-cache.outputs.cache-primary-key }}
       - name: Compile current launcher, emulator frontend and DS core
         run: sh scripts/build_release_frontends.sh '${{ matrix.platform }}'
       - uses: actions/upload-artifact@v4

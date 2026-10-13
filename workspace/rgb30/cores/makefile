@@ -39,7 +39,9 @@ snes9x2005_plus_FLAGS = USE_BLARGG_APU=1
 
 # The MOSS SDK ships only shared C++ runtime libraries. Keep its exact runtime
 # with its core instead of mixing a different compiler's libstdc++ into the OS.
-NDS_CXX_RUNTIME =
+# Its libgcc also lacks GCC 12's outlined atomic helpers, so emit baseline
+# ARMv8 atomics directly (compatible with the RK3566's Cortex-A55).
+NDS_CXX_RUNTIME = -mno-outline-atomics
 
 include ../../all/cores/makefile
 
