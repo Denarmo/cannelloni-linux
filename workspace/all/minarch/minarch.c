@@ -630,6 +630,31 @@ static char* effect_labels[] = {
 	"None",
 	"Line",
 	"Grid",
+	"CRT-Cannelloni",
+	"CRT-Cannelloni Lite",
+	"CRT-EasyMode",
+	"CRT-Aperture",
+	"CRT-Geom",
+	"CRT-Lottes Fast",
+	"Zfast-CRT",
+	"LCD3x",
+	"Zfast-LCD",
+	"Dot Matrix",
+	"Scanlines",
+	"Sharp Bilinear",
+	NULL
+};
+static char* intensity_labels[] = {
+	"Light (25%)",
+	"Balanced (50%)",
+	"Authentic (75%)",
+	"Heavy (100%)",
+	NULL
+};
+static char* curvature_labels[] = {
+	"Flat (0%)",
+	"Subtle (5%)",
+	"Arcade (15%)",
 	NULL
 };
 static char* sharpness_labels[] = {
@@ -661,6 +686,8 @@ static char* max_ff_labels[] = {
 enum {
 	FE_OPT_SCALING,
 	FE_OPT_EFFECT,
+	FE_OPT_INTENSITY,
+	FE_OPT_CURVATURE,
 	FE_OPT_SHARPNESS,
 	FE_OPT_TEARING,
 	FE_OPT_OVERCLOCK,
@@ -857,13 +884,33 @@ static struct Config {
 			},
 			[FE_OPT_EFFECT] = {
 				.key	= "minarch_screen_effect",
-				.name	= "Screen Effect",
-				.desc	= "Grid simulates an LCD grid.\nLine simulates CRT scanlines.\nEffects usually look best at native scaling.",
+				.name	= "Shaders",
+				.desc	= "Denarmo shaders and CRT/LCD presets from Android Cannelloni.\nSimulates CRT scanlines, aperture grills, and handheld subpixels.",
+				.default_value = 0,
+				.value = 0,
+				.count = 15,
+				.values = effect_labels,
+				.labels = effect_labels,
+			},
+			[FE_OPT_INTENSITY] = {
+				.key	= "cannelloni_shader_intensity",
+				.name	= "Scanline Intensity",
+				.desc	= "Adjust scanline depth and darkness for CRT and scanline shaders.",
+				.default_value = 1,
+				.value = 1,
+				.count = 4,
+				.values = intensity_labels,
+				.labels = intensity_labels,
+			},
+			[FE_OPT_CURVATURE] = {
+				.key	= "cannelloni_shader_curvature",
+				.name	= "Screen Curvature",
+				.desc	= "Simulate the glass curve of a vintage arcade tube or CRT monitor.",
 				.default_value = 0,
 				.value = 0,
 				.count = 3,
-				.values = effect_labels,
-				.labels = effect_labels,
+				.values = curvature_labels,
+				.labels = curvature_labels,
 			},
 			[FE_OPT_SHARPNESS] = {
 				.key	= "minarch_screen_sharpness",
@@ -989,9 +1036,47 @@ static void Config_syncFrontend(char* key, int value) {
 	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_EFFECT].key)) {
 		screen_effect = value;
-		GFX_setEffect(value);
+		if (value == 0) GFX_setEffect(EFFECT_NONE);
+		else if (value == 1) GFX_setEffect(EFFECT_LINE);
+		else if (value == 2) GFX_setEffect(EFFECT_GRID);
+		else if (value >= 10 && value <= 12) GFX_setEffect(EFFECT_GRID);
+		else GFX_setEffect(EFFECT_LINE);
 		renderer.dst_p = 0;
 		i = FE_OPT_EFFECT;
+
+		char conf_path[MAX_PATH];
+		sprintf(conf_path, "%s/.cannelloni/shader.conf", SHARED_USERDATA_PATH);
+		FILE* sf = fopen(conf_path, "w");
+		if (sf) {
+			const char* preset_ids[] = {
+				"none", "line", "grid", "crt-cannelloni", "crt-cannelloni-lite",
+				"crt-easymode", "crt-aperture", "crt-geom", "crt-lottes-fast",
+				"zfast-crt", "lcd3x", "zfast-lcd", "dot", "scanline", "sharp-bilinear-simple"
+			};
+			const char* pid = (value >= 0 && value < 15) ? preset_ids[value] : "none";
+			fprintf(sf, "preset=%s\n", pid);
+			fprintf(sf, "effect=%d\n", value <= 2 ? value : (value >= 10 && value <= 12 ? 2 : 1));
+			fprintf(sf, "glslp=%s/.system/common/shaders/%s/%s.glslp\n", SDCARD_PATH, pid, pid);
+			fclose(sf);
+		}
+	}
+	else if (exactMatch(key,config.frontend.options[FE_OPT_INTENSITY].key)) {
+		i = FE_OPT_INTENSITY;
+		const char* intensities[] = { "25", "50", "75", "100" };
+		if (value >= 0 && value < 4) {
+			char conf_path[MAX_PATH];
+			sprintf(conf_path, "%s/.cannelloni/shader_intensity.txt", SHARED_USERDATA_PATH);
+			putFile(conf_path, (char*)intensities[value]);
+		}
+	}
+	else if (exactMatch(key,config.frontend.options[FE_OPT_CURVATURE].key)) {
+		i = FE_OPT_CURVATURE;
+		const char* curvatures[] = { "flat", "subtle", "arcade" };
+		if (value >= 0 && value < 3) {
+			char conf_path[MAX_PATH];
+			sprintf(conf_path, "%s/.cannelloni/shader_curvature.txt", SHARED_USERDATA_PATH);
+			putFile(conf_path, (char*)curvatures[value]);
+		}
 	}
 	else if (exactMatch(key,config.frontend.options[FE_OPT_SHARPNESS].key)) {
 		screen_sharpness = value;

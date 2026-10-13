@@ -165,15 +165,36 @@ fi
 
 lumon.elf & # adjust lcd luma and saturation
 
+start_charging_animation() {
+	if [ -f "$SYSTEM_PATH/res/charging_00.png" ]; then
+		(
+			while pidof batmon.elf >/dev/null 2>&1; do
+				for f in "$SYSTEM_PATH/res"/charging_*.png; do
+					[ ! -f "$f" ] && break
+					! pidof batmon.elf >/dev/null 2>&1 && break
+					dc=$(cat /sys/class/pwm/pwmchip0/pwm0/duty_cycle 2>/dev/null)
+					if [ "$dc" != "0" ]; then
+						show.elf "$f" 2>/dev/null
+						usleep 300000 2>/dev/null || sleep 1
+					else
+						sleep 1
+					fi
+				done
+			done
+		) &
+	fi
+	batmon.elf
+}
+
 if $IS_PLUS; then
 	CHARGING=`/customer/app/axp_test | awk -F'[,: {}]+' '{print $7}'`
 	if [ "$CHARGING" == "3" ]; then
-		batmon.elf # &> /mnt/SDCARD/batmon.txt
+		start_charging_animation
 	fi
 else
 	CHARGING=`cat /sys/devices/gpiochip0/gpio/gpio59/value`
 	if [ "$CHARGING" == "1" ]; then
-		batmon.elf # &> /mnt/SDCARD/batmon.txt
+		start_charging_animation
 	fi
 fi
 

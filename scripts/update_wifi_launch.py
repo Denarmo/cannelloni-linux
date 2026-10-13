@@ -36,6 +36,14 @@ export PATH="$PAK_DIR/bin/$architecture:$PAK_DIR/bin/$PLATFORM:$PAK_DIR/bin:$SDC
 chmod +x "$PAK_DIR/bin/"* "$PAK_DIR/bin/$architecture/"* "$PAK_DIR/bin/$PLATFORM/"* 2>/dev/null
 [ -f "$PAK_DIR/bin/$architecture/jq" ] && chmod +x "$PAK_DIR/bin/$architecture/jq" 2>/dev/null
 
+# Ensure symlinks/copies for cannelloni-* <-> minui-*
+for tool in keyboard list presenter; do
+    if [ ! -f "$PAK_DIR/bin/$PLATFORM/cannelloni-$tool" ] && [ -f "$PAK_DIR/bin/$PLATFORM/minui-$tool" ]; then
+        cp -f "$PAK_DIR/bin/$PLATFORM/minui-$tool" "$PAK_DIR/bin/$PLATFORM/cannelloni-$tool" 2>/dev/null
+        chmod +x "$PAK_DIR/bin/$PLATFORM/cannelloni-$tool" 2>/dev/null
+    fi
+done
+
 # --- Cannelloni Secure Network Storage ---
 SECURE_NET_DIR="$SDCARD_PATH/.userdata/shared/.cannelloni"
 SECURE_NET_CONF="$SECURE_NET_DIR/network.conf"
@@ -44,7 +52,7 @@ SRC_SET='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='
 DST_SET='NOPQRSTUVWXYZABCDEFGHIJKLMnopqrstuvwxyzabcdefghijklm9876543210+/_'
 
 encode_cred() {
-    printf "%s" "$1" | base64 | tr -d '\\r\\n' | tr "$SRC_SET" "$DST_SET"
+    printf "%s" "$1" | base64 | tr -d '\r\n' | tr "$SRC_SET" "$DST_SET"
 }
 
 decode_cred() {
@@ -57,7 +65,7 @@ migrate_legacy_wifi_txt() {
         while IFS= read -r line || [ -n "$line" ]; do
             line=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
             case "$line" in
-                \\#*|"") continue ;;
+                \#*|"") continue ;;
                 *:*)
                     s=$(echo "$line" | cut -d: -f1 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
                     p=$(echo "$line" | cut -d: -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
@@ -192,7 +200,7 @@ get_ssid_and_ip() {
             ssid="$(wpa_cli -i wlan0 status 2>/dev/null | grep ssid= | grep -v bssid= | cut -d'=' -f2)"
             ip_address="$(wpa_cli -i wlan0 status 2>/dev/null | grep ip_address= | cut -d'=' -f2)"
         else
-            ssid="$(iw dev wlan0 link 2>/dev/null | grep SSID: | cut -d':' -f2- | sed -e 's/^[ \\t]*//' -e 's/[ \\t]*$//')"
+            ssid="$(iw dev wlan0 link 2>/dev/null | grep SSID: | cut -d':' -f2- | sed -e 's/^[ \t]*//' -e 's/[ \t]*$//')"
             ip_address="$(ip addr show wlan0 2>/dev/null | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1)"
             [ -z "$ip_address" ] && ip_address="$(ifconfig wlan0 2>/dev/null | awk '/inet addr:/ {print $2}' | cut -d: -f2 | head -n1)"
         fi
@@ -210,7 +218,7 @@ get_ssid_and_ip() {
         ip_address="N/A"
     fi
 
-    printf "%s\\t%s" "$ssid" "$ip_address"
+    printf "%s\t%s" "$ssid" "$ip_address"
 }
 
 main_screen() {
@@ -281,7 +289,7 @@ networks_screen() {
         done
     else
         for i in $(seq 1 "$DELAY"); do
-            iw dev wlan0 scan 2>/dev/null | grep SSID: | cut -d':' -f2- | sed -e 's/^[ \\t]*//' -e 's/[ \\t]*$//' | sort -u >>"$cannelloni_list_file"
+            iw dev wlan0 scan 2>/dev/null | grep SSID: | cut -d':' -f2- | sed -e 's/^[ \t]*//' -e 's/[ \t]*$//' | sort -u >>"$cannelloni_list_file"
             if [ -s "$cannelloni_list_file" ]; then
                 break
             fi
@@ -387,7 +395,7 @@ enable_start_on_boot() {
         echo '' >>"$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
     fi
 
-    echo "test -f \\\"\\$SDCARD_PATH/Settings/\\$PLATFORM/$PAK_NAME.pak/bin/on-boot\\\" && \\\"\\$SDCARD_PATH/Settings/\\$PLATFORM/$PAK_NAME.pak/bin/on-boot\\\" # ${PAK_NAME}.pak-on-boot" >>"$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
+    echo "test -f \"\$SDCARD_PATH/Settings/\$PLATFORM/$PAK_NAME.pak/bin/on-boot\" && \"\$SDCARD_PATH/Settings/\$PLATFORM/$PAK_NAME.pak/bin/on-boot\" # ${PAK_NAME}.pak-on-boot" >>"$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
     chmod +x "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh"
     sync
     return 0
@@ -395,7 +403,7 @@ enable_start_on_boot() {
 
 will_start_on_boot() {
     if [ -f "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh" ]; then
-        if grep -q -E "(${PAK_NAME}|Wi-Fi)\\.pak-on-boot" "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh" >/dev/null 2>&1; then
+        if grep -q -E "(${PAK_NAME}|Wi-Fi)\.pak-on-boot" "$SDCARD_PATH/.userdata/$PLATFORM/auto.sh" >/dev/null 2>&1; then
             return 0
         fi
     fi
@@ -435,7 +443,7 @@ write_config() {
                         has_passwords=true
                         {
                             echo "network={"
-                            echo "    ssid=\\"$ssid\\""
+                            echo "    ssid=\"$ssid\""
                             if [ "$priority_used" = false ]; then
                                 echo "    priority=1"
                                 priority_used=true
@@ -443,14 +451,14 @@ write_config() {
                             if [ -z "$psk" ]; then
                                 echo "    key_mgmt=NONE"
                             else
-                                echo "    psk=\\"$psk\\""
+                                echo "    psk=\"$psk\""
                             fi
                             echo "}"
                         } >>"$PAK_DIR/res/wpa_supplicant.conf"
                         if [ "$PLATFORM" = "rg35xxplus" ]; then
                             {
-                                echo "                \\"$ssid\\":"
-                                echo "                    password: \\"$psk\\""
+                                echo "                \"$ssid\":"
+                                echo "                    password: \"$psk\""
                             } >>"$PAK_DIR/res/netplan.yaml"
                         fi
                         ;;
