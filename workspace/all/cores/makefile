@@ -38,7 +38,7 @@ override CORES := $(filter-out melonds desmume2015,$(CORES)) $(NDS_CORE)
 
 # this logic was broken out from picoarch's all-in-one makefile
 
-PATCH = git apply
+PATCH ?= git apply
 PROCS = -j4
 
 ###############################

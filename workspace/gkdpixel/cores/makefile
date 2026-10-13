@@ -41,4 +41,8 @@ snes9x2005_plus_FLAGS = USE_BLARGG_APU=1
 
 ###############################
 
+# DeSmuME's pinned source uses CRLF; accept whitespace differences in patch
+# context while keeping our compatibility patch and added lines normalized.
+PATCH = git apply --ignore-space-change
+
 include ../../all/cores/makefile

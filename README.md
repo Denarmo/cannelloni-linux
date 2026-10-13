@@ -163,6 +163,8 @@ Build **`dist/Cannelloni-Installer.exe`** using PyInstaller on Windows, then run
 
 The [release workflow](.github/workflows/release.yml) performs the tests, platform builds, Windows installer build, packaging, and archive verification before publishing. Releases use semantic versions such as **1.0.0**, with the Git tag **`v1.0.0`**.
 
+For a targeted CI check, choose one platform when manually running the workflow. Single-platform runs upload build artifacts but skip tagging and publication; select **all** to build and publish a complete release.
+
 ## Credits and licenses
 
 Thank you to [Shaun Inman and MinUI contributors](https://github.com/shauninman/MinUI), [CannoliHQ](https://github.com/CannoliHQ/cannoli), [Libretro](https://www.libretro.com), the emulator and shader authors, and the handheld developers whose toolchains and platform work make this project possible. Additional platform attributions are in the [packaged guide](skeleton/BASE/README.txt).
