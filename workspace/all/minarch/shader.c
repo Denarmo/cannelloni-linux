@@ -41,6 +41,9 @@ static const ShaderPreset presets[SHADER_COUNT] = {
 typedef struct { float r, g, b; } Color;
 typedef struct { const uint8_t *pixels; int w, h, pitch; } Source;
 static float clampf(float v, float lo, float hi) { return v < lo ? lo : v > hi ? hi : v; }
+/* Shader coordinates are finite. Older uClibc targets omit fminf/fmaxf. */
+static float minf(float a, float b) { return a < b ? a : b; }
+static float maxf(float a, float b) { return a > b ? a : b; }
 static int clampi(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
 static float fract(float v) { return v - floorf(v); }
 static float mixf(float a, float b, float f) { return a + (b - a) * f; }
@@ -168,7 +171,7 @@ static Source glow_source(ShaderContext *c, Source source) {
 }
 
 static Color sharp_bilinear(Source s, float px, float py, int ow, int oh) {
-    float sx=fmaxf(floorf((float)ow/s.w),1), sy=fmaxf(floorf((float)oh/s.h),1);
+    float sx=maxf(floorf((float)ow/s.w),1), sy=maxf(floorf((float)oh/s.h),1);
     float dx=fract(px)-0.5f, dy=fract(py)-0.5f;
     float rx=0.5f-0.5f/sx, ry=0.5f-0.5f/sy;
     return bilinear(s,floorf(px)+(dx-clampf(dx,-rx,rx))*sx,
@@ -213,7 +216,7 @@ const uint16_t *Shader_process(ShaderContext *c, const ShaderSettings *settings,
             }
             uint16_t *out=&c->pixels[(size_t)y*ow+x];
             if (ux<0 || ux>1 || vy<0 || vy>1 ||
-                (curve && fminf(ux,1-ux)*fminf(vy,1-vy)<0.0001f)) {
+                (curve && minf(ux,1-ux)*minf(vy,1-vy)<0.0001f)) {
                 *out=0; continue;
             }
             float px=ux*sw, py=vy*sh, fx=px-(int)px, fy=py-(int)py;
@@ -233,7 +236,7 @@ const uint16_t *Shader_process(ShaderContext *c, const ShaderSettings *settings,
                         1-intensity*(fx<0.22f || fy<0.22f));
                     break;
                 case SHADER_ZFAST_LCD: {
-                    float d=fmaxf(fabsf(fx-0.5f),fabsf(fy-0.5f));
+                    float d=maxf(fabsf(fx-0.5f),fabsf(fy-0.5f));
                     float d2=d*d, d4=d2*d2;
                     col=multiply(read_pixel(source,(int)px,(int)py),1-40*intensity*(d4-2.7f*d4*d2));
                     col=(Color){col.r*(0.6f+0.4f*col.r),col.g*(0.6f+0.4f*col.g),col.b*(0.6f+0.4f*col.b)};
