@@ -1,5 +1,6 @@
 """Publish locally built and verified release archives with GitHub CLI."""
 import argparse
+import json
 from pathlib import Path
 import subprocess
 
@@ -15,8 +16,7 @@ def publish(notes_file, workspace):
     notes_file = Path(notes_file).resolve()
     if not notes_file.is_file():
         raise FileNotFoundError(notes_file)
-    assets = [ROOT / "releases" / name for name in
-              (f"Cannelloni-{version}.zip", "Cannelloni.zip", "Cannelloni-Installer.zip")]
+    assets = [ROOT / "releases" / "Cannelloni-Installer.zip"]
     for asset in assets:
         verify_archive(asset, workspace)
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
@@ -27,6 +27,15 @@ def publish(notes_file, workspace):
                         "--title", f"Cannelloni {version}", "--notes-file", str(notes_file), "--latest"], check=True)
         subprocess.run(["gh", "release", "upload", tag, "--repo", REPO,
                         *map(str, assets), "--clobber"], check=True)
+        # Older releases offered duplicate manual-install downloads. The OS ZIP
+        # is now available inside the installer; remove these only after upload.
+        published = json.loads(subprocess.check_output(
+            ["gh", "release", "view", tag, "--repo", REPO, "--json", "assets"], text=True))
+        obsolete = {f"Cannelloni-{version}.zip", "Cannelloni.zip"}
+        for asset in published["assets"]:
+            if asset["name"] in obsolete:
+                subprocess.run(["gh", "release", "delete-asset", tag, asset["name"],
+                                "--repo", REPO, "--yes"], check=True)
     else:
         subprocess.run(["gh", "release", "create", tag, "--repo", REPO,
                         "--target", commit, "--title", f"Cannelloni {version}",

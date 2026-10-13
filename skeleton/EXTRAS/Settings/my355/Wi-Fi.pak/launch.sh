@@ -1,5 +1,4 @@
 #!/bin/sh
-set -x
 PAK_DIR="$(dirname "$0")"
 PAK_NAME="$(basename "$PAK_DIR")"
 PAK_NAME="${PAK_NAME%.*}"
@@ -13,6 +12,7 @@ fi
 [ -z "$USERDATA_PATH" ] && export USERDATA_PATH="$SDCARD_PATH/.userdata/$PLATFORM"
 [ -z "$LOGS_PATH" ] && export LOGS_PATH="$USERDATA_PATH/logs"
 
+mkdir -p "$LOGS_PATH"
 rm -f "$LOGS_PATH/$PAK_NAME.txt"
 exec >>"$LOGS_PATH/$PAK_NAME.txt"
 exec 2>&1
@@ -264,7 +264,7 @@ main_screen() {
     sed -i "s/NETWORK_SSID/$ssid/" "$cannelloni_list_file"
     sed -i "s/NETWORK_IP_ADDRESS/$ip_address/" "$cannelloni_list_file"
 
-    killall cannelloni-presenter >/dev/null 2>&1 || true
+    stop_message
     cannelloni-list --disable-auto-sleep --item-key settings --file "$cannelloni_list_file" --format json --cancel-text "EXIT" --title "Wifi Configuration" --write-location /tmp/cannelloni-output --write-value state
 }
 
@@ -295,7 +295,7 @@ networks_screen() {
         done
     fi
 
-    killall cannelloni-presenter >/dev/null 2>&1 || true
+    stop_message
     cannelloni-list --disable-auto-sleep --file "$cannelloni_list_file" --format text --confirm-text "CONNECT" --title "Wifi Networks" --write-location /tmp/cannelloni-output
 }
 
@@ -311,7 +311,7 @@ saved_networks_screen() {
         return 1
     fi
 
-    killall cannelloni-presenter >/dev/null 2>&1 || true
+    stop_message
     cannelloni-list --disable-auto-sleep --file "$cannelloni_list_file" --format text --title "Wifi Networks" --confirm-text "FORGET" --write-location /tmp/cannelloni-output
 }
 
@@ -321,7 +321,7 @@ password_screen() {
     rm -f "/tmp/cannelloni-output"
     initial_password="$(get_network_password "$SSID")"
 
-    killall cannelloni-presenter >/dev/null 2>&1 || true
+    stop_message
     cannelloni-keyboard --title "Enter Password" --initial-value "$initial_password" --write-location /tmp/cannelloni-output
     exit_code=$?
     if [ "$exit_code" -eq 2 ]; then
@@ -353,28 +353,67 @@ show_message() {
         seconds="forever"
     fi
 
-    killall cannelloni-presenter >/dev/null 2>&1 || true
     echo "$message" 1>&2
-    if [ "$PLATFORM" = "miyoomini" ]; then
-        SAY_BIN="$SDCARD_PATH/.system/miyoomini/bin/say.elf"
-        [ ! -x "$SAY_BIN" ] && SAY_BIN="say.elf"
-        if command -v "$SAY_BIN" >/dev/null 2>&1 || [ -x "$SAY_BIN" ]; then
-            if [ "$seconds" = "forever" ]; then
-                "$SAY_BIN" "$message" &
-            else
-                "$SAY_BIN" "$message" &
-                SAY_PID=$!
-                sleep "$seconds"
-                kill $SAY_PID 2>/dev/null
-            fi
+    if [ -z "$MESSAGE_FILE" ]; then
+        MESSAGE_FILE=$(mktemp /tmp/cannelloni-wifi.XXXXXX) || return 1
+    fi
+    printf '%s\n' "$message" >"$MESSAGE_FILE.new"
+    mv "$MESSAGE_FILE.new" "$MESSAGE_FILE"
+    if [ -z "$MESSAGE_PID" ] || ! kill -0 "$MESSAGE_PID" 2>/dev/null; then
+        SAY_BIN="$SDCARD_PATH/.system/$PLATFORM/bin/say.elf"
+        [ -x "$SAY_BIN" ] || SAY_BIN=say.elf
+        "$SAY_BIN" --status-file "$MESSAGE_FILE" &
+        MESSAGE_PID=$!
+    fi
+    if [ "$seconds" != forever ]; then
+        sleep "$seconds"
+        stop_message
+    fi
+}
+
+stop_message() {
+    if [ -n "$MESSAGE_PID" ]; then
+        kill "$MESSAGE_PID" 2>/dev/null
+        wait "$MESSAGE_PID" 2>/dev/null
+        MESSAGE_PID=
+    fi
+    [ -z "$MESSAGE_FILE" ] || rm -f "$MESSAGE_FILE" "$MESSAGE_FILE.new"
+    MESSAGE_FILE=
+}
+
+connection_ip() {
+    ip -4 addr show dev wlan0 2>/dev/null | awk '/inet / {split($2,a,"/"); print a[1]; exit}'
+}
+
+wait_for_connection() {
+    elapsed=0
+    while [ "$elapsed" -lt 30 ]; do
+        state=$(wpa_cli -i wlan0 status 2>/dev/null | sed -n 's/^wpa_state=//p')
+        address=$(connection_ip)
+        [ -n "$address" ] || address=$(ifconfig wlan0 2>/dev/null | awk '/inet addr:/ {sub("addr:","",$2); print $2; exit}')
+        if [ -n "$address" ] && [ "$address" != 127.0.0.1 ] &&
+           { [ "$state" = COMPLETED ] || { [ -z "$state" ] && [ "$(cat /sys/class/net/wlan0/operstate 2>/dev/null)" = up ]; }; }; then
+            show_message "Connected to ${SSID:-saved network}
+IP address: $address" 2
+            return 0
         fi
-        return 0
-    fi
-    if [ "$seconds" = "forever" ]; then
-        cannelloni-presenter --message "$message" --timeout -1 &
-    else
-        cannelloni-presenter --message "$message" --timeout "$seconds"
-    fi
+        case "$state" in
+            COMPLETED) stage="Connected. Obtaining IP address..." ;;
+            ASSOCIATING|ASSOCIATED) stage="Joining the network..." ;;
+            4WAY_HANDSHAKE|GROUP_HANDSHAKE) stage="Checking Wi-Fi password..." ;;
+            SCANNING) stage="Searching for the network..." ;;
+            *) stage="Waiting for the network..." ;;
+        esac
+        show_message "Wi-Fi: ${SSID:-saved network}
+$stage
+${elapsed}s / 30s" forever
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    show_message "Could not connect to ${SSID:-saved network}.
+Check the password, signal and router.
+No IP address was assigned." 4
+    return 1
 }
 
 disable_start_on_boot() {
@@ -504,11 +543,15 @@ wifi_off() {
 
 wifi_on() {
     echo "Preparing to toggle wifi on"
+    show_message "Wi-Fi: ${SSID:-saved network}
+Saving network settings..." forever
 
     if ! write_config "true"; then
         return 1
     fi
 
+    show_message "Wi-Fi: ${SSID:-saved network}
+Starting wireless service..." forever
     if ! service-on; then
         return 1
     fi
@@ -518,18 +561,7 @@ wifi_on() {
         return 0
     fi
 
-    DELAY=20
-    for i in $(seq 1 "$DELAY"); do
-        STATUS=$(cat "/sys/class/net/wlan0/operstate" 2>/dev/null)
-        if [ "$STATUS" = "up" ]; then
-            break
-        fi
-        sleep 1
-    done
-
-    if [ "$STATUS" != "up" ]; then
-        return 1
-    fi
+    wait_for_connection
 }
 
 forget_network_loop() {
@@ -569,7 +601,7 @@ forget_network_loop() {
         break
     done
 
-    killall cannelloni-presenter >/dev/null 2>&1 || true
+    stop_message
     echo "$next_screen" >/tmp/wifi-next-screen
 }
 
@@ -621,18 +653,19 @@ network_loop() {
         break
     done
 
-    killall cannelloni-presenter >/dev/null 2>&1 || true
+    stop_message
     echo "$next_screen" >/tmp/wifi-next-screen
 }
 
 cleanup() {
     rm -f /tmp/stay_awake /tmp/wifi-next-screen
-    killall cannelloni-presenter >/dev/null 2>&1 || true
+    stop_message
 }
 
 main() {
     echo "1" >/tmp/stay_awake
-    trap "cleanup" EXIT INT TERM HUP QUIT
+    trap cleanup EXIT
+    trap 'exit 0' INT TERM HUP QUIT
 
     if [ "$PLATFORM" = "tg3040" ] && [ -z "$DEVICE" ]; then
         export DEVICE="brick"
@@ -657,10 +690,6 @@ main() {
         return 1
     fi
 
-    if ! command -v cannelloni-presenter >/dev/null 2>&1 && [ ! -x "$PAK_DIR/bin/$PLATFORM/cannelloni-presenter" ]; then
-        show_message "cannelloni-presenter not found" 2
-        return 1
-    fi
 
     allowed_platforms="miyoomini my282 my355 tg5040 rg35xxplus"
     if ! echo "$allowed_platforms" | grep -q "$PLATFORM"; then
@@ -770,7 +799,7 @@ main() {
             fi
 
             show_message "Refreshing connection" forever
-            if ! service-on; then
+            if ! wifi_on; then
                 show_message "Failed to enable wifi" 2
                 continue
             fi

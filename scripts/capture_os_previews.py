@@ -54,6 +54,7 @@ def generate(build):
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <ctype.h>
 #include <pthread.h>
 #include "defines.h"
 #include "api.h"
@@ -93,7 +94,7 @@ void GFX_flip(SDL_Surface*s) {if(IMG_SavePNG(s,output_file)) {fprintf(stderr,"sa
         harness += re.search(r"^#define " + name + r" .+$", source, re.M)[0] + "\n"
     harness += api[api.index("uint32_t RGB_WHITE;"):api.index("static int _;")]
     harness += "\n".join(function(api, name) for name in (
-        "GFX_tintAssetRect", "GFX_setAccentColor", "GFX_loadAccentColor", "GFX_init",
+        "GFX_tintAssetRect", "GFX_initAssets", "GFX_setAccentColor", "GFX_loadAccentColor", "GFX_init",
         "GFX_setMode", "GFX_blitAsset", "GFX_blitPill", "GFX_blitBattery",
         "GFX_blitHardwareGroup", "GFX_sizeText", "GFX_blitText"))
     start = menu.index("typedef struct Option {")

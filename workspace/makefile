@@ -19,6 +19,7 @@ frontends:
 	cd ./$(PLATFORM)/libmsettings && make
 	cd ./$(PLATFORM) && make early
 	cd ./all/cannelloni && make
+	cd ./all/say && make
 	cd ./all/minarch && make
 	cd ./$(PLATFORM)/cores && make nds
 

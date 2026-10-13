@@ -81,7 +81,11 @@ if [ "$EMU_PREF" = "drastic-standalone" ]; then
 fi
 
 CORE_FILE=""
-for c in "$CORES_PATH/melonds_libretro.so" "$CORES_PATH/desmume2015_libretro.so" "$CORES_PATH/desmume_libretro.so"; do
+# Upgrades may leave the old melonDS binary beside Miyoo's ARM JIT core.
+CORE_NAMES="melonds_libretro.so desmume2015_libretro.so desmume_libretro.so"
+[ "$PLATFORM" = "miyoomini" ] && CORE_NAMES="desmume2015_libretro.so melonds_libretro.so desmume_libretro.so"
+for name in $CORE_NAMES; do
+    c="$CORES_PATH/$name"
     if [ -s "$c" ]; then
         CORE_FILE="$c"
         break
@@ -101,8 +105,14 @@ fi
 
 export LD_LIBRARY_PATH="$SYSTEM_PATH/lib:$CORES_PATH:$LD_LIBRARY_PATH"
 log "Launching libretro core: $CORE_FILE"
-nice -20 "$MINARCH_BIN" "$CORE_FILE" "$ROM" >> "$LOG_FILE" 2>&1
+# DS cores can be CPU-heavy; keep the system responsive during startup.
+nice -n 0 "$MINARCH_BIN" "$CORE_FILE" "$ROM" >> "$LOG_FILE" 2>&1
 EXIT_CODE=$?
 log "minarch exited with code: $EXIT_CODE"
+case "$EXIT_CODE" in
+    0) ;;
+    124) show_error "NDS startup timed out. Try another game or check cannelloni_nds.log." ;;
+    *) show_error "NDS could not start. Check cannelloni_nds.log for details." ;;
+esac
 sync
 exit "$EXIT_CODE"

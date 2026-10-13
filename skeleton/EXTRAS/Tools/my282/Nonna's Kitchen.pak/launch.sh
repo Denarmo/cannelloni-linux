@@ -1,91 +1,75 @@
 #!/bin/sh
+# The process shown on screen owns the web server for its entire lifetime.
+PAK_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+[ -n "$SDCARD_PATH" ] || SDCARD_PATH=/mnt/SDCARD
+[ -d "$SDCARD_PATH" ] || SDCARD_PATH=/storage/roms
+export SDCARD_PATH
+export SDCARD="$SDCARD_PATH"
+SAY="${SYSTEM_PATH:-$SDCARD_PATH/.system/$PLATFORM}/bin/say.elf"
+[ -x "$SAY" ] || SAY=say.elf
+HTTPD_PID=
+MESSAGE_PID=
+RUNTIME_DIR=
 
-PAK_DIR="$(dirname "$0")"
-
-[ -z "$SDCARD_PATH" ] && SDCARD_PATH="/mnt/SDCARD"
-[ ! -d "$SDCARD_PATH" ] && [ -d "/storage/roms" ] && SDCARD_PATH="/storage/roms"
-
-# Check if Wi-Fi is already connected with a valid IP
-get_ip() {
-	ip -4 addr show dev wlan0 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1 | head -n1
+stop_message() {
+    if [ -n "$MESSAGE_PID" ]; then
+        kill "$MESSAGE_PID" 2>/dev/null
+        wait "$MESSAGE_PID" 2>/dev/null
+        MESSAGE_PID=
+    fi
 }
+cleanup() {
+    stop_message
+    if [ -n "$HTTPD_PID" ]; then
+        kill "$HTTPD_PID" 2>/dev/null
+        wait "$HTTPD_PID" 2>/dev/null
+        HTTPD_PID=
+    fi
+    if [ -n "$RUNTIME_DIR" ]; then
+        rm -rf "$RUNTIME_DIR"
+        RUNTIME_DIR=
+    fi
+}
+trap cleanup EXIT
+trap 'exit 0' INT TERM HUP
 
+get_ip() {
+    ip -4 addr show dev wlan0 2>/dev/null | awk '/inet / {split($2,a,"/"); print a[1]; exit}'
+}
 IP=$(get_ip)
-if [ -z "$IP" ] || [ "$IP" = "127.0.0.1" ]; then
-	IP=$(ifconfig wlan0 2>/dev/null | awk '/inet addr:/ {print $2}' | cut -d: -f2 | head -n1)
+[ -n "$IP" ] || IP=$(ifconfig wlan0 2>/dev/null | awk '/inet addr:/ {sub("addr:","",$2); print $2; exit}')
+if [ -z "$IP" ] || [ "$IP" = 127.0.0.1 ]; then
+    "$SAY" "Wi-Fi is not connected.
+Open Settings > Wi-Fi and connect first."
+    exit 1
 fi
 
-SAY="/mnt/SDCARD/.system/miyoomini/bin/say.elf"
-if ! [ -x "$SAY" ]; then
-	SAY="say.elf"
+# Run CGI from an executable filesystem. FAT SD cards may be mounted noexec
+# and cannot hold the symlinks used by earlier versions of this tool.
+RUNTIME_DIR=$(mktemp -d /tmp/cannelloni-kitchen.XXXXXX) || exit 1
+mkdir -p "$RUNTIME_DIR/cgi-bin" "$SDCARD_PATH/Roms" "$SDCARD_PATH/Bios" "$SDCARD_PATH/Saves"
+if ! cp "$PAK_DIR/web/index.html" "$RUNTIME_DIR/index.html" ||
+   ! cp "$PAK_DIR/web/cgi-bin/api.cgi" "$RUNTIME_DIR/cgi-bin/api.cgi" ||
+   ! chmod 700 "$RUNTIME_DIR/cgi-bin/api.cgi"; then
+    "$SAY" "Unable to prepare the web service."
+    exit 1
 fi
 
-# If not connected yet, try bringing Wi-Fi up cleanly
-if [ -z "$IP" ] || [ "$IP" = "127.0.0.1" ]; then
-	WIFI_ON="/mnt/SDCARD/Settings/$PLATFORM/Wi-Fi.pak/bin/service-on"
-	[ ! -f "$WIFI_ON" ] && WIFI_ON="/mnt/SDCARD/Settings/miyoomini/Wi-Fi.pak/bin/service-on"
-	[ ! -f "$WIFI_ON" ] && WIFI_ON="/mnt/SDCARD/Tools/$PLATFORM/Wi-Fi.pak/bin/service-on"
-	[ ! -f "$WIFI_ON" ] && WIFI_ON="/mnt/SDCARD/Tools/miyoomini/Wi-Fi.pak/bin/service-on"
-	if [ -f "$WIFI_ON" ]; then
-		/bin/sh "$WIFI_ON" >/dev/null 2>&1
-	elif [ -f "/customer/app/axp_test" ]; then
-		/customer/app/axp_test wifion 2>/dev/null
-		ifconfig wlan0 up 2>/dev/null
-		if ! pgrep wpa_supplicant >/dev/null 2>&1 && [ -f "/appconfigs/wpa_supplicant.conf" ]; then
-			wpa_supplicant -B -D nl80211 -iwlan0 -c /appconfigs/wpa_supplicant.conf 2>/dev/null
-			udhcpc -i wlan0 -s /etc/init.d/udhcpc.script -q 2>/dev/null &
-		fi
-	fi
-
-	# Wait up to 8 seconds for IP address assignment
-	for i in 1 2 3 4 5 6 7 8; do
-		IP=$(get_ip)
-		[ -z "$IP" ] && IP=$(ifconfig wlan0 2>/dev/null | awk '/inet addr:/ {print $2}' | cut -d: -f2 | head -n1)
-		if [ -n "$IP" ] && [ "$IP" != "127.0.0.1" ]; then
-			break
-		fi
-		sleep 1
-	done
-fi
-
-if [ -z "$IP" ] || [ "$IP" = "127.0.0.1" ]; then
-	$SAY "Wi-Fi is not connected.
-Please configure Wi-Fi in Settings > Wi-Fi first."
-	exit 0
-fi
-
-# Overclock CPU for maximum transfer speeds
-if [ -x "/mnt/SDCARD/.system/miyoomini/bin/overclock.elf" ]; then
-	/mnt/SDCARD/.system/miyoomini/bin/overclock.elf 1488000 2>/dev/null
-elif command -v overclock.elf >/dev/null 2>&1; then
-	overclock.elf 1488000 2>/dev/null
-fi
-
-# Disable Wi-Fi power saving to boost throughput and eliminate latency
-iw dev wlan0 set power_save off 2>/dev/null || true
-
-# Setup direct symlinks under web/ for fast downloads where filesystem supports it
-mkdir -p "$SDCARD_PATH/Roms" "$SDCARD_PATH/Bios" "$SDCARD_PATH/Saves"
-ln -sf "$SDCARD_PATH/Roms" "$PAK_DIR/web/Roms" 2>/dev/null || true
-ln -sf "$SDCARD_PATH/Bios" "$PAK_DIR/web/Bios" 2>/dev/null || true
-ln -sf "$SDCARD_PATH/Saves" "$PAK_DIR/web/Saves" 2>/dev/null || true
-
-# Ensure CGI script is executable
-chmod +x "$PAK_DIR/web/cgi-bin/api.cgi" 2>/dev/null
-
-# Start Nonna's Kitchen HTTP server on port 1091 (matching Android Cannelloni)
-killall httpd 2>/dev/null
-busybox httpd -p 1091 -h "$PAK_DIR/web" &
+# -f is essential: without it httpd daemonizes and $! is not the listener.
+busybox httpd -f -p 1091 -h "$RUNTIME_DIR" >"$RUNTIME_DIR/httpd.log" 2>&1 &
 HTTPD_PID=$!
-
-$SAY "Nonna's Kitchen is Serving!
-Open in browser on phone or PC:
+sleep 1
+if ! kill -0 "$HTTPD_PID" 2>/dev/null; then
+    "$SAY" "Unable to start Nonna's Kitchen.
+Port 1091 may already be in use."
+    exit 1
+fi
+"$SAY" "Nonna's Kitchen is serving
 http://$IP:1091
 
-Press A to Stop & Exit."
-
-# Stop HTTP server and clean up symlinks when user exits (leaving Wi-Fi active!)
-kill $HTTPD_PID 2>/dev/null
-killall httpd 2>/dev/null
-rm -f "$PAK_DIR/web/Roms" "$PAK_DIR/web/Bios" "$PAK_DIR/web/Saves" 2>/dev/null
-sync
+Keep this screen open to transfer files.
+Press A or B to stop and exit." &
+MESSAGE_PID=$!
+wait "$MESSAGE_PID"
+MESSAGE_PID=
+# EXIT also handles interruption, failure and normal button dismissal.

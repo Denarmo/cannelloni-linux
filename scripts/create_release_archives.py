@@ -2,7 +2,7 @@ import os
 import sys
 import io
 import zipfile
-import shutil
+import re
 import struct
 import urllib.request
 import tarfile
@@ -14,14 +14,10 @@ from nds_cores import collect_nds_cores
 from release_version import release_version
 
 RELEASE_VERSION = release_version()
-RELEASE_TAG = "v" + RELEASE_VERSION
-RELEASE_NAME = "Cannelloni-" + RELEASE_VERSION
 
 SRC_BASE_ZIP = "build_release/temp/base.zip"
 SRC_EXTRAS_ZIP = "build_release/temp/extras.zip"
 OUT_DIR = "releases"
-OUT_UNIFIED_ZIP = os.path.join(OUT_DIR, f"{RELEASE_NAME}.zip")
-OUT_ALIAS_ZIP = os.path.join(OUT_DIR, "Cannelloni.zip")
 OUT_INSTALLER_ZIP = os.path.join(OUT_DIR, "Cannelloni-Installer.zip")
 PAYLOAD_ZIP = "build_release/temp/Cannelloni.zip"
 
@@ -280,7 +276,7 @@ def load_built_frontends(platforms, workspace="workspace"):
     """Never ship an old MinUI binary in place of the modified source."""
     binaries = {}
     for platform in platforms:
-        for name in ("cannelloni", "minarch"):
+        for name in ("cannelloni", "minarch", "say"):
             path = os.path.join(workspace, "all", name, "build", platform, name + ".elf")
             if not os.path.isfile(path):
                 raise FileNotFoundError(
@@ -298,7 +294,7 @@ def load_built_frontends(platforms, workspace="workspace"):
 def add_built_frontends(archive, binaries, written_entries):
     """Install exact current binaries even if a template omits a platform."""
     for (platform, name), data in binaries.items():
-        filenames = ("cannelloni.elf", "minui.elf") if name == "cannelloni" else ("minarch.elf",)
+        filenames = ("cannelloni.elf", "minui.elf") if name == "cannelloni" else (name + ".elf",)
         for filename in filenames:
             destination = f".system/{platform}/bin/{filename}"
             info = zipfile.ZipInfo(destination)
@@ -307,6 +303,52 @@ def add_built_frontends(archive, binaries, written_entries):
             info.external_attr = 0o755 << 16
             archive.writestr(info, data)
             written_entries.add(destination)
+
+
+EMULATOR_FOLDERS = {
+    "FC": "Nintendo Entertainment System", "GB": "Game Boy", "GBC": "Game Boy Color",
+    "GBA": "Game Boy Advance", "MD": "Sega Genesis", "PS": "Sony PlayStation",
+    "SFC": "Super Nintendo Entertainment System", "PAK": "Native Games", "NDS": "Nintendo DS",
+    "GG": "Sega Game Gear", "MGBA": "Game Boy Advance", "NGP": "Neo Geo Pocket",
+    "NGPC": "Neo Geo Pocket Color", "P8": "Pico-8", "P8-NATIVE": "Pico-8 Native",
+    "PCE": "TurboGrafx-16", "PKM": "Pokemon mini", "SGB": "Super Game Boy",
+    "SMS": "Sega Master System", "SUPA": "Super Nintendo Entertainment System", "VB": "Virtual Boy",
+}
+
+
+def add_extra_emulators(archive, extras, written_entries):
+    """Restore upstream optional launchers and their device-specific cores."""
+    for item in extras.infolist():
+        name = item.filename
+        parts = name.split("/")
+        if len(parts) < 3 or parts[0] != "Emus" or parts[1] not in PLATFORMS or item.is_dir():
+            continue
+        if name in written_entries:
+            continue
+        data = extras.read(item)
+        if name.endswith((".sh", ".txt", ".cfg")):
+            data = data.replace(b"\r\n", b"\n").replace(b"MinUI", b"Cannelloni").replace(b".minui", b".cannelloni")
+        info = zipfile.ZipInfo(name)
+        info.create_system = 3
+        info.compress_type = zipfile.ZIP_DEFLATED
+        info.external_attr = (0o755 if name.endswith((".sh", ".so")) else 0o644) << 16
+        archive.writestr(info, data)
+        written_entries.add(name)
+
+
+def add_emulator_folders(archive, written_entries):
+    """Make every included emulator discoverable instead of only GBA/DS/PS."""
+    tags = {match.group(1) for name in archive.namelist()
+            if (match := re.search(r"/Emus/([^/]+)\.pak/launch\.sh$", name))}
+    tags.update(match.group(1) for name in archive.namelist()
+                if (match := re.match(r"Emus/[^/]+/([^/]+)\.pak/launch\.sh$", name)))
+    for tag in sorted(tags & EMULATOR_FOLDERS.keys()):
+        folders = [f"Roms/{EMULATOR_FOLDERS[tag]} ({tag})", f"Bios/{tag}", f"Saves/{tag}"]
+        for folder in folders:
+            name = folder + "/.keep"
+            if name not in written_entries:
+                archive.writestr(name, b"")
+                written_entries.add(name)
 
 
 def build_release():
@@ -322,7 +364,7 @@ def build_release():
         print("Downloading upstream extras release template...")
         urllib.request.urlretrieve("https://github.com/shauninman/MinUI/releases/download/v20251127-1/MinUI-20251127-1-extras.zip", SRC_EXTRAS_ZIP)
 
-    print(f"Building unified release: {OUT_UNIFIED_ZIP}...")
+    print(f"Building installer release: {OUT_INSTALLER_ZIP}...")
 
     # ----------------------------------------------------
     # 1. Process and rebuild Cannelloni.zip (from MinUI.zip)
@@ -618,6 +660,7 @@ def build_release():
 
     # 4. Extras zip entries (allowed tools from upstream extras)
     with zipfile.ZipFile(SRC_EXTRAS_ZIP, "r") as ext_in:
+        add_extra_emulators(out_cannelloni_zip, ext_in, written_entries)
         allowed_tools = {"Clock.pak", "Files.pak", "Input.pak", "IP.pak", "Nonna's Kitchen.pak", "Bootlogo.pak"}
         for item in ext_in.infolist():
             name = item.filename
@@ -701,15 +744,8 @@ def build_release():
             out_cannelloni_zip.writestr("README.txt", f.read())
         written_entries.add("README.txt")
 
-    # 2. Add Nintendo DS ROM, Bios, and Saves placeholder folders
-    for folder in [
-        "Roms/Nintendo DS (NDS)", "Roms/Game Boy Advance (GBA)", "Roms/Sony PlayStation (PS)",
-        "Bios/NDS", "Bios/PS", "Bios/GBA", "Saves/NDS", "Saves/PS", "Saves/GBA"
-    ]:
-        keep_path = f"{folder}/.keep"
-        if keep_path not in written_entries:
-            out_cannelloni_zip.writestr(keep_path, b"")
-            written_entries.add(keep_path)
+    # 2. Create ROM/BIOS/save folders for the complete bundled emulator suite.
+    add_emulator_folders(out_cannelloni_zip, written_entries)
 
     # 3. Add dmenu.bin directly to root for RG35XX Plus/H/SP TF1 cards
     if "dmenu.bin" not in written_entries:
@@ -861,34 +897,8 @@ def build_release():
     # ----------------------------------------------------
     # 8. Package final delivered release archives
     # ----------------------------------------------------
-    print(f"Packaging final delivered release archives containing Cannelloni.zip + GUI installer...")
-    delivered_written = set()
-
-    with zipfile.ZipFile(OUT_UNIFIED_ZIP, "w", zipfile.ZIP_DEFLATED) as zout:
-        add_installer_files(zout, PAYLOAD_ZIP, installer_exe)
-        delivered_written.update(zout.namelist())
-
-        # G. Platform bootstrap files & directories (for on-device direct boot)
-        with zipfile.ZipFile(PAYLOAD_ZIP, "r") as pz:
-            for item in pz.infolist():
-                name = item.filename
-                if name.startswith(BOOTSTRAP_DIRS) or name in (
-                    "dmenu.bin", "em_ui.sh",
-                    ".system/common/device_select.sh",
-                    ".system/miyoomini/paks/Cannelloni.pak/launch.sh"
-                ) or name.startswith("Emus/miyoomini/NDS-Drastic.pak/") or name.startswith("Emus/miyoomini/NDS.pak/") or name.startswith("Settings/") or name.startswith("Tools/"):
-                    if name not in delivered_written:
-                        zout.writestr(item, pz.read(name))
-                        delivered_written.add(name)
-
-    # Keep the legacy direct-boot release alias, but omit duplicated OS files
-    # from the desktop installer package. Its only OS source is the payload.
-    shutil.copyfile(OUT_UNIFIED_ZIP, OUT_ALIAS_ZIP)
+    print("Packaging installer with its manual-install Cannelloni.zip payload...")
     build_installer_archive(OUT_INSTALLER_ZIP, PAYLOAD_ZIP, installer_exe)
-
-    print(f"Delivered release archives completed:")
-    print(f" - {OUT_ALIAS_ZIP} ({os.path.getsize(OUT_ALIAS_ZIP)} bytes)")
-    print(f" - {OUT_UNIFIED_ZIP} ({os.path.getsize(OUT_UNIFIED_ZIP)} bytes)")
     print(f" - {OUT_INSTALLER_ZIP} ({os.path.getsize(OUT_INSTALLER_ZIP)} bytes)")
 
     print("Release archive built successfully!")

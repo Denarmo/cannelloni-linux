@@ -21,7 +21,7 @@ class ReleaseFrontendTests(unittest.TestCase):
         self.workspace = Path(self.temp.name)
         self.expected = {}
         for platform in ("miyoomini", "rg35xxplus"):
-            for name in ("cannelloni", "minarch"):
+            for name in ("cannelloni", "minarch", "say"):
                 path = self.workspace / "all" / name / "build" / platform / (name + ".elf")
                 path.parent.mkdir(parents=True)
                 data = b"\x7fELF" + bytes(48) + (platform + name).encode()
@@ -36,7 +36,7 @@ class ReleaseFrontendTests(unittest.TestCase):
         with zipfile.ZipFile(output, "w") as archive:
             add_built_frontends(archive, binaries, written)
         with zipfile.ZipFile(output) as archive:
-            self.assertEqual(len(archive.namelist()), 6)
+            self.assertEqual(len(archive.namelist()), 8)
             self.assertEqual(written, set(archive.namelist()))
             for (platform, name), data in self.expected.items():
                 filename = f".system/{platform}/bin/{name}.elf"

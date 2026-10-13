@@ -21,11 +21,13 @@ melonds_MAKE = $(MAKE) platform=unix ARCH=$(subst aarch64,arm64,$(melonds_ARCH))
 
 desmume2015_HASH = 422b688009ccb9f2917c086a8fe79c8cecb030ae
 desmume2015_BUILD_PATH = desmume2015/desmume
-desmume2015_MAKE = $(MAKE) -f Makefile.libretro platform=unix CC=$(CROSS_COMPILE)gcc CXX="$(CROSS_COMPILE)g++ $(NDS_CXX_RUNTIME)" AR=$(CROSS_COMPILE)ar DESMUME_JIT=0 DESMUME_JIT_ARM=0
+desmume2015_PLATFORM ?= unix
+desmume2015_JIT_ARM ?= 0
+desmume2015_MAKE = $(MAKE) -f Makefile.libretro platform=$(desmume2015_PLATFORM) CC=$(CROSS_COMPILE)gcc CXX="$(CROSS_COMPILE)g++ $(NDS_CXX_RUNTIME)" AR=$(CROSS_COMPILE)ar DESMUME_JIT=0 DESMUME_JIT_ARM=$(desmume2015_JIT_ARM)
 
 # C++17 support differs across official device toolchains. Both choices use
 # minarch and the same OS menu; the core filename always identifies its build.
-NDS_CORE := $(shell CROSS_COMPILE='$(CROSS_COMPILE)' sh ../../all/cores/select-nds-core.sh)
+NDS_CORE ?= $(shell CROSS_COMPILE='$(CROSS_COMPILE)' sh ../../all/cores/select-nds-core.sh)
 ifeq (,$(NDS_CORE))
 $(error Unable to select an NDS core; check CROSS_COMPILE and the device C++ compiler)
 endif

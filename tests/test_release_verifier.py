@@ -8,8 +8,8 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-from create_release_archives import PLATFORMS
-from verify_release_archive import verify_archive, verify_payload
+from create_release_archives import PLATFORMS, EMULATOR_FOLDERS, add_emulator_folders, add_extra_emulators
+from verify_release_archive import verify_archive, verify_payload, verify_emulators
 from release_version import release_version
 from nds_cores import NDS_RUNTIMES
 
@@ -32,11 +32,15 @@ class ReleaseVerifierTests(unittest.TestCase):
             base = f".system/{platform}/"
             files.update({
                 base + "bin/cannelloni.elf": elf(),
+                base + "bin/say.elf": elf(),
                 base + "bin/minarch.elf": elf() + b"cannelloni_shader_mask",
                 base + "cores/desmume2015_libretro.so": elf(),
                 base + "paks/Emus/NDS.pak/launch.sh": b'EMU_PREF="libretro"\nminarch.elf\n',
                 base + "system.cfg": b"minarch_screen_effect = None\n",
             })
+            for tag in EMULATOR_FOLDERS:
+                if tag != "NDS":
+                    files[base + f"paks/Emus/{tag}.pak/launch.sh"] = b"#!/bin/sh\n"
             for library in NDS_RUNTIMES.get(platform, ()):
                 files[base + "lib/" + library] = elf()
         if change:
@@ -45,6 +49,7 @@ class ReleaseVerifierTests(unittest.TestCase):
         with zipfile.ZipFile(data, "w") as archive:
             for name, content in files.items():
                 archive.writestr(name, content)
+            add_emulator_folders(archive, set(files))
         data.seek(0)
         return data
 
@@ -80,6 +85,30 @@ class ReleaseVerifierTests(unittest.TestCase):
         with zipfile.ZipFile(self.payload(("rgb30",), change)) as archive:
             with self.assertRaisesRegex(ValueError, "incompatible SDK runtime"):
                 verify_payload(archive, ("rgb30",))
+
+    def test_extra_emulators_keep_matching_cores_and_create_all_folders(self):
+        source = io.BytesIO()
+        script = b'#!/bin/sh\r\nEMU_EXE=mgba\r\nCORES_PATH=$(dirname "$0")\r\n'
+        with zipfile.ZipFile(source, "w") as extras:
+            extras.writestr("Emus/miyoomini/MGBA.pak/launch.sh", script)
+            extras.writestr("Emus/miyoomini/MGBA.pak/mgba_libretro.so", elf())
+            extras.writestr("Emus/rgb30/MGBA.pak/mgba_libretro.so", elf(183))
+            extras.writestr("Tools/miyoomini/Unselected.pak/launch.sh", b"unused")
+        with zipfile.ZipFile(self.payload(("miyoomini",)), "a") as payload, zipfile.ZipFile(source) as extras:
+            add_extra_emulators(payload, extras, set(payload.namelist()))
+            add_emulator_folders(payload, set(payload.namelist()))
+            verify_emulators(payload, "miyoomini")
+            self.assertEqual(payload.read("Emus/miyoomini/MGBA.pak/launch.sh"), script.replace(b"\r\n", b"\n"))
+            self.assertEqual(payload.read("Emus/miyoomini/MGBA.pak/mgba_libretro.so"), elf())
+            self.assertNotIn("Tools/miyoomini/Unselected.pak/launch.sh", payload.namelist())
+            for tag in EMULATOR_FOLDERS:
+                self.assertIn(f"Roms/{EMULATOR_FOLDERS[tag]} ({tag})/.keep", payload.namelist())
+
+    def test_missing_extra_core_is_rejected(self):
+        change = {"Emus/miyoomini/MGBA.pak/launch.sh": b'EMU_EXE=mgba\nCORES_PATH=$(dirname "$0")\n'}
+        with zipfile.ZipFile(self.payload(("miyoomini",), change)) as archive:
+            with self.assertRaisesRegex(ValueError, "Missing or incompatible emulator core"):
+                verify_payload(archive, ("miyoomini",))
 
 
 if __name__ == "__main__":

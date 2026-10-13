@@ -4,6 +4,7 @@ import tempfile
 from contextlib import contextmanager, ExitStack
 import time
 import json
+import re
 import zipfile
 import shutil
 import threading
@@ -526,7 +527,77 @@ def open_os_payload(zip_path):
         raise ValueError("Too many nested Cannelloni payload archives.")
 
 
-def payload_members(archive, target_path):
+BOOTSTRAP_ROOTS = {
+    "miyoomini": {"miyoo", "miyoo354"},
+    "my282": {"miyoo", "miyoo285"},
+    "my355": {"miyoo355"},
+    "trimuismart": {"trimui"},
+    "tg5040": {"trimui"},
+    "rg35xx": {"rg35xx"},
+    "rg35xxplus": {"rg35xxplus", "dmenu.bin"},
+    "gkdpixel": {"gkdpixel"},
+    "m17": {"em_ui.sh"},
+    "zero28": {"magicx"},
+    "magicmini": set(),
+    "rgb30": set(),
+}
+UPDATER_PLATFORMS = {"miyoomini", "my282", "my355", "trimuismart", "tg5040", "zero28"}
+ALL_BOOTSTRAP_ROOTS = set().union(*BOOTSTRAP_ROOTS.values())
+
+
+def supported_emulators(archive, platform):
+    """Only expose ROM/BIOS/save folders that have a launcher on this device."""
+    tags = set()
+    for name in archive.namelist():
+        for prefix in (f".system/{platform}/paks/Emus/", f"Emus/{platform}/"):
+            if name.startswith(prefix) and name.endswith(".pak/launch.sh"):
+                tags.add(name[len(prefix):].split(".pak/", 1)[0])
+    return tags
+
+
+def belongs_to_device(name, device, emulators):
+    parts = name.replace("\\", "/").rstrip("/").split("/")
+    platform = device["platform"]
+    root = parts[0]
+    if root in (".system", ".userdata") and len(parts) > 1:
+        shared = {"bin", "common", "res", "dat", "version.txt", "commits.txt"} if root == ".system" else {"shared"}
+        if parts[1] not in shared and parts[1] != platform:
+            return False
+        # All accent assets stay available; platform-specific widget binaries do not.
+        if parts[:3] == [".system", "res", "themes"] and len(parts) > 5 and parts[4] == "bin":
+            return parts[5] == platform
+    if root in ("Settings", "Tools", "Emus") and len(parts) > 1:
+        return parts[1] == platform
+    if root in ALL_BOOTSTRAP_ROOTS and root not in BOOTSTRAP_ROOTS[platform]:
+        return False
+    if ".tmp_update" in parts:
+        if platform not in UPDATER_PLATFORMS:
+            return False
+        rest = parts[parts.index(".tmp_update") + 1:]
+        if rest and rest[0] not in {platform, platform + ".sh", "updater", "device_select.sh", "apply_language.sh"}:
+            return False
+        if rest[:2] == ["tg5040", "brick"] and device["device"] != "brick":
+            return False
+    if root in {"miyoo", "miyoo354", "miyoo355", "miyoo285"} and len(parts) > 2 and parts[1] == "app":
+        if parts[2].removesuffix(".sh") in {"miyoomini", "my282", "my355"}:
+            return parts[2].removesuffix(".sh") == platform
+    if root == "trimui" and len(parts) > 2:
+        if parts[2] == "main.sh":
+            return platform == "trimuismart"
+        if parts[2] == "runtrimui.sh":
+            return platform == "tg5040"
+    if root in {"Roms", "Bios", "Saves"} and len(parts) > 1:
+        if root == "Roms":
+            match = re.search(r"\(([^)]+)\)$", parts[1])
+            tag = match.group(1) if match else None
+        else:
+            tag = parts[1]
+        if tag is not None:
+            return tag in emulators
+    return True
+
+
+def payload_members(archive, target_path, device=None):
     """Validate all output paths before copying anything to the SD card."""
     target_root = os.path.realpath(target_path)
     members = []
@@ -541,6 +612,11 @@ def payload_members(archive, target_path):
         if os.path.commonpath((target_root, destination)) != target_root:
             raise ValueError(f"OS payload path escapes the target directory: {name}")
         members.append(member)
+    if device is not None:
+        if not any(member.filename.startswith(f'.system/{device["platform"]}/') for member in members):
+            raise ValueError(f'The OS payload does not contain files for {device["name"]}.')
+        emulators = supported_emulators(archive, device["platform"])
+        members = [member for member in members if belongs_to_device(member.filename, device, emulators)]
     return members
 
 def detect_drives():
@@ -680,14 +756,16 @@ def perform_installation(target_path, lang_code, accent_hex, device_id, progress
     progress_callback(1)
 
     # Resolve device object
-    dev_obj = next((d for d in DEVICES if d["id"] == device_id), DEVICES[0])
+    dev_obj = next((d for d in DEVICES if d["id"] == device_id), None)
+    if dev_obj is None:
+        raise ValueError(f"Unknown handheld model: {device_id}")
     target_platform = dev_obj["platform"]
     target_variant = dev_obj["device"]
     target_name = dev_obj["name"]
 
     # 1. Unzip Cannelloni payload with progress
     with open_os_payload(zip_path) as zf:
-        infolist = payload_members(zf, target_path)
+        infolist = payload_members(zf, target_path, dev_obj)
         total_items = len(infolist)
         extracted = 0
 

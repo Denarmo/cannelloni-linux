@@ -1,6 +1,12 @@
 CORES = fceumm gambatte gpsp pcsx_rearmed picodrive snes9x2005_plus melonds
 CORES+= mednafen_pce_fast mednafen_vb fake-08 mednafen_supafaust mgba pokemini race
 
+# The Mini/Plus Cortex-A7 supports upstream's ARM32 dynamic recompiler.
+# The generic Unix interpreter is too slow for interactive DS emulation here.
+NDS_CORE = desmume2015
+desmume2015_PLATFORM = armv7-hardfloat
+desmume2015_JIT_ARM = 1
+
 ###############################
 
 # optional core vars

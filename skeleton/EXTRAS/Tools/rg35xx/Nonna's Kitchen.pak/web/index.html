@@ -119,6 +119,13 @@
     let currentDir = 'Roms';
     let baseDir = 'Roms';
 
+    async function requestJson(url, options) {
+      const res = await fetch(url, { cache: 'no-store', ...options });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+      return data;
+    }
+
     function switchCategory(cat) {
       baseDir = cat;
       currentDir = cat;
@@ -132,15 +139,14 @@
 
     async function loadStorage() {
       try {
-        const res = await fetch('/cgi-bin/api.cgi?action=status');
-        const data = await res.json();
+        const data = await requestJson('/cgi-bin/api.cgi?action=status');
         if (data.total) {
           document.getElementById('storage-text').innerText = `${data.used} used / ${data.free} free of ${data.total}`;
           const pct = Math.min(100, Math.max(0, data.percent));
           document.getElementById('storage-fill').style.width = pct + '%';
         }
       } catch (e) {
-        document.getElementById('storage-text').innerText = 'Online';
+        document.getElementById('storage-text').innerText = 'Storage unavailable: ' + e.message;
       }
     }
 
@@ -151,8 +157,8 @@
       const listEl = document.getElementById('file-list');
       listEl.innerHTML = '<li class="file-item"><span style="color: var(--text-muted);">Loading...</span></li>';
       try {
-        const res = await fetch(`/cgi-bin/api.cgi?action=list&dir=${encodeURIComponent(path)}`);
-        const files = await res.json();
+        const files = await requestJson(`/cgi-bin/api.cgi?action=list&dir=${encodeURIComponent(path)}`);
+        if (path !== currentDir) return;
         listEl.innerHTML = '';
         if (files.length === 0) {
           listEl.innerHTML = '<li class="file-item"><span style="color: var(--text-muted);">Folder is empty</span></li>';
@@ -219,7 +225,13 @@
           listEl.appendChild(li);
         });
       } catch (e) {
-        listEl.innerHTML = '<li class="file-item"><span style="color: var(--danger);">Failed to load files</span></li>';
+        if (path !== currentDir) return;
+        listEl.innerHTML = '';
+        const error = document.createElement('li');
+        error.className = 'file-item';
+        error.style.color = 'var(--danger)';
+        error.textContent = 'Failed to load files: ' + e.message + '. Keep Nonna\'s Kitchen open on the device and refresh.';
+        listEl.appendChild(error);
       }
     }
 
@@ -235,10 +247,10 @@
     async function deleteFile(filePath) {
       if (!confirm(`Delete ${filePath}?`)) return;
       try {
-        await fetch(`/cgi-bin/api.cgi?action=delete&path=${encodeURIComponent(filePath)}`, { method: 'POST' });
+        await requestJson(`/cgi-bin/api.cgi?action=delete&path=${encodeURIComponent(filePath)}`, { method: 'POST' });
         refreshList();
       } catch (e) {
-        alert('Failed to delete file');
+        alert('Failed to delete file: ' + e.message);
       }
     }
 
@@ -307,6 +319,13 @@
 
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const result = JSON.parse(xhr.responseText);
+              if (result.error || result.status !== 'ok') throw new Error(result.error || 'Upload was not saved');
+            } catch (e) {
+              reject(e);
+              return;
+            }
             progressFill.style.width = '100%';
             statsEl.innerText = '100% (Complete)';
             speedEl.innerText = 'Transfer finished';
@@ -327,17 +346,21 @@
 
     async function uploadFiles(files) {
       const progressContainer = document.getElementById('upload-progress-container');
-      uploadStatus.innerText = `Uploading ${files.length} file(s) to /${currentDir}...`;
+      const uploadDir = currentDir;
+      let failed = 0;
+      uploadStatus.innerText = `Uploading ${files.length} file(s) to /${uploadDir}...`;
       for (let i = 0; i < files.length; i++) {
         try {
-          await uploadSingleFile(files[i], currentDir, i, files.length);
+          await uploadSingleFile(files[i], uploadDir, i, files.length);
         } catch (e) {
+          failed++;
           uploadStatus.innerText = `Error uploading ${files[i].name}: ${e.message}`;
           console.error(e);
         }
       }
-      uploadStatus.innerText = 'All uploads complete!';
+      uploadStatus.innerText = failed ? `${failed} upload(s) failed. Please retry.` : 'All uploads complete!';
       refreshList();
+      if (failed) return;
       setTimeout(() => {
         uploadStatus.innerText = '';
         progressContainer.style.display = 'none';

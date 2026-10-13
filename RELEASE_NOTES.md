@@ -1,33 +1,30 @@
-# Cannelloni 1.0.0
+# Cannelloni 1.0.1
 
-Cannelloni now uses semantic version numbers. This release brings the SD installer, Nintendo DS launcher, and in-game shader menu together with builds from the current source.
+This bug-fix release corrects device installation, theme colors, network tools, and emulator video handling.
 
-## What's new
+## Fixes
 
-- **One installer payload.** The desktop installer reads the bundled `Cannelloni.zip` directly; the installer package no longer includes duplicate loose OS files. Legacy `Cannoli.zip` payloads are also recognized. Language, accent, and device selections are applied after extraction.
-- **Nintendo DS in the OS menu.** DS games default to a libretro core through minarch. Builds use melonDS where the compiler supports it and DeSmuME2015 on older toolchains. Old packaged DraStic defaults migrate to libretro; standalone DraStic remains an explicit option under Settings → Emulators.
-- **Working in-game shaders.** Open MENU → Shaders to choose a preset and edit its supported parameters. CRT-Cannelloni, Lite, CRT, LCD, dot-matrix, scanline, and sharp-bilinear effects are portable software adaptations of the Android Cannelloni shader work. Save settings for a game or console, or set shared defaults in Settings → Shaders.
-- **Consistent 1.0.0 branding.** Installer, OS version information, release filenames, and build workflow read the same version source.
-- **Updated documentation.** The README includes an installer walkthrough, screenshots, device notes, and the new features. MagicX installer profiles now correctly identify XU Mini M and include Mini Zero 28.
-- **Source-built release frontends.** Packaging requires freshly compiled launcher and minarch binaries plus architecture-checked DS cores. Accent themes cannot replace the frontends with stale copies.
+- **Correct accent colors.** Native menus tint an immutable neutral spritesheet, avoiding double tinting and color buildup around rounded corners. Installer and on-device presets now match.
+- **Visible Wi-Fi progress.** Connection screens show the current stage and result, with managed status messages that do not cover the network picker or keyboard.
+- **Nonna’s Kitchen file browser.** The web API handles encoded filenames on legacy BusyBox, runs CGI from executable temporary storage, reports request failures, and reads file metadata without scanning entire ROMs.
+- **Kitchen shutdown.** Closing its screen stops the exact web-server process it started. Settings and Tools open the same service.
+- **Only the selected device’s files.** The installer filters platform binaries, tools, settings, boot files, theme widgets, and emulator folders. Existing unrelated files on a card are preserved.
+- **Complete Miyoo emulator selection.** Base and optional upstream emulator packs are included with their matching cores and ROM/BIOS/save folders, instead of exposing only GBA, DS, and PlayStation.
+- **GBA and in-game overlay crash fix.** A malformed menu-loop condition could read past the end of the menu items. The loop now stops at the correct item. The frontend also owns the last video frame, declines unsupported direct framebuffer requests, and handles missing frames and changed geometry.
+- **Miyoo Nintendo DS startup.** Mini/Plus explicitly use DeSmuME2015 with its supported ARM JIT build instead of the generic melonDS selection. DS startup displays progress and reports a core that fails to produce a frame within 60 seconds, returning to the launcher instead of leaving an indefinite black screen.
 
 ## Download and install
 
-**Recommended: `Cannelloni-Installer.zip`**
+The only download is **Cannelloni-Installer.zip**. Extract it on your computer, keep its bundled `Cannelloni.zip` and `VERSION` beside the installer, select your device and SD card, and install. Windows includes an executable; Linux uses `bash Cannelloni-Installer.sh` with Python 3.
 
-1. Back up your SD card and use the partition/stock boot setup required by your handheld. The installer copies files; it does not format or partition the card.
-2. Extract the installer package into a folder on your computer. Keep `Cannelloni.zip` and `VERSION` beside the installer; do not unpack the inner ZIP.
-3. On Windows, run `Cannelloni-Installer.exe`. On Linux, run `bash Cannelloni-Installer.sh` with Python 3 installed (Tkinter is recommended; a local browser interface is available as fallback).
-4. Select the correct SD card, language, accent color, and handheld model. Click **Install Cannelloni to SD Card** and wait for completion.
-5. Safely eject the card and follow the model-specific boot instructions in the README.
+For a manual first installation, extract the bundled `Cannelloni.zip` to the SD root, including hidden files and the boot files needed by your device. Also copy the compressed `Cannelloni.zip` to the root so the device can perform its first-boot installation steps. Complete any separate boot-card setup before starting. Existing working cards can update by copying the bundled compressed archive to the root and booting. The desktop installer selects device-specific files automatically.
 
-For manual setup, `Cannelloni-1.0.0.zip` and `Cannelloni.zip` are the unified release wrapper. Extract that outer archive at the SD-card root and follow its device-specific bootstrap instructions. Existing installations can use the inner payload for an update.
+Back up saves and settings first. The installer does not format the card. Previous unrelated platform folders already on the card are preserved; a fresh target receives only the selected device’s files.
 
 [Full installer and device guide](https://github.com/Denarmo/cannelloni-linux#installation)
 
-## Compatibility notes
+## Validation and compatibility
 
-- Software shaders are off by default. Full CRT/glow effects use more CPU; Lite and Zfast presets are available for slower devices. Handheld performance still needs testing per model.
-- Libretro and standalone DraStic save states use different formats. Keep a backup before switching emulator paths.
-- Host regression tests and release archive verification cover packaging, routing, configuration, and rendering. These checks do not replace testing on physical handhelds.
-- ROMs and BIOS files are not included. Original shader notices and component licenses are included.
+Release publication requires host regression tests, all 12 platform builds, a Windows installer build, and verification of the exact packaged binaries and emulator cores. Physical Miyoo Mini/Plus testing is still needed to confirm the reported GBA and DS failures are resolved on hardware; these changes address identified source defects and build configuration, not a device-reproduced crash trace.
+
+Software shaders remain off by default. DS speed and compatibility depend on the game and device. ROMs and BIOS files are not included. Libretro and standalone DraStic save states are not interchangeable.

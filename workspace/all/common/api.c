@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <ctype.h>
 
 #include <msettings.h>
 
@@ -94,18 +95,20 @@ static struct PWR_Context {
 static int _;
 
 static void GFX_tintAssetRect(SDL_Rect rect, uint8_t r, uint8_t g, uint8_t b) {
-	if (!gfx.assets) return;
+	if (!gfx.assets || !gfx.assets_orig) return;
 	SDL_PixelFormat* fmt = gfx.assets->format;
 	SDL_LockSurface(gfx.assets);
+	SDL_LockSurface(gfx.assets_orig);
 	for (int y = rect.y; y < rect.y + rect.h; y++) {
 		for (int x = rect.x; x < rect.x + rect.w; x++) {
 			uint8_t* p = (uint8_t*)gfx.assets->pixels + y * gfx.assets->pitch + x * fmt->BytesPerPixel;
+			uint8_t* original = (uint8_t*)gfx.assets_orig->pixels + y * gfx.assets_orig->pitch + x * fmt->BytesPerPixel;
 			uint8_t pr, pg, pb, pa;
 			uint32_t pixel = 0;
 			if (fmt->BytesPerPixel == 4) {
-				pixel = *(uint32_t*)p;
+				pixel = *(uint32_t*)original;
 			} else if (fmt->BytesPerPixel == 2) {
-				pixel = *(uint16_t*)p;
+				pixel = *(uint16_t*)original;
 			} else {
 				continue;
 			}
@@ -123,7 +126,34 @@ static void GFX_tintAssetRect(SDL_Rect rect, uint8_t r, uint8_t g, uint8_t b) {
 			}
 		}
 	}
+	SDL_UnlockSurface(gfx.assets_orig);
 	SDL_UnlockSurface(gfx.assets);
+}
+
+static void GFX_initAssets(void) {
+	char asset_path[MAX_PATH];
+	// The installer and external widgets use pre-colored sheets. Native drawing
+	// must always start from the neutral sheet or corners are tinted twice.
+	snprintf(asset_path, sizeof(asset_path), RES_PATH "/themes/#ffffff/assets@%ix.png", FIXED_SCALE);
+	SDL_Surface* loaded = IMG_Load(asset_path);
+	if (!loaded) {
+		snprintf(asset_path, sizeof(asset_path), RES_PATH "/assets@%ix.png", FIXED_SCALE);
+		loaded = IMG_Load(asset_path);
+	}
+	if (!loaded) {
+		LOG_error("Unable to load UI assets: %s\n", IMG_GetError());
+		return;
+	}
+	// PNGs may be indexed or RGB24. Normalize once so every supported PNG
+	// format takes the same RGBA tint path and keeps antialiased alpha edges.
+	SDL_Surface* rgba = SDL_CreateRGBSurface(0, 1, 1, 32,
+		0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000);
+	if (rgba) {
+		gfx.assets = SDL_ConvertSurface(loaded, rgba->format, 0);
+		SDL_FreeSurface(rgba);
+	}
+	SDL_FreeSurface(loaded);
+	if (gfx.assets) gfx.assets_orig = SDL_ConvertSurface(gfx.assets, gfx.assets->format, 0);
 }
 
 void GFX_setAccentColor(uint8_t r, uint8_t g, uint8_t b) {
@@ -135,7 +165,8 @@ void GFX_setAccentColor(uint8_t r, uint8_t g, uint8_t b) {
 		asset_rgbs[ASSET_BUTTON] = RGB_ACCENT;
 	}
 	if (gfx.assets && gfx.assets_orig) {
-		SDL_BlitSurface(gfx.assets_orig, NULL, gfx.assets, NULL);
+		// Read immutable pixels directly; alpha-blitting a reset sheet would
+		// blend new colors with the previous selection at translucent edges.
 		GFX_tintAssetRect(asset_rects[ASSET_WHITE_PILL], r, g, b);
 		GFX_tintAssetRect(asset_rects[ASSET_BAR], r, g, b);
 		GFX_tintAssetRect(asset_rects[ASSET_BUTTON], r, g, b);
@@ -147,10 +178,13 @@ void GFX_loadAccentColor(void) {
 	if (exists(ACCENT_COLOR_PATH)) {
 		char hex[32] = {0};
 		getFile(ACCENT_COLOR_PATH, hex, sizeof(hex));
-		int tr, tg, tb;
-		if (sscanf(hex, "#%02x%02x%02x", &tr, &tg, &tb) == 3 ||
-		    sscanf(hex, "%02x%02x%02x", &tr, &tg, &tb) == 3 ||
-		    sscanf(hex, "%d,%d,%d", &tr, &tg, &tb) == 3) {
+		unsigned int tr, tg, tb;
+		int end = 0;
+		int valid = sscanf(hex, "%u,%u,%u%n", &tr, &tg, &tb, &end) == 3;
+		if (!valid) valid = sscanf(hex, "#%2x%2x%2x%n", &tr, &tg, &tb, &end) == 3;
+		if (!valid) valid = sscanf(hex, "%2x%2x%2x%n", &tr, &tg, &tb, &end) == 3;
+		while (hex[end] && isspace((unsigned char)hex[end])) end++;
+		if (valid && !hex[end] && tr <= 255 && tg <= 255 && tb <= 255) {
 			r = (uint8_t)tr;
 			g = (uint8_t)tg;
 			b = (uint8_t)tb;
@@ -215,13 +249,7 @@ SDL_Surface* GFX_init(int mode) {
 	asset_rects[ASSET_WIFI]				= (SDL_Rect){SCALE4(95,39,14,10)};
 	asset_rects[ASSET_HOLE]				= (SDL_Rect){SCALE4( 1,63,20,20)};
 	
-	char asset_path[MAX_PATH];
-	sprintf(asset_path, RES_PATH "/assets@%ix.png", FIXED_SCALE);
-	if (!exists(asset_path)) LOG_info("missing assets, you're about to segfault dummy!\n");
-	gfx.assets = IMG_Load(asset_path);
-	if (gfx.assets) {
-		gfx.assets_orig = SDL_ConvertSurface(gfx.assets, gfx.assets->format, 0);
-	}
+	GFX_initAssets();
 	GFX_loadAccentColor();
 	
 	TTF_Init();

@@ -1,5 +1,6 @@
 """Verify rebuilt release payloads without relying on old MinUI ELF offsets."""
 import argparse
+import re
 from contextlib import ExitStack
 from pathlib import Path
 import shutil
@@ -7,7 +8,7 @@ import struct
 import tempfile
 import zipfile
 
-from create_release_archives import PLATFORMS, load_built_frontends
+from create_release_archives import EMULATOR_FOLDERS, PLATFORMS, load_built_frontends
 from nds_cores import NDS_CORES, NDS_RUNTIMES
 from release_version import release_version
 
@@ -18,13 +19,39 @@ def elf_target(data):
     return data[4], data[5], struct.unpack_from("<H" if data[5] == 1 else ">H", data, 18)[0]
 
 
+def verify_emulators(payload, platform):
+    names = set(payload.namelist())
+    launchers = [name for name in names if name.endswith(".pak/launch.sh") and
+                 name.startswith((f".system/{platform}/paks/Emus/", f"Emus/{platform}/"))]
+    tags = {name.rsplit("/", 2)[1][:-4] for name in launchers}
+    required = {"FC", "GB", "GBC", "GBA", "MD", "PS", "SFC", "PAK", "NDS"}
+    if platform == "miyoomini":
+        required |= {"GG", "SMS", "SUPA", "MGBA", "SGB", "PCE", "PKM", "NGP", "NGPC", "P8", "VB"}
+    if required - tags:
+        raise ValueError(f"Emulator launchers missing for {platform}: {sorted(required - tags)}")
+    for tag in tags & EMULATOR_FOLDERS.keys():
+        for folder in (f"Roms/{EMULATOR_FOLDERS[tag]} ({tag})", f"Bios/{tag}", f"Saves/{tag}"):
+            if folder + "/.keep" not in names:
+                raise ValueError(f"Emulator folder missing: {folder}")
+    frontend = payload.read(f".system/{platform}/bin/minarch.elf")
+    for launcher in launchers:
+        script = payload.read(launcher).decode("utf-8")
+        match = re.search(r"^EMU_EXE=([a-zA-Z0-9_-]+)$", script, re.MULTILINE)
+        if not match:
+            continue  # NDS and native game launchers select their runtime separately.
+        directory = launcher.rsplit("/", 1)[0] if 'CORES_PATH=$(dirname "$0")' in script else f".system/{platform}/cores"
+        core = directory + "/" + match.group(1) + "_libretro.so"
+        if core not in names or elf_target(payload.read(core)) != elf_target(frontend):
+            raise ValueError(f"Missing or incompatible emulator core: {core}")
+
+
 def verify_payload(payload, platforms=PLATFORMS, builds=None):
     names = payload.namelist()
     if payload.read(".system/version.txt").decode("utf-8").splitlines()[0] != release_version():
         raise ValueError("OS version does not match VERSION")
     for platform in platforms:
         base = f".system/{platform}/"
-        for name in ("cannelloni", "minarch"):
+        for name in ("cannelloni", "minarch", "say"):
             filename = base + f"bin/{name}.elf"
             if names.count(filename) != 1:
                 raise ValueError(f"Missing or duplicate frontend: {filename}")
@@ -50,6 +77,7 @@ def verify_payload(payload, platforms=PLATFORMS, builds=None):
             raise ValueError(f"NDS launcher does not default to minarch: {platform}")
         if b"-minarch_screen_effect" in payload.read(base + "system.cfg"):
             raise ValueError(f"Obsolete hardware effect lock: {platform}")
+        verify_emulators(payload, platform)
     for filename in (".system/common/shaders/README.txt", ".system/common/shaders/LICENSE.txt"):
         payload.getinfo(filename)
     for filename in names:

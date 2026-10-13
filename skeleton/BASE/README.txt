@@ -1,4 +1,4 @@
-Cannelloni 1.0.0
+Cannelloni 1.0.1
 
 Cannelloni is a focused retro gaming launcher and libretro frontend for supported Linux handhelds. The release includes separate platform builds, a desktop SD installer, Nintendo DS integration, and configurable software shader effects.
 
@@ -11,7 +11,7 @@ Installing
 DESKTOP INSTALLER (WINDOWS / LINUX)
 
 Download Cannelloni-Installer.zip from:
-https://github.com/Denarmo/cannelloni-linux/releases/tag/v1.0.0
+https://github.com/Denarmo/cannelloni-linux/releases/tag/v1.0.1
 
 1. Extract the installer package to a folder on your computer. Keep its bundled
    Cannelloni.zip beside the installer, compressed, and retain the VERSION file.
@@ -36,12 +36,14 @@ installer can reuse it later. ZIPs on your computer keep their original names.
 
 MANUAL FIRST INSTALLATION
 
-1. Download Cannelloni-1.0.0.zip and extract the outer archive to the card root,
-   including hidden folders. Leave the inner Cannelloni.zip compressed.
-2. Retain the supplied boot files appropriate to your device. A blank card with
-   only a ZIP is not sufficient on all handhelds.
-3. Complete the device boot setup and start the handheld. Where supported, its
-   updater extracts the OS payload and starts the device setup screen.
+1. Download Cannelloni-Installer.zip and extract it on your computer. The
+   Cannelloni.zip inside is also the manual-install archive.
+2. Extract Cannelloni.zip onto the SD root, including hidden files and your
+   device's boot files. Also copy the compressed Cannelloni.zip to the root
+   so the device runs its first-boot installation steps. Complete any separate
+   boot-card setup before starting the handheld.
+3. The manual archive includes every platform. The desktop installer instead
+   selects the OS, tools, emulator folders and boot files for your chosen device.
 
 SUPPORTED PLATFORM TARGETS
 
@@ -64,8 +66,10 @@ including RG35XX Plus/H/SP; do not use it for the original RG35XX.
 FEATURES AND SETTINGS
 
 - Nintendo DS defaults to a libretro core through minarch and the OS menu.
-  Builds use melonDS with modern C++17 toolchains and DeSmuME2015 with older
-  toolchains. Compatibility and speed depend on the core and handheld.
+  Miyoo Mini/Plus use DeSmuME2015 with ARM JIT. Other platforms use melonDS
+  with C++17 toolchains and DeSmuME2015 with older toolchains. Startup displays
+  progress and reports an error if the core produces no frame in 60 seconds.
+  Compatibility and speed depend on the core and handheld.
 - Old packaged DraStic defaults migrate to libretro. On Miyoo Mini devices with
   DraStic installed, Settings -> Emulators explicitly selects standalone mode.
   DraStic and libretro save states are not interchangeable.
@@ -83,11 +87,10 @@ FEATURES AND SETTINGS
 ----------------------------------------
 Updating
 
-Back up Saves and .userdata before updating. Extract the downloaded release or
-installer package on your computer. Copy the INNER OS payload Cannelloni.zip,
-without unzipping it, to the root of your already working Cannelloni card and
-boot the handheld. The downloadable release asset named Cannelloni.zip is an
-alias of the OUTER package; extract that package first to obtain the payload.
+Back up Saves and .userdata before updating. Extract Cannelloni-Installer.zip
+on your computer. Copy the bundled Cannelloni.zip, without unzipping it, to the
+root of your already working Cannelloni card and boot the handheld. Use the
+desktop installer when you want only your selected device's files extracted.
 
 ----------------------------------------
 Shortcuts

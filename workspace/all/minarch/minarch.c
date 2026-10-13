@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <zlib.h>
 #include <pthread.h>
+#include <signal.h>
 
 #include "libretro.h"
 #include "defines.h"
@@ -53,6 +54,14 @@ static ShaderContext shader_context;
 static GFX_Renderer shader_renderer; // SDL2 retains this until the next flip.
 static SDL_Surface* shader_screen;
 static unsigned shader_frame;
+static int startup_pending;
+
+static void startup_timeout(int signal_number) {
+	(void)signal_number;
+	static const char message[] = "Core startup timed out before its first frame.\n";
+	write(STDERR_FILENO, message, sizeof(message) - 1);
+	_exit(124);
+}
 static int prevent_tearing = 1; // lenient
 static int show_debug = 0;
 static int max_ff_speed = 3; // 4x
@@ -2084,6 +2093,7 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL: { /* 8 */
 		// puts("RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL");
 		// TODO: used by fceumm at least
+		break;
 	}
 	case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY: { /* 9 */
 		const char **out = (const char **)data;
@@ -2212,8 +2222,9 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 	// RETRO_ENVIRONMENT_SET_MEMORY_MAPS (36 | RETRO_ENVIRONMENT_EXPERIMENTAL)
 	// RETRO_ENVIRONMENT_GET_LANGUAGE 39
 	case RETRO_ENVIRONMENT_GET_CURRENT_SOFTWARE_FRAMEBUFFER: { /* (40 | RETRO_ENVIRONMENT_EXPERIMENTAL) */
-		// puts("RETRO_ENVIRONMENT_GET_CURRENT_SOFTWARE_FRAMEBUFFER");
-		break;
+		// No direct framebuffer is supplied. A true response makes cores use
+		// the uninitialized data/pitch fields instead of their own framebuffer.
+		return false;
 	}
 	
 	case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE: {
@@ -2704,7 +2715,8 @@ static uint32_t sec_start = 0;
 	static int fit = 0;
 #endif	
 
-// buffer to convert xrgb8888 to rgb565
+// Own the last RGB565 frame. Libretro's video callback only lends its data
+// until the callback returns; the pause menu and save previews run later.
 static void* buffer = NULL;
 static size_t buffer_size;
 static void buffer_dealloc(void) {
@@ -2714,13 +2726,15 @@ static void buffer_dealloc(void) {
 	buffer_size = 0;
 }
 static void buffer_realloc(int w, int h, int p) {
-	size_t needed = (size_t)w * FIXED_BPP * h;
+	size_t needed = (size_t)p * h;
 	// Menu previews borrow this buffer while scaling options are changed.
 	// Geometry changes alone must not invalidate the last converted frame.
 	if (buffer && buffer_size >= needed) return;
-	buffer_dealloc();
-	buffer = malloc(needed);
-	if (buffer) buffer_size = needed;
+	void* replacement = realloc(buffer, needed);
+	if (replacement) {
+		buffer = replacement;
+		buffer_size = needed;
+	}
 	// LOG_info("buffer_realloc(%i,%i,%i)\n", w,h,p);
 }
 static void buffer_downsample(const void *data, unsigned width, unsigned height, size_t pitch) {
@@ -2745,7 +2759,7 @@ static void buffer_downsample(const void *data, unsigned width, unsigned height,
 static void selectScaler(int src_w, int src_h, int src_p) {
 	LOG_info("selectScaler\n");
 	
-	if (downsample) buffer_realloc(src_w,src_h,src_p);
+	buffer_realloc(src_w,src_h,src_p);
 	
 	int src_x,src_y,dst_x,dst_y,dst_w,dst_h,dst_p,scale;
 	double aspect;
@@ -3069,12 +3083,14 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	// eg. PS@10 60/240
 	
 	if (!data) return;
+	if (!width || !height || pitch < (size_t)width * (downsample ? 4 : FIXED_BPP)) return;
 
 	fps_ticks += 1;
 	
 	size_t input_pitch = pitch;
 	// Conversion writes tightly packed RGB565 rows, regardless of core padding.
 	if (downsample) pitch = width * FIXED_BPP;
+	if (height > SIZE_MAX / pitch) return;
 	
 	// if source has changed size (or forced by dst_p==0)
 	// eg. true src + cropped src + fixed dst + cropped dst
@@ -3082,13 +3098,19 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 		selectScaler(width, height, pitch);
 		GFX_clearAll();
 	}
+	if (!buffer || buffer_size < pitch * height) {
+		LOG_error("Unable to allocate video frame.\n");
+		return;
+	}
 
 	if (downsample) {
 		buffer_downsample(data,width,height,input_pitch);
 		renderer.src = buffer;
 	}
 	else {
-		renderer.src = (void*)data;
+		for (unsigned y = 0; y < height; y++)
+			memcpy((uint8_t*)buffer + y * pitch, (const uint8_t*)data + y * input_pitch, width * FIXED_BPP);
+		renderer.src = buffer;
 	}
 	
 	// Draw on the RGB565 presentation frame after conversion. XRGB8888
@@ -3116,6 +3138,10 @@ static void video_refresh_callback_main(const void *data, unsigned width, unsign
 	// LOG_info("video_refresh_callback: %ix%i@%i %ix%i@%i\n",width,height,pitch,screen->w,screen->h,screen->pitch);
 	
 	Shader_blit();
+	if (startup_pending) {
+		alarm(0);
+		startup_pending = 0;
+	}
 	
 	if (!thread_video) GFX_flip(screen);
 	last_flip_time = SDL_GetTicks();
@@ -3242,7 +3268,7 @@ void Core_load(void) {
 		LOG_error("No game loaded or game file is empty\n");
 		exit(1);
 	}
-	struct retro_game_info game_info;
+	struct retro_game_info game_info = {0};
 	game_info.path = game.tmp_path[0]?game.tmp_path:game.path;
 	game_info.data = game.data;
 	game_info.size = game.size;
@@ -4346,6 +4372,8 @@ static int Menu_options(MenuList* list) {
 
 static void Menu_scale(SDL_Surface* src, SDL_Surface* dst) {
 	// LOG_info("Menu_scale src: %ix%i dst: %ix%i\n", src->w,src->h,dst->w,dst->h);
+	if (!src || !dst || !src->pixels || !dst->pixels || src->w <= 0 || src->h <= 0 ||
+			dst->w <= 0 || dst->h <= 0 || src->pitch < src->w * FIXED_BPP || dst->pitch < dst->w * FIXED_BPP) return;
 	
 	uint16_t* s = src->pixels;
 	uint16_t* d = dst->pixels;
@@ -4447,35 +4475,21 @@ static void Menu_scale(SDL_Surface* src, SDL_Surface* dst) {
 	// LOG_info("offset: %i,%i\n", renderer.src_x, renderer.src_y);
 
 	// dumb nearest neighbor scaling
+	if (rw <= 0 || rh <= 0 || sw <= 0 || sh <= 0) return;
 	int mx = (sw << 16) / rw;
 	int my = (sh << 16) / rh;
-	int ox = (renderer.src_x << 16);
-	int sx = ox;
-	int sy = (renderer.src_y << 16);
-	int lr = -1;
-	int sr = 0;
-	int dr = ry * dp;
-	int cp = dp * FIXED_BPP;
-	
-	// LOG_info("Menu_scale (s): %i,%i %ix%i\n",sx,sy,sw,sh);
-	// LOG_info("mx:%i my:%i sx>>16:%i sy>>16:%i\n",mx,my,((sx+mx) >> 16),((sy+my) >> 16));
-
-	for (int dy=0; dy<rh; dy++) {
-		sx = ox;
-		sr = (sy >> 16) * sp;
-		if (sr==lr) {
-			memcpy(d+dr,d+dr-dp,cp);
+	// Geometry can refer to an oversized game surface or a cropped preview.
+	// Clip both ends before writing; menu surfaces are always display-sized.
+	int start_y = MAX(0,-ry), end_y = MIN(rh,dh-ry);
+	int start_x = MAX(0,-rx), end_x = MIN(rw,dw-rx);
+	for (int dy=start_y; dy<end_y; dy++) {
+		int sy = renderer.src_y + (((int64_t)dy * my) >> 16);
+		if (sy < 0 || sy >= src->h) continue;
+		for (int dx=start_x; dx<end_x; dx++) {
+			int sx = renderer.src_x + (((int64_t)dx * mx) >> 16);
+			if (sx >= 0 && sx < src->w) d[(ry+dy)*dp+rx+dx] = s[sy*sp+sx];
 		}
-		else {
-	        for (int dx=0; dx<rw; dx++) {
-	            d[dr + rx + dx] = s[sr + (sx >> 16)];
-				sx += mx;
-	        }
-		}
-		lr = sr;
-		sy += my;
-		dr += dp;
-    }
+	}
 	
 	// LOG_info("successful\n");
 }
@@ -4597,10 +4611,11 @@ static char* getAlias(char* path, char* alias) {
 }
 
 static void Menu_loop(void) {
-	menu.bitmap = SDL_CreateRGBSurfaceFrom(renderer.src, renderer.true_w, renderer.true_h, FIXED_DEPTH, renderer.src_p, RGBA_MASK_565);
+	menu.bitmap = renderer.src ? SDL_CreateRGBSurfaceFrom(renderer.src, renderer.true_w, renderer.true_h, FIXED_DEPTH, renderer.src_p, RGBA_MASK_565) : NULL;
 	// LOG_info("Menu_loop:menu.bitmap %ix%i\n", menu.bitmap->w,menu.bitmap->h);
 	
 	SDL_Surface* backing = SDL_CreateRGBSurface(SDL_SWSURFACE,DEVICE_WIDTH,DEVICE_HEIGHT,FIXED_DEPTH,RGBA_MASK_565); 
+	if (backing) SDL_FillRect(backing, NULL, 0);
 	Menu_scale(menu.bitmap, backing);
 	
 	int restore_w = screen->w;
@@ -4812,7 +4827,8 @@ static void Menu_loop(void) {
 			if (selected < menu_start) menu_start = selected;
 			if (selected >= menu_start + MENU_VISIBLE_ITEMS) menu_start = selected - MENU_VISIBLE_ITEMS + 1;
 			oy = (((DEVICE_HEIGHT / FIXED_SCALE) - PADDING * 2) - (MENU_VISIBLE_ITEMS * PILL_SIZE)) / 2;
-			for (int i=menu_start; i<MIN(MENU_ITEM_COUNT, menu_start + MENU_VISIBLE_ITEMS); i++) {
+			int menu_end = MIN(MENU_ITEM_COUNT, menu_start + MENU_VISIBLE_ITEMS);
+			for (int i=menu_start; i<menu_end; i++) {
 				char* item = menu.items[i];
 				SDL_Color text_color = COLOR_WHITE;
 				
@@ -5077,6 +5093,16 @@ int main(int argc , char* argv[]) {
 	PWR_init();
 	if (!HAS_POWER_BUTTON) PWR_disableSleep();
 	MSG_init();
+	if (exactMatch(tag_name, "NDS")) {
+		// Some ROM/core combinations stall before entering the input loop.
+		// Keep a visible loading screen and return to the launcher on timeout.
+		GFX_clear(screen);
+		GFX_blitMessage(font.medium, "Loading Nintendo DS...\nLarge games can take longer.", screen, NULL);
+		GFX_flip(screen);
+		signal(SIGALRM, startup_timeout);
+		startup_pending = 1;
+		alarm(60);
+	}
 	
 	// Overrides_init();
 	
@@ -5127,8 +5153,10 @@ int main(int argc , char* argv[]) {
 	
 	// force a vsync immediately before loop
 	// for better frame pacing?
-	GFX_clearAll();
-	GFX_flip(screen);
+	if (!startup_pending) {
+		GFX_clearAll();
+		GFX_flip(screen);
+	}
 	
 	Special_init(); // after config
 	

@@ -14,42 +14,6 @@
 
 ///////////////////////////////////////
 
-#define KITCHEN_STATUS_PATH "/tmp/kitchen.status"
-
-static int is_kitchen_running(char* out_info, size_t max_len) {
-	if (exists(KITCHEN_STATUS_PATH)) {
-		char content[256] = {0};
-		getFile(KITCHEN_STATUS_PATH, content, sizeof(content));
-		char* ip_line = strstr(content, "ip=");
-		char* port_line = strstr(content, "port=");
-		char ip[64] = "127.0.0.1";
-		char port[16] = "2121";
-		if (ip_line) {
-			sscanf(ip_line, "ip=%63s", ip);
-		}
-		if (port_line) {
-			sscanf(port_line, "port=%15s", port);
-		}
-		if (out_info) {
-			snprintf(out_info, max_len, "Running (ftp://%s:%s)", ip, port);
-		}
-		return 1;
-	}
-	if (out_info) {
-		snprintf(out_info, max_len, "Stopped");
-	}
-	return 0;
-}
-
-static void toggle_kitchen(void) {
-	if (exists(KITCHEN_STATUS_PATH)) {
-		system("kitchen.elf --stop &");
-		unlink(KITCHEN_STATUS_PATH);
-	} else {
-		system("kitchen.elf --daemon &");
-	}
-}
-
 static int has_wifi_hardware(void) {
 	return exists("/sys/class/net/wlan0") || exists("/sys/class/net/wlan1") || PLAT_isOnline();
 }
@@ -69,15 +33,6 @@ static void get_wifi_status(char* out_info, size_t max_len) {
 	}
 }
 
-static void toggle_wifi(void) {
-	if (!has_wifi_hardware()) return;
-	if (PLAT_isOnline()) {
-		system("ifconfig wlan0 down 2>/dev/null || wifictl disable 2>/dev/null &");
-	} else {
-		system("ifconfig wlan0 up 2>/dev/null || wifictl enable 2>/dev/null &");
-	}
-}
-
 typedef struct {
 	const char* name;
 	const char* hex;
@@ -86,11 +41,11 @@ typedef struct {
 
 static AccentPreset accent_presets[] = {
 	{"Gold",       "#f1c40f", 0xf1, 0xc4, 0x0f},
-	{"Cannoli",    "#6fb8de", 0x6f, 0xb8, 0xde},
-	{"Coral Red",  "#e57373", 0xe5, 0x73, 0x73},
-	{"Emerald",    "#81c784", 0x81, 0xc7, 0x84},
-	{"Purple",     "#ba68c8", 0xba, 0x68, 0xc8},
-	{"Amber",      "#ffb74d", 0xff, 0xb7, 0x4d},
+	{"Tomato Red", "#e74c3c", 0xe7, 0x4c, 0x3c},
+	{"Basil Green", "#2ecc71", 0x2e, 0xcc, 0x71},
+	{"Sky Blue",   "#3498db", 0x34, 0x98, 0xdb},
+	{"Purple",     "#9b59b6", 0x9b, 0x59, 0xb6},
+	{"Carrot Orange", "#e67e22", 0xe6, 0x7e, 0x22},
 	{"White",      "#ffffff", 0xff, 0xff, 0xff},
 };
 #define ACCENT_PRESET_COUNT (sizeof(accent_presets)/sizeof(accent_presets[0]))
@@ -124,6 +79,8 @@ static void cycle_accent(int direction) {
 	if (f) {
 		fprintf(f, "%s\n", accent_presets[idx].hex);
 		fclose(f);
+		// Keep the external Settings widgets in step with the native palette.
+		system(SYSTEM_PATH "/bin/apply_accent_color.sh >/dev/null 2>&1");
 	}
 }
 
@@ -1204,6 +1161,40 @@ static void openPak(char* path) {
 	sprintf(cmd, "'%s/launch.sh'", escapeSingleQuotes(path));
 	queueNext(cmd);
 }
+
+// Network settings use the same tools as the main library. Queueing the pak
+// releases the launcher's display/input before its UI starts.
+static void openNetworkPak(const char* category, const char* name, const char* pak_id) {
+	char path[MAX_PATH];
+	char launcher[MAX_PATH];
+	snprintf(path, sizeof(path), "%s/%s/%s/%s.pak", SDCARD_PATH, category, PLATFORM, name);
+	snprintf(launcher, sizeof(launcher), "%s/launch.sh", path);
+	if (exists(launcher)) {
+		openPak(path);
+		return;
+	}
+	// Language packs can rename the visible folder; its identity stays stable.
+	char root[MAX_PATH];
+	snprintf(root, sizeof(root), "%s/%s/%s", SDCARD_PATH, category, PLATFORM);
+	DIR* directory = opendir(root);
+	if (!directory) return;
+	struct dirent* entry;
+	while ((entry = readdir(directory))) {
+		if (entry->d_name[0] == '.') continue;
+		snprintf(path, sizeof(path), "%s/%s", root, entry->d_name);
+		snprintf(launcher, sizeof(launcher), "%s/.pak_id", path);
+		char id[64] = {0};
+		getFile(launcher, id, sizeof(id));
+		trimTrailingNewlines(id);
+		if (strcmp(id, pak_id)) continue;
+		snprintf(launcher, sizeof(launcher), "%s/launch.sh", path);
+		if (exists(launcher)) {
+			openPak(path);
+			break;
+		}
+	}
+	closedir(directory);
+}
 static void openRom(char* path, char* last) {
 	LOG_info("openRom(%s,%s)\n", path, last);
 	
@@ -1507,11 +1498,11 @@ int main (int argc, char *argv[]) {
 			}
 			else if (PAD_justPressed(BTN_A)) {
 				if (setting_selected == SETTING_KITCHEN) {
-					toggle_kitchen();
+					openNetworkPak("Tools", "Nonna's Kitchen", "nonna");
 					dirty = 1;
 				}
 				else if (setting_selected == SETTING_WIFI) {
-					toggle_wifi();
+					openNetworkPak("Settings", "Wi-Fi", "wifi");
 					dirty = 1;
 				}
 				else if (setting_selected == SETTING_ACCENT) {
@@ -1684,8 +1675,7 @@ int main (int argc, char *argv[]) {
 			int ow = GFX_blitHardwareGroup(screen, show_setting);
 			
 			if (show_settings) {
-				char kitchen_info[128];
-				is_kitchen_running(kitchen_info, sizeof(kitchen_info));
+				char kitchen_info[128] = "Open web file manager";
 
 				char wifi_info[128];
 				get_wifi_status(wifi_info, sizeof(wifi_info));

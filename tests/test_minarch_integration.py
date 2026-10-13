@@ -37,6 +37,114 @@ class MinarchIntegrationTests(unittest.TestCase):
             result = subprocess.run([str(binary), str(root)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_optional_framebuffer_and_performance_negotiation(self):
+        source = (MINARCH / "minarch.c").read_text()
+        environment = function(source, "environment_callback")
+        performance = environment[environment.index("\tcase RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL:"):
+                                  environment.index("\tcase RETRO_ENVIRONMENT_SET_PIXEL_FORMAT:")]
+        framebuffer = environment[environment.index("\tcase RETRO_ENVIRONMENT_GET_CURRENT_SOFTWARE_FRAMEBUFFER:"):
+                                  environment.index("\tcase RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE:")]
+        self.build_and_run(r'''
+#include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
+#define RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL 8
+#define RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY 9
+#define RETRO_ENVIRONMENT_GET_CURRENT_SOFTWARE_FRAMEBUFFER 40
+static struct { const char *bios_dir; } core = {"/Bios/NDS"};
+static bool environment_callback(unsigned cmd, void *data) {
+    switch (cmd) {
+''' + performance + framebuffer + r'''
+    default: return false;
+    }
+    return true;
+}
+int main(void) {
+    struct { unsigned level; uint32_t guard; } performance = {3, 0xdeadbeef};
+    assert(environment_callback(8, &performance.level));
+    assert(performance.level == 3 && performance.guard == 0xdeadbeef);
+    const char *path = 0;
+    assert(environment_callback(9, &path) && path == core.bios_dir);
+    assert(!environment_callback(40, &performance));
+    assert(performance.level == 3 && performance.guard == 0xdeadbeef);
+    return 0;
+}
+''')
+
+    def test_menu_background_handles_missing_frame_and_clips_geometry(self):
+        source = (MINARCH / "minarch.c").read_text()
+        defines = (ROOT / "workspace/all/common/defines.h").read_text()
+        macros = "\n".join(re.findall(r"^#define (?:MIN|MAX)\(.*$", defines, re.M))
+        self.build_and_run(macros + r'''
+#include <assert.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#define FIXED_BPP 2
+#define HDMI_WIDTH 1280
+enum { SCALE_NATIVE, SCALE_ASPECT, SCALE_FULLSCREEN, SCALE_CROPPED };
+typedef struct { int w,h,pitch; void *pixels; } SDL_Surface;
+static struct { int dst_x,dst_y,src_x,src_y,src_w,src_h,scale; } renderer;
+static struct { double aspect_ratio; } core;
+static int screen_scaling, DEVICE_WIDTH = 640, DEVICE_HEIGHT = 480;
+''' + function(source, "Menu_scale") + r'''
+int main(void) {
+    uint16_t source[240*160];
+    for (int i=0; i<240*160; i++) source[i] = i+1;
+    uint16_t *storage = calloc(644*480+2,2);
+    assert(storage); storage[0] = storage[644*480+1] = 0xabcd;
+    SDL_Surface src = {240,160,480,source};
+    SDL_Surface dst = {640,480,1288,storage+1};
+    core.aspect_ratio=1.5; screen_scaling=SCALE_ASPECT;
+    renderer.src_w=240; renderer.src_h=160; renderer.scale=3;
+    Menu_scale(&src,&dst);
+    assert(storage[0] == 0xabcd && storage[644*480+1] == 0xabcd);
+    uint16_t *pixels=dst.pixels;
+    assert(pixels[26*644] == 0 && pixels[27*644] == source[0]);
+    assert(pixels[452*644+639] == source[159*240+239]);
+    for(int y=0;y<480;y++) for(int x=640;x<644;x++) assert(!pixels[y*644+x]);
+    free(storage);
+
+    uint16_t small[8*8], guarded[16*12+2];
+    for(int i=0;i<64;i++) small[i]=i+1;
+    memset(guarded,0,sizeof(guarded)); guarded[0]=guarded[193]=0xabcd;
+    src=(SDL_Surface){8,8,16,small}; dst=(SDL_Surface){16,12,32,guarded+1};
+    DEVICE_WIDTH=16; DEVICE_HEIGHT=12; screen_scaling=SCALE_NATIVE;
+    renderer.src_w=8; renderer.src_h=8; renderer.scale=1;
+    renderer.dst_x=-2; renderer.dst_y=-3;
+    Menu_scale(&src,&dst);
+    assert(guarded[0]==0xabcd && guarded[193]==0xabcd);
+    assert(guarded[1]==small[3*8+2]);
+    Menu_scale(NULL,&dst); Menu_scale(&src,NULL);
+    src.pixels=NULL; Menu_scale(&src,&dst);
+    assert(guarded[0]==0xabcd && guarded[193]==0xabcd);
+    return 0;
+}
+''')
+
+    def test_pause_menu_renders_only_visible_items_with_production_macros(self):
+        source = (MINARCH / "minarch.c").read_text()
+        defines = (ROOT / "workspace/all/common/defines.h").read_text()
+        macros = "\n".join(re.findall(r"^#define (?:MIN|MAX)\(.*$", defines, re.M))
+        constants = "\n".join(re.findall(r"^#define MENU_(?:ITEM_COUNT|VISIBLE_ITEMS) .*", source, re.M))
+        loop = re.search(r"(?:int menu_end = [^\n]+;\s*)?for \(int i=menu_start;[^\n]+\{", source).group(0)
+        self.build_and_run(macros + "\n" + constants + r'''
+#include <assert.h>
+int main(void) {
+    int menu_start = 0;
+    for (int selected=0; selected<MENU_ITEM_COUNT; selected++) {
+        if (selected >= menu_start + MENU_VISIBLE_ITEMS) menu_start = selected - MENU_VISIBLE_ITEMS + 1;
+        int rendered = 0;
+''' + loop + r'''
+            assert(i >= 0 && i < MENU_ITEM_COUNT);
+            assert(++rendered <= MENU_VISIBLE_ITEMS);
+        }
+        assert(rendered == MENU_VISIBLE_ITEMS);
+    }
+    return 0;
+}
+''')
+
     def test_config_precedence_legacy_values_and_menu_parameters(self):
         source = (MINARCH / "minarch.c").read_text()
         utils = (ROOT / "workspace/all/common/utils.c").read_text()
@@ -325,6 +433,7 @@ int main(int argc, char **argv) {
 #include <string.h>
 #define FIXED_BPP 2
 #define LOG_info(...) ((void)0)
+#define LOG_error(...) ((void)0)
 #define RETRO_ENVIRONMENT_SET_PIXEL_FORMAT 10
 enum retro_pixel_format {
     RETRO_PIXEL_FORMAT_0RGB1555 = 0,
@@ -334,6 +443,8 @@ enum retro_pixel_format {
 static void *buffer;
 static size_t buffer_size;
 static int downsample, fast_forward, show_debug, thread_video, fps_ticks;
+static int startup_pending, alarm_cancelled;
+static void alarm(int seconds) { assert(seconds == 0); alarm_cancelled++; }
 static double fps_double, cpu_double;
 static int use_double, resizes, debug_writes, expected_pitch = 4;
 static struct { int true_w,true_h,src_p,dst_p,src_x,src_y,src_w,src_h,dst_x,dst_y,dst_w,dst_h,scale; void *src,*dst; } renderer;
@@ -356,7 +467,7 @@ static bool environment_callback(unsigned cmd,void *data) {
 }
 ''' + buffer_functions + r'''
 static void selectScaler(int w,int h,int pitch) {
-    if (downsample) buffer_realloc(w,h,pitch);
+    buffer_realloc(w,h,pitch);
     resizes++;
     renderer.true_w=w; renderer.true_h=h; renderer.src_p=pitch; renderer.dst_p=640;
 }
@@ -380,7 +491,11 @@ int main(void) {
     assert(environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,&rgb565));
     assert(!downsample);
     video_refresh_callback_main(native,2,2,4);
-    assert(resizes == 1 && !buffer && renderer.src == native);
+    assert(resizes == 1 && buffer && renderer.src == buffer && renderer.src != native);
+    /* The core may recycle callback data before the pause menu opens. */
+    native[0] = 0;
+    assert(((uint16_t*)renderer.src)[0] == 0xf800);
+    native[0] = 0xf800;
     assert(!environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,&unsupported));
     assert(!environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,&unknown));
     assert(!environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,NULL));
@@ -395,8 +510,10 @@ int main(void) {
     /* Two pixels per row plus one padding word from the libretro core. */
     uint32_t input[] = {0x00ff0000,0x0000ff00,0xdeadbeef,0x000000ff,0x00ffffff,0xdeadbeef};
     uint32_t original[6]; memcpy(original,input,sizeof(input));
+    startup_pending = 1;
     video_refresh_callback_main(input,2,2,12);
     assert(resizes == 2 && buffer && renderer.src == buffer);
+    assert(!startup_pending && alarm_cancelled == 1);
     void *preview_pixels = buffer;
     uint16_t saved[4]; memcpy(saved,buffer,sizeof(saved));
     buffer_realloc(2,2,4);
@@ -412,15 +529,21 @@ int main(void) {
     assert(environment_callback(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,&rgb565));
     assert(!downsample && renderer.dst_p == 0);
     video_refresh_callback_main(native,2,2,4);
-    assert(resizes == 3 && renderer.src == native);
+    assert(resizes == 3 && renderer.src == buffer && renderer.src != native);
     /* Native RGB565 cores may change stride without changing width/height. */
     uint16_t padded[] = {0xf800,0x07e0,0xdead,0x001f,0xffff,0xbeef};
     expected_pitch = 6;
     video_refresh_callback_main(padded,2,2,6);
-    assert(resizes == 4 && renderer.src == padded);
+    assert(resizes == 4 && renderer.src == buffer && renderer.src != padded);
+    padded[0] = 0;
+    assert(((uint16_t*)renderer.src)[0] == 0xf800);
     expected_pitch = 4;
     video_refresh_callback_main(native,2,2,4);
-    assert(resizes == 5 && renderer.src == native);
+    assert(resizes == 5 && renderer.src == buffer && renderer.src != native);
+    /* Invalid core geometry must not replace the last frame. */
+    video_refresh_callback_main(native,2,2,2);
+    video_refresh_callback_main(native,0,2,4);
+    assert(resizes == 5);
     buffer_dealloc();
     return 0;
 }

@@ -207,6 +207,55 @@ class TestCannelloniInstaller(unittest.TestCase):
                 self.install_fixture(self.payload_path, target)
             self.assertEqual(os.listdir(target), [])
 
+    def test_install_only_selected_device_files_and_supported_emulators(self):
+        """Exercise the full installer for every profile with a mixed-device ZIP."""
+        with zipfile.ZipFile(self.payload_path, "a") as archive:
+            for platform in sorted({device["platform"] for device in cannelloni_installer.DEVICES}):
+                for path in (f".system/{platform}/bin/marker", f"Tools/{platform}/Test.pak/launch.sh",
+                             f"Settings/{platform}/Test.pak/launch.sh", f".userdata/{platform}/marker",
+                             f".system/res/themes/#ffffff/bin/{platform}/cannelloni-list",
+                             f".system/{platform}/paks/Emus/FC.pak/launch.sh",
+                             f"Emus/{platform}/GB.pak/launch.sh"):
+                    archive.writestr(path, b"fixture")
+            for bootstrap in sorted(cannelloni_installer.ALL_BOOTSTRAP_ROOTS):
+                archive.writestr(bootstrap if "." in bootstrap else bootstrap + "/marker", b"bootstrap")
+            for root in (".tmp_update", "miyoo/app/.tmp_update", "trimui/app/.tmp_update", "magicx/.tmp_update"):
+                archive.writestr(root + "/updater", b"updater")
+                for platform in cannelloni_installer.UPDATER_PLATFORMS:
+                    archive.writestr(root + "/" + platform + ".sh", b"updater")
+                    archive.writestr(root + "/" + platform + "/show.elf", b"updater")
+            for tag in ("FC", "GB", "UNSUPPORTED"):
+                for path in (f"Roms/Test ({tag})/.keep", f"Bios/{tag}/.keep", f"Saves/{tag}/.keep"):
+                    archive.writestr(path, b"")
+            archive.writestr(".system/res/themes/#ffffff/assets@1x.png", b"white")
+            archive.writestr(".system/common/shaders/README.txt", b"shared")
+            archive.writestr(".system/rg40xxcube/bin/marker", b"legacy platform")
+        for device in cannelloni_installer.DEVICES:
+            with self.subTest(device=device["id"]), tempfile.TemporaryDirectory() as target:
+                with mock.patch.object(cannelloni_installer, "find_cannelloni_zip", return_value=self.payload_path):
+                    cannelloni_installer.perform_installation(target, "en", "#f1c40f", device["id"], lambda p: None, lambda s: None)
+                platform = device["platform"]
+                for directory in ("Tools", "Settings", "Emus", ".userdata"):
+                    self.assertEqual(set(os.listdir(os.path.join(target, directory))) - {"shared"}, {platform})
+                self.assertEqual(set(os.listdir(os.path.join(target, ".system"))) - {"common", "res", "dat"}, {platform})
+                self.assertEqual(set(os.listdir(os.path.join(target, ".system/res/themes/#ffffff/bin"))), {platform})
+                self.assertTrue(os.path.isfile(os.path.join(target, ".system/res/themes/#ffffff/assets@1x.png")))
+                for bootstrap in cannelloni_installer.ALL_BOOTSTRAP_ROOTS:
+                    self.assertEqual(os.path.exists(os.path.join(target, bootstrap)), bootstrap in cannelloni_installer.BOOTSTRAP_ROOTS[platform])
+                if platform in cannelloni_installer.UPDATER_PLATFORMS:
+                    self.assertEqual(set(os.listdir(os.path.join(target, ".tmp_update"))), {platform, platform + ".sh", "updater"})
+                else:
+                    self.assertFalse(os.path.exists(os.path.join(target, ".tmp_update")))
+                self.assertEqual(set(os.listdir(os.path.join(target, "Roms"))), {"Test (FC)", "Test (GB)"})
+
+    def test_wrong_device_or_missing_platform_cannot_install(self):
+        with tempfile.TemporaryDirectory() as target:
+            with mock.patch.object(cannelloni_installer, "find_cannelloni_zip", return_value=self.payload_path):
+                for device, error in (("made-up", "Unknown handheld"), ("rgb30", "does not contain files")):
+                    with self.assertRaisesRegex(ValueError, error):
+                        cannelloni_installer.perform_installation(target, "en", "#f1c40f", device, lambda p: None, lambda s: None)
+                    self.assertEqual(os.listdir(target), [])
+
     def test_installer_package_contains_no_loose_os_files(self):
         """Packaging must not duplicate the OS outside its bundled archive."""
         output = os.path.join(self.fixture_dir.name, "Cannelloni-Installer.zip")

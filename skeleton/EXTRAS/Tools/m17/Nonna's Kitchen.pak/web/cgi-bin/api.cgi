@@ -1,141 +1,120 @@
 #!/bin/sh
-
-[ -z "$SDCARD" ] && SDCARD="$SDCARD_PATH"
-[ -z "$SDCARD" ] && SDCARD="/mnt/SDCARD"
-[ ! -d "$SDCARD" ] && [ -d "/storage/roms" ] && SDCARD="/storage/roms"
+# BusyBox-compatible CGI: no Python, jq, symlinks or interval-regex dependency.
+LC_ALL=C
+export LC_ALL
+[ -n "$SDCARD" ] || SDCARD="$SDCARD_PATH"
+[ -n "$SDCARD" ] || SDCARD=/mnt/SDCARD
+[ -d "$SDCARD" ] || SDCARD=/storage/roms
+SDCARD=$(CDPATH= cd -- "$SDCARD" 2>/dev/null && pwd -P) || exit 1
 
 urldecode() {
-    awk 'BEGIN {
-        for (i = 1; i < ARGC; i++) {
-            s = ARGV[i]
-            gsub(/\+/, " ", s)
-            while (match(s, /%[0-9A-Fa-f]{2}/)) {
-                code = substr(s, RSTART + 1, 2)
-                val = (index("123456789abcdef", tolower(substr(code, 1, 1)))) * 16 + (index("123456789abcdef", tolower(substr(code, 2, 1))))
-                s = substr(s, 1, RSTART - 1) sprintf("%c", val) substr(s, RSTART + 3)
-            }
-            print s
+    printf '%s' "$1" | awk 'BEGIN {hex="0123456789abcdef"} {
+        result=""
+        for (i=1; i<=length($0); i++) {
+            c=substr($0,i,1)
+            pair=substr($0,i+1,2)
+            if (c=="%" && pair ~ /^[0-9a-fA-F][0-9a-fA-F]$/) {
+                n=(index(hex,tolower(substr(pair,1,1)))-1)*16+index(hex,tolower(substr(pair,2,1)))-1
+                if (n==0 || n==10 || n==13) exit 1
+                result=result sprintf("%c",n); i+=2
+            } else if (c=="+") result=result " "
+            else result=result c
         }
-    }' "$1"
+        printf "%s", result
+    }'
 }
-
-# Parse query string parameters
-parse_param() {
-    raw_val=$(printf "%s\n" "$QUERY_STRING" | tr '&' '\n' | grep "^$1=" | head -n1 | cut -d= -f2-)
-    urldecode "$raw_val"
+param() {
+    value=$(printf '%s\n' "$QUERY_STRING" | tr '&' '\n' | sed -n "s/^$1=//p" | head -n 1)
+    urldecode "$value"
 }
-
-ACTION=$(parse_param "action")
-DIR=$(parse_param "dir")
-[ -z "$DIR" ] && DIR="Roms"
-# Sanitize DIR
-DIR=$(echo "$DIR" | sed 's/\.\.//g' | sed 's/^\///')
-
+json_string() {
+    printf '%s' "$1" | awk 'BEGIN {printf "\""} {
+        if (NR>1) printf "\\n"
+        for (i=1;i<=length($0);i++) {
+            c=substr($0,i,1)
+            if (c=="\\" || c=="\"") printf "\\%s",c
+            else if (c=="\t") printf "\\t"
+            else if (c=="\r") printf "\\r"
+            else if (c ~ /[[:cntrl:]]/) printf "?"
+            else printf "%s",c
+        }
+    } END {printf "\""}'
+}
+json_header() { printf 'Content-Type: application/json\r\nCache-Control: no-store\r\n\r\n'; }
+fail() {
+    printf 'Status: %s\r\n' "$1"
+    json_header
+    printf '{"error":'; json_string "$2"; printf '}\n'
+    exit 0
+}
+# Resolve existing paths physically, including symlinks, within one shared root.
+resolve() {
+    case "$1" in Roms|Roms/*|Bios|Bios/*|Saves|Saves/*) ;; *) return 1 ;; esac
+    case "/$1/" in */../*|*/./*|*//*) return 1 ;; esac
+    target=$(readlink -f "$SDCARD/$1") || return 1
+    case "$target" in "$SDCARD/Roms"|"$SDCARD/Roms/"*|"$SDCARD/Bios"|"$SDCARD/Bios/"*|"$SDCARD/Saves"|"$SDCARD/Saves/"*) ;; *) return 1 ;; esac
+}
+require_post() { [ "$REQUEST_METHOD" = POST ] || fail '405 Method Not Allowed' 'Use POST for this operation'; }
+ACTION=$(param action) || fail '400 Bad Request' 'Invalid action'
 case "$ACTION" in
     status)
-        printf "Content-Type: application/json\r\n\r\n"
-        DF_INFO=$(df -h "$SDCARD" 2>/dev/null | awk 'NR==2 {print $2, $3, $4, $5}')
-        TOT=$(echo "$DF_INFO" | awk '{print $1}')
-        USED=$(echo "$DF_INFO" | awk '{print $2}')
-        FREE=$(echo "$DF_INFO" | awk '{print $3}')
-        PCT=$(echo "$DF_INFO" | awk '{print $4}' | tr -d '%')
-        [ -z "$TOT" ] && TOT="32G"
-        [ -z "$USED" ] && USED="10G"
-        [ -z "$FREE" ] && FREE="22G"
-        [ -z "$PCT" ] && PCT="30"
-        printf '{"status":"online","total":"%s","used":"%s","free":"%s","percent":%s}\n' "$TOT" "$USED" "$FREE" "$PCT"
+        info=$(df -Pk "$SDCARD" 2>/dev/null | awk 'END {print $(NF-4), $(NF-3), $(NF-2), $(NF-1)}')
+        set -- $info
+        [ "$#" = 4 ] || fail '500 Internal Server Error' 'Unable to read SD card storage'
+        json_header
+        awk -v total="$1" -v used="$2" -v free="$3" -v percent="${4%%%}" 'BEGIN {
+            printf "{\"total\":\"%.1f GB\",\"used\":\"%.1f GB\",\"free\":\"%.1f GB\",\"percent\":%d}\n",total/1048576,used/1048576,free/1048576,percent
+        }'
         ;;
-
     list)
-        printf "Content-Type: application/json\r\n\r\n"
-        TARGET="$SDCARD/$DIR"
-        printf "["
-        FIRST=1
-        if [ -d "$TARGET" ]; then
-            for item in "$TARGET"/*; do
-                [ -e "$item" ] || continue
-                NAME=$(basename "$item")
-                # Skip hidden files
-                case "$NAME" in
-                    .*|"") continue ;;
-                esac
-                if [ -d "$item" ]; then
-                    TYPE="dir"
-                    SIZE=""
-                else
-                    TYPE="file"
-                    BYTES=$(wc -c < "$item" 2>/dev/null | tr -d ' \t\r\n')
-                    [ -z "$BYTES" ] && BYTES=0
-                    if [ "$BYTES" -ge 1073741824 ] 2>/dev/null; then
-                        SIZE="$(awk "BEGIN {printf \"%.1f GB\", $BYTES/1073741824}")"
-                    elif [ "$BYTES" -ge 1048576 ] 2>/dev/null; then
-                        SIZE="$(awk "BEGIN {printf \"%.1f MB\", $BYTES/1048576}")"
-                    elif [ "$BYTES" -ge 1024 ] 2>/dev/null; then
-                        SIZE="$(awk "BEGIN {printf \"%.1f KB\", $BYTES/1024}")"
-                    else
-                        SIZE="${BYTES} B"
-                    fi
-                fi
-                [ "$FIRST" = "0" ] && printf ","
-                FIRST=0
-                JSON_NAME=$(echo "$NAME" | sed 's/\\/\\\\/g; s/\"/\\"/g')
-                printf '{"name":"%s","type":"%s","size":"%s"}' "$JSON_NAME" "$TYPE" "$SIZE"
-            done
-        fi
-        printf "]\n"
+        DIR=$(param dir) || fail '400 Bad Request' 'Invalid folder'
+        [ -n "$DIR" ] || DIR=Roms
+        resolve "$DIR" && [ -d "$target" ] || fail '404 Not Found' 'Folder not found'
+        json_header
+        printf '['; comma=
+        for item in "$target"/*; do
+            [ -e "$item" ] || continue
+            name=${item##*/}
+            if [ -d "$item" ]; then type=dir; size=; else
+                type=file
+                bytes=$(stat -c %s "$item" 2>/dev/null) || bytes=0
+                size=$(awk -v b="$bytes" 'BEGIN {if(b>=1073741824) printf "%.1f GB",b/1073741824; else if(b>=1048576) printf "%.1f MB",b/1048576; else if(b>=1024) printf "%.1f KB",b/1024; else printf "%d B",b}')
+            fi
+            printf '%s{"name":' "$comma"; json_string "$name"
+            printf ',"type":"%s","size":"%s"}' "$type" "$size"
+            comma=,
+        done
+        printf ']\n'
         ;;
-
     upload)
-        printf "Content-Type: application/json\r\n\r\n"
-        NAME=$(parse_param "name")
-        [ -z "$NAME" ] && NAME="upload_$(date +%s)"
-        NAME=$(echo "$NAME" | sed 's/\.\.//g' | sed 's/^\///')
-        TARGET_FILE="$SDCARD/$DIR/$NAME"
-        mkdir -p "$SDCARD/$DIR"
-        cat > "$TARGET_FILE"
-        JSON_NAME=$(echo "$NAME" | sed 's/\\/\\\\/g; s/\"/\\"/g')
-        printf '{"status":"ok","file":"%s"}\n' "$JSON_NAME"
+        require_post
+        DIR=$(param dir) || fail '400 Bad Request' 'Invalid folder'
+        NAME=$(param name) || fail '400 Bad Request' 'Invalid filename'
+        case "$NAME" in ''|.|..|*/*|*\\*) fail '400 Bad Request' 'Invalid filename' ;; esac
+        resolve "$DIR" && [ -d "$target" ] || fail '404 Not Found' 'Folder not found'
+        target_file="$target/$NAME"
+        [ ! -L "$target_file" ] || fail '400 Bad Request' 'Cannot overwrite a symbolic link'
+        temp=$(mktemp "$target/.kitchen-upload.XXXXXX") || fail '500 Internal Server Error' 'Cannot write to this folder'
+        trap 'rm -f "$temp"' EXIT
+        cat >"$temp" || fail '500 Internal Server Error' 'Could not save upload'
+        actual=$(stat -c %s "$temp")
+        [ "$actual" = "$CONTENT_LENGTH" ] || fail '400 Bad Request' 'Upload was incomplete'
+        mv -f "$temp" "$target_file" || fail '500 Internal Server Error' 'Could not save upload'
+        json_header; printf '{"status":"ok"}\n'
         ;;
-
     download)
-        PATH_PARAM=$(parse_param "path")
-        PATH_PARAM=$(echo "$PATH_PARAM" | sed 's/\.\.//g' | sed 's/^\///')
-        TARGET_FILE="$SDCARD/$PATH_PARAM"
-        if [ -n "$PATH_PARAM" ] && [ -f "$TARGET_FILE" ]; then
-            FNAME=$(basename "$TARGET_FILE")
-            FSIZE=$(wc -c < "$TARGET_FILE" 2>/dev/null | tr -d ' \t\r\n')
-            printf "Content-Type: application/octet-stream\r\n"
-            printf "Content-Disposition: attachment; filename=\"%s\"\r\n" "$FNAME"
-            [ -n "$FSIZE" ] && printf "Content-Length: %s\r\n" "$FSIZE"
-            printf "\r\n"
-            cat "$TARGET_FILE"
-            exit 0
-        else
-            printf "Content-Type: text/plain\r\nStatus: 404 Not Found\r\n\r\nFile not found\n"
-            exit 0
-        fi
+        path=$(param path) || fail '400 Bad Request' 'Invalid path'
+        resolve "$path" && [ -f "$target" ] || fail '404 Not Found' 'File not found'
+        printf 'Content-Type: application/octet-stream\r\nContent-Length: %s\r\n\r\n' "$(stat -c %s "$target")"
+        cat "$target"
         ;;
-
     delete)
-        printf "Content-Type: application/json\r\n\r\n"
-        PATH_PARAM=$(parse_param "path")
-        PATH_PARAM=$(echo "$PATH_PARAM" | sed 's/\.\.//g' | sed 's/^\///')
-        case "$PATH_PARAM" in
-            Roms|Bios|Saves|"")
-                printf '{"status":"error","message":"cannot delete root folder"}\n'
-                exit 0
-                ;;
-        esac
-        if [ -n "$PATH_PARAM" ] && [ -e "$SDCARD/$PATH_PARAM" ]; then
-            rm -rf "$SDCARD/$PATH_PARAM"
-            printf '{"status":"ok"}\n'
-        else
-            printf '{"status":"error","message":"file not found"}\n'
-        fi
+        require_post
+        path=$(param path) || fail '400 Bad Request' 'Invalid path'
+        case "$path" in Roms|Bios|Saves) fail '400 Bad Request' 'Cannot delete a root folder' ;; esac
+        resolve "$path" && [ -e "$target" ] || fail '404 Not Found' 'File not found'
+        rm -rf "$target" || fail '500 Internal Server Error' 'Could not delete file'
+        json_header; printf '{"status":"ok"}\n'
         ;;
-
-    *)
-        printf "Content-Type: application/json\r\n\r\n"
-        printf '{"status":"online","service":"Nonna'\'s Kitchen"}\n'
-        ;;
+    *) fail '400 Bad Request' 'Unknown action' ;;
 esac

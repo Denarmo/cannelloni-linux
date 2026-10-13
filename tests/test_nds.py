@@ -48,7 +48,7 @@ class NDSLauncherTests(unittest.TestCase):
         self.frontend = self.system / "bin/minarch.elf"
         write_script(self.frontend, 'printf "%s\\n" "libretro" "$1" "$2" > "$TEST_RECORD"\nexit "${TEST_EXIT:-0}"')
         write_script(self.system / "bin/say.elf", 'printf "%s\\n" "$1" > "$TEST_ERROR"')
-        write_script(self.sd / "bin/nice", 'shift\nexec "$@"')
+        write_script(self.sd / "bin/nice", 'test "$1" = "-n" && test "$2" = "0" || exit 98\nshift 2\nexec "$@"')
         write_script(self.sd / "bin/sync", 'exit 0')
         drastic = self.sd / "Emus/miyoomini/NDS-Drastic.pak"
         write_script(drastic / "drastic", 'exit 0')
@@ -94,6 +94,10 @@ class NDSLauncherTests(unittest.TestCase):
         (self.cores / "desmume2015_libretro.so").write_bytes(b"other core")
         self.assert_libretro("desmume2015_libretro.so")
 
+    def test_miyoo_prefers_arm_jit_core_over_previous_melonds(self):
+        (self.cores / "desmume2015_libretro.so").write_bytes(b"ARM JIT core")
+        self.assert_libretro("desmume2015_libretro.so")
+
     def test_missing_core_reports_error_without_starting_drastic(self):
         (self.cores / "melonds_libretro.so").unlink()
         result = self.launch()
@@ -110,6 +114,12 @@ class NDSLauncherTests(unittest.TestCase):
     def test_frontend_exit_status_is_preserved(self):
         self.env["TEST_EXIT"] = "23"
         self.assertEqual(self.launch().returncode, 23)
+        self.assertIn("could not start", self.error.read_text())
+
+    def test_stalled_core_reports_timeout_and_returns(self):
+        self.env["TEST_EXIT"] = "124"
+        self.assertEqual(self.launch().returncode, 124)
+        self.assertIn("startup timed out", self.error.read_text())
 
     def test_generated_platform_launchers_match_and_parse(self):
         paths = list(ROOT.glob("skeleton/SYSTEM/*/paks/Emus/NDS.pak/launch.sh"))
@@ -179,6 +189,18 @@ class NDSCorePackagingTests(unittest.TestCase):
 
 @unittest.skipUnless(find_shell(), "A POSIX shell is needed for compiler selection tests")
 class NDSCompilerSelectionTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("make") or shutil.which("mingw32-make"), "GNU make is needed")
+    def test_miyoo_build_overrides_compiler_probe_with_arm_jit_core(self):
+        make = shutil.which("make") or shutil.which("mingw32-make")
+        # A missing compiler proves this platform does not run the C++17 probe.
+        # Expand the real makefiles rather than duplicating their selection rule.
+        result = subprocess.run([make, "--no-print-directory", "-C", str(ROOT / "workspace/miyoomini/cores"),
+                                 "PLATFORM=miyoomini", "CROSS_COMPILE=missing-cross-",
+                                 "--eval=print-nds:;@echo $(NDS_CORE) $(desmume2015_PLATFORM) $(desmume2015_JIT_ARM)",
+                                 "print-nds"], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "desmume2015 armv7-hardfloat 1")
+
     def test_cxx17_probe_selects_matching_core(self):
         with tempfile.TemporaryDirectory(prefix="nds compiler ") as directory:
             root = Path(directory)
