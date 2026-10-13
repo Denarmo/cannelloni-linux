@@ -30,12 +30,18 @@ if [ -f $UPDATE_PATH ]; then
 	dd if=/usr/config/cannelloni/$ACTION.bmp of=/dev/fb0 bs=71 skip=1
 	echo 0,0 > /sys/class/graphics/fb0/pan
 
+	HAS_NESTED_ZIP=false
+	if unzip -l "$UPDATE_PATH" 2>/dev/null | grep -qi 'Cannelloni\.zip'; then
+		HAS_NESTED_ZIP=true
+	fi
+
 	unzip -o $UPDATE_PATH -d $SDCARD_PATH >> $SDCARD_PATH/log.txt
-	if [ -f "$SDCARD_PATH/Cannelloni.zip" ] && [ "$UPDATE_PATH" != "$SDCARD_PATH/Cannelloni.zip" ]; then
+	if [ "$HAS_NESTED_ZIP" = true ] && [ -f "$SDCARD_PATH/Cannelloni.zip" ]; then
 		unzip -o "$SDCARD_PATH/Cannelloni.zip" -d "$SDCARD_PATH" >> $SDCARD_PATH/log.txt
 	fi
-	rm -f $UPDATE_PATH
+	rm -f "$UPDATE_PATH"
 	rm -f "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null
+	rm -f "$SDCARD_PATH"/Cannelloni-Installer* "$SDCARD_PATH"/cannelloni_installer* 2>/dev/null
 	sync
 
 	# the updated system finishes the install/update

@@ -81,12 +81,19 @@ if [ -f "$UPDATE_PATH" ] || [ "$FIRST_BOOT" = true ]; then
 		log "Unpacking update archive $UPDATE_PATH to $SDCARD_PATH/..."
 		mv $SDCARD_PATH/.tmp_update $SDCARD_PATH/.tmp_update-old 2>/dev/null
 		
+		# Detect if update archive wraps a nested Cannelloni.zip payload
+		HAS_NESTED_ZIP=false
+		if unzip -l "$UPDATE_PATH" 2>/dev/null | grep -qi 'Cannelloni\.zip'; then
+			HAS_NESTED_ZIP=true
+			log "Detected nested Cannelloni.zip payload in wrapper archive"
+		fi
+
 		# Unzip update
 		unzip -o "$UPDATE_PATH" -d "$SDCARD_PATH" 2>&1 | tee -a "$LOG_FILE"
 		UNZIP_RESULT=$?
 		log "unzip exited with code: $UNZIP_RESULT"
 		
-		if [ -f "$SDCARD_PATH/Cannelloni.zip" ] && [ "$UPDATE_PATH" != "$SDCARD_PATH/Cannelloni.zip" ]; then
+		if [ "$HAS_NESTED_ZIP" = true ] && [ -f "$SDCARD_PATH/Cannelloni.zip" ]; then
 			log "Found nested Cannelloni.zip, extracting..."
 			unzip -o "$SDCARD_PATH/Cannelloni.zip" -d "$SDCARD_PATH" >> "$LOG_FILE" 2>&1
 		fi
@@ -94,6 +101,7 @@ if [ -f "$UPDATE_PATH" ] || [ "$FIRST_BOOT" = true ]; then
 		log "Cleaning up archive..."
 		rm -f "$UPDATE_PATH"
 		rm -f "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null
+		rm -f "$SDCARD_PATH"/Cannelloni-Installer* "$SDCARD_PATH"/cannelloni_installer* 2>/dev/null
 		rm -rf $SDCARD_PATH/.tmp_update-old 2>/dev/null
 	fi
 

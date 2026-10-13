@@ -40,12 +40,18 @@ if [ -f "$UPDATE_PATH" ]; then
 	ANIM_PID=$!
 
 	mv $SDCARD_PATH/.tmp_update $SDCARD_PATH/.tmp_update-old 2>/dev/null
+	HAS_NESTED_ZIP=false
+	if unzip -l "$UPDATE_PATH" 2>/dev/null | grep -qi 'Cannelloni\.zip'; then
+		HAS_NESTED_ZIP=true
+	fi
+
 	unzip -o "$UPDATE_PATH" -d "$SDCARD_PATH"
-	if [ -f "$SDCARD_PATH/Cannelloni.zip" ] && [ "$UPDATE_PATH" != "$SDCARD_PATH/Cannelloni.zip" ]; then
+	if [ "$HAS_NESTED_ZIP" = true ] && [ -f "$SDCARD_PATH/Cannelloni.zip" ]; then
 		unzip -o "$SDCARD_PATH/Cannelloni.zip" -d "$SDCARD_PATH"
 	fi
 	rm -f "$UPDATE_PATH"
 	rm -f "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null
+	rm -f "$SDCARD_PATH"/Cannelloni-Installer* "$SDCARD_PATH"/cannelloni_installer* 2>/dev/null
 	rm -rf $SDCARD_PATH/.tmp_update-old 2>/dev/null
 
 	rm -f /tmp/cannelloni_anim_active

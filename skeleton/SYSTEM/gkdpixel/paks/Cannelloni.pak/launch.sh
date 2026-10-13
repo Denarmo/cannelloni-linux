@@ -24,14 +24,20 @@ if [ -n "$FOUND_ZIP" ] && [ -f "$FOUND_ZIP" ]; then
     echo "Update archive detected at $FOUND_ZIP"
     [ -x "$SYSTEM_PATH/bin/show.elf" ] && [ -f "$SYSTEM_PATH/res/updating.png" ] && "$SYSTEM_PATH/bin/show.elf" "$SYSTEM_PATH/res/updating.png" 2>/dev/null &
     
+    HAS_NESTED_ZIP=false
+    if unzip -l "$FOUND_ZIP" 2>/dev/null | grep -qi 'Cannelloni\.zip'; then
+        HAS_NESTED_ZIP=true
+    fi
+
     unzip -o "$FOUND_ZIP" -d "$SDCARD_PATH"
     
-    if [ -f "$SDCARD_PATH/Cannelloni.zip" ] && [ "$FOUND_ZIP" != "$SDCARD_PATH/Cannelloni.zip" ]; then
+    if [ "$HAS_NESTED_ZIP" = true ] && [ -f "$SDCARD_PATH/Cannelloni.zip" ]; then
         unzip -o "$SDCARD_PATH/Cannelloni.zip" -d "$SDCARD_PATH"
     fi
     
     rm -f "$FOUND_ZIP"
     rm -f "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null
+    rm -f "$SDCARD_PATH"/Cannelloni-Installer* "$SDCARD_PATH"/cannelloni_installer* 2>/dev/null
     sync
     
     DEV_SELECT="$SDCARD_PATH/.system/common/device_select.sh"

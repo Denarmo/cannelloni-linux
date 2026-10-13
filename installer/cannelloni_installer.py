@@ -1,5 +1,6 @@
 import os
 import sys
+import io
 import time
 import json
 import zipfile
@@ -424,8 +425,10 @@ def find_cannelloni_zip():
     curr_dir = os.path.dirname(os.path.abspath(__file__))
     candidates.append(os.path.join(curr_dir, "Cannelloni.zip"))
     candidates.append(os.path.join(curr_dir, f"Cannelloni-{VERSION}.zip"))
+    candidates.append(os.path.join(curr_dir, "..", "build_release", "temp", "Cannelloni.zip"))
     candidates.append(os.path.join(curr_dir, "..", "releases", "Cannelloni.zip"))
     candidates.append(os.path.join(curr_dir, "releases", "Cannelloni.zip"))
+    candidates.append(os.path.join(os.getcwd(), "build_release", "temp", "Cannelloni.zip"))
     candidates.append(os.path.join(os.getcwd(), "Cannelloni.zip"))
     candidates.append(os.path.join(os.getcwd(), "releases", "Cannelloni.zip"))
 
@@ -499,7 +502,7 @@ def detect_drives():
                 try:
                     for entry in os.listdir(sdir):
                         full = os.path.join(sdir, entry)
-                        if os.path.ismount(full) and full not in seen_mounts:
+                        if (os.path.ismount(full) or sdir.startswith(("/media", "/run/media"))) and full not in seen_mounts and os.path.isdir(full):
                             seen_mounts.add(full)
                             try:
                                 usage = shutil.disk_usage(full)
@@ -509,7 +512,7 @@ def detect_drives():
                                 free_str, total_str = "Unknown", "Unknown"
                             drives.append({
                                 "path": full,
-                                "display": f"{entry} ({full}) • {free_str} free / {total_str}",
+                                "display": f"{entry} ({full}) • {free_str} free / {total_str} • Removable",
                                 "label": entry,
                                 "is_removable": True,
                                 "free": free_str
@@ -533,7 +536,7 @@ def detect_drives():
                             sz = dev.get("size") or ""
                             drives.append({
                                 "path": mp,
-                                "display": f"{lbl} ({mp}) • {sz}",
+                                "display": f"{lbl} ({mp}) • {sz} • Removable",
                                 "label": lbl,
                                 "is_removable": True,
                                 "free": sz
@@ -544,6 +547,8 @@ def detect_drives():
         except Exception:
             pass
 
+    # Sort drives: removable drives first!
+    drives.sort(key=lambda d: 0 if d.get("is_removable") else 1)
     return drives
 
 def perform_installation(target_path, lang_code, accent_hex, device_id, progress_callback, status_callback):
@@ -574,9 +579,20 @@ def perform_installation(target_path, lang_code, accent_hex, device_id, progress
     target_variant = dev_obj["device"]
     target_name = dev_obj["name"]
 
-    # 1. Unzip Cannelloni.zip with progress
-    with zipfile.ZipFile(zip_path, 'r') as zf:
-        infolist = zf.infolist()
+    # 1. Unzip Cannelloni payload with progress
+    with zipfile.ZipFile(zip_path, 'r') as outer_zf:
+        if "Cannelloni.zip" in outer_zf.namelist():
+            status_callback("Extracting nested Cannelloni OS payload...")
+            payload_data = outer_zf.read("Cannelloni.zip")
+            zf = zipfile.ZipFile(io.BytesIO(payload_data), 'r')
+        else:
+            zf = outer_zf
+
+        infolist = [
+            m for m in zf.infolist()
+            if not m.filename.startswith(("Cannelloni-Installer", "cannelloni_installer"))
+            and m.filename != "Cannelloni.zip"
+        ]
         total_items = len(infolist)
         extracted = 0
 
@@ -587,6 +603,15 @@ def perform_installation(target_path, lang_code, accent_hex, device_id, progress
                 pct = int((extracted / total_items) * 85)
                 progress_callback(pct)
                 status_callback(f"Extracting {member.filename} ({extracted}/{total_items})...")
+
+    # Clean up any misplaced installer binaries or zip from target root if present
+    for bad_file in ("Cannelloni.zip", "Cannelloni-Installer.exe", "Cannelloni-Installer.bat", "Cannelloni-Installer.sh", "cannelloni_installer.py"):
+        bf_path = os.path.join(target_path, bad_file)
+        if os.path.isfile(bf_path):
+            try:
+                os.remove(bf_path)
+            except Exception:
+                pass
 
     progress_callback(86)
     status_callback("Configuring system preferences and hardware profile...")
@@ -683,13 +708,14 @@ def perform_installation(target_path, lang_code, accent_hex, device_id, progress
     return True
 
 # -----------------------------------------------------------------------------
-# Desktop Tkinter GUI Implementation
-# -----------------------------------------------------------------------------
-
-def run_tkinter_gui():
+try:
     import tkinter as tk
     from tkinter import ttk, messagebox, filedialog
+    TKINTER_AVAILABLE = True
+except Exception:
+    TKINTER_AVAILABLE = False
 
+if TKINTER_AVAILABLE:
     class CannelloniInstallerApp:
         def __init__(self, root):
             self.root = root
@@ -709,8 +735,8 @@ def run_tkinter_gui():
             self.text_muted = "#9ca3af"
 
             self.root.title("Cannelloni SD Installer")
-            self.root.geometry("820x760")
-            self.root.minsize(780, 700)
+            self.root.geometry("820x680")
+            self.root.minsize(780, 620)
             self.root.configure(bg=self.bg_main)
 
             # Center window on screen
@@ -724,10 +750,10 @@ def run_tkinter_gui():
         def center_window(self):
             self.root.update_idletasks()
             width = 820
-            height = 760
-            x = (self.root.winfo_screenwidth() // 2) - (width // 2)
-            y = (self.root.winfo_screenheight() // 2) - (height // 2) - 30
-            self.root.geometry(f"{width}x{height}+{max(0, x)}+{max(0, y)}")
+            height = 680
+            x = max(0, (self.root.winfo_screenwidth() // 2) - (width // 2))
+            y = max(0, (self.root.winfo_screenheight() // 2) - (height // 2) - 20)
+            self.root.geometry(f"{width}x{height}+{x}+{y}")
 
         def t(self, key, **kwargs):
             lang_dict = LANGUAGES.get(self.current_lang, LANGUAGES["en"])
@@ -1142,8 +1168,9 @@ def run_tkinter_gui():
             options = [d["display"] for d in self.drives]
             self.drive_combo['values'] = options
             if options:
-                self.drive_combo.current(0)
-                self.selected_drive = self.drives[0]["path"]
+                rem_idx = next((i for i, d in enumerate(self.drives) if d.get("is_removable")), 0)
+                self.drive_combo.current(rem_idx)
+                self.selected_drive = self.drives[rem_idx]["path"]
             else:
                 self.drive_var.set(self.t("no_drives"))
                 self.selected_drive = None
@@ -1171,8 +1198,12 @@ def run_tkinter_gui():
                 messagebox.showerror("Error", self.t("error_drive_not_found"))
                 return
 
-            # Warn if user selects C:
-            if sys.platform == "win32" and self.selected_drive.upper().startswith("C:"):
+            # Warn if user selects internal/fixed drive
+            drive_info = next((d for d in self.drives if d.get("path") == self.selected_drive), None)
+            is_fixed = (drive_info and not drive_info.get("is_removable", True)) or (
+                sys.platform == "win32" and self.selected_drive.upper().startswith("C:")
+            )
+            if is_fixed:
                 confirm = messagebox.askyesno("Warning", self.t("warning_fixed", drive=self.selected_drive))
                 if not confirm:
                     return
@@ -1229,6 +1260,9 @@ def run_tkinter_gui():
             self.lbl_status.configure(text=f"Error: {err_msg}")
             messagebox.showerror("Installation Failed", f"An error occurred during installation:\n\n{err_msg}")
 
+def run_tkinter_gui():
+    if not TKINTER_AVAILABLE:
+        raise RuntimeError("Tkinter is not available on this system.")
     root = tk.Tk()
     app = CannelloniInstallerApp(root)
     root.mainloop()
@@ -1297,12 +1331,12 @@ select, input[type=text] { width: 100%; background: var(--bg-inner); border: 1px
       <p id="app-sub">Universal Retro Handheld Setup Tool</p>
     </div>
     <div class="lang-chips">
-      <button class="lang-btn active" onclick="setLang('en')">EN</button>
-      <button class="lang-btn" onclick="setLang('es')">ES</button>
-      <button class="lang-btn" onclick="setLang('fr')">FR</button>
-      <button class="lang-btn" onclick="setLang('pt_BR')">PT</button>
-      <button class="lang-btn" onclick="setLang('de')">DE</button>
-      <button class="lang-btn" onclick="setLang('it')">IT</button>
+      <button class="lang-btn active" data-lang="en" onclick="setLang('en')">EN</button>
+      <button class="lang-btn" data-lang="es" onclick="setLang('es')">ES</button>
+      <button class="lang-btn" data-lang="fr" onclick="setLang('fr')">FR</button>
+      <button class="lang-btn" data-lang="pt_BR" onclick="setLang('pt_BR')">PT</button>
+      <button class="lang-btn" data-lang="de" onclick="setLang('de')">DE</button>
+      <button class="lang-btn" data-lang="it" onclick="setLang('it')">IT</button>
     </div>
   </div>
 
@@ -1311,7 +1345,10 @@ select, input[type=text] { width: 100%; background: var(--bg-inner); border: 1px
       <div class="card">
         <h2 id="card-drive-title">1. Target SD Card</h2>
         <p id="card-drive-desc">Select the removable drive for your handheld's SD card.</p>
-        <select id="drive-select"></select>
+        <select id="drive-select" onchange="onDriveChange()"></select>
+        <div id="custom-drive-box" style="display:none;margin-top:6px;">
+          <input type="text" id="custom-drive-input" placeholder="e.g. /media/user/SDCARD or E:\" />
+        </div>
       </div>
 
       <div class="card">
@@ -1330,7 +1367,7 @@ select, input[type=text] { width: 100%; background: var(--bg-inner); border: 1px
 
     <div class="preview-col">
       <div class="card">
-        <h2>Live Preview</h2>
+        <h2 id="card-preview-title">Live Preview</h2>
         <div class="preview-box">
           <div style="font-size:11px;color:#888;display:flex;justify-content:space-between;">
             <span>Cannelloni</span><span>12:00 [100%]</span>
@@ -1343,7 +1380,7 @@ select, input[type=text] { width: 100%; background: var(--bg-inner); border: 1px
         </div>
         <div style="margin-top:14px;font-size:12px;">
           <div id="summary-dev" style="font-weight:bold;margin-bottom:4px;">🎮 Miyoo Mini Plus</div>
-          <div id="summary-lang" style="color:var(--muted);margin-bottom:4px;">🌐 English</div>
+          <div id="summary-lang" style="color:var(--muted);margin-bottom:4px;">🌐 English (en)</div>
           <div id="summary-color" style="color:var(--accent);">🎨 #f1c40f</div>
         </div>
       </div>
@@ -1365,17 +1402,18 @@ let currentColor = '#f1c40f';
 let devices = [];
 let colors = [];
 let drives = [];
+let translations = {};
 
 async function init() {
   const res = await fetch('/api/init');
   const data = await res.json();
-  devices = data.devices;
-  colors = data.colors;
-  drives = data.drives;
+  devices = data.devices || [];
+  colors = data.colors || [];
+  drives = data.drives || [];
+  translations = data.languages || {};
   
   // Render drives
-  const driveSelect = document.getElementById('drive-select');
-  driveSelect.innerHTML = drives.map(d => `<option value="${d.path}">${d.display}</option>`).join('');
+  renderDrives();
   
   // Render colors
   const swatchBox = document.getElementById('color-swatches');
@@ -1391,6 +1429,42 @@ async function init() {
   devSelect.innerHTML = devices.map(d => `<option value="${d.id}">${d.brand}: ${d.name}</option>`).join('');
   devSelect.value = 'miyoominiplus';
   onDeviceChange();
+  applyLang();
+}
+
+function renderDrives() {
+  const driveSelect = document.getElementById('drive-select');
+  const customBox = document.getElementById('custom-drive-box');
+  let options = '';
+  if (drives.length > 0) {
+    options = drives.map(d => `<option value="${d.path}">${d.display}</option>`).join('');
+    options += `<option value="__custom__">📁 Enter Custom Path / Directory...</option>`;
+    driveSelect.innerHTML = options;
+    driveSelect.style.display = 'block';
+    customBox.style.display = 'none';
+  } else {
+    driveSelect.innerHTML = `<option value="__custom__">📁 Enter Custom SD Path...</option>`;
+    driveSelect.style.display = 'none';
+    customBox.style.display = 'block';
+  }
+}
+
+function onDriveChange() {
+  const sel = document.getElementById('drive-select');
+  const customBox = document.getElementById('custom-drive-box');
+  if (sel.value === '__custom__') {
+    customBox.style.display = 'block';
+  } else {
+    customBox.style.display = 'none';
+  }
+}
+
+function getSelectedDrive() {
+  const sel = document.getElementById('drive-select');
+  if (sel.value === '__custom__' || drives.length === 0) {
+    return document.getElementById('custom-drive-input').value.trim();
+  }
+  return sel.value;
 }
 
 function setColor(hex) {
@@ -1405,8 +1479,25 @@ function setColor(hex) {
 function setLang(code) {
   currentLang = code;
   document.querySelectorAll('.lang-btn').forEach(b => {
-    b.classList.toggle('active', b.textContent.toLowerCase() === code.replace('_br','').toLowerCase());
+    b.classList.toggle('active', b.getAttribute('data-lang') === code);
   });
+  applyLang();
+}
+
+function applyLang() {
+  const dict = translations[currentLang] || translations['en'] || {};
+  const t = (k, def) => dict[k] || def;
+  document.getElementById('app-title').textContent = '🍝 ' + (t('title', 'Cannelloni SD Installer')).toUpperCase();
+  document.getElementById('app-sub').textContent = t('subtitle', 'Universal Retro Handheld Setup Tool');
+  document.getElementById('card-drive-title').textContent = t('drive_section', '1. Target SD Card');
+  document.getElementById('card-drive-desc').textContent = t('drive_desc', 'Select the removable drive for your handheld\'s SD card.');
+  document.getElementById('card-color-title').textContent = t('color_section', '2. Accent Color Theme');
+  document.getElementById('card-color-desc').textContent = t('color_desc', 'Pick your favorite accent color for menu highlights.');
+  document.getElementById('card-device-title').textContent = t('device_section', '3. Handheld Console Model');
+  document.getElementById('card-device-desc').textContent = t('device_desc', 'Select your exact handheld hardware to optimize drivers and controls.');
+  document.getElementById('card-preview-title').textContent = t('preview_title', 'Live Preview');
+  document.getElementById('install-btn').textContent = t('install_btn', '⚡ Install Cannelloni to SD Card');
+  document.getElementById('summary-lang').textContent = '🌐 ' + (dict.name || currentLang) + ' (' + currentLang + ')';
 }
 
 function onDeviceChange() {
@@ -1419,17 +1510,29 @@ function onDeviceChange() {
 }
 
 async function startInstall() {
-  const drive = document.getElementById('drive-select').value;
+  const drive = getSelectedDrive();
+  const dict = translations[currentLang] || translations['en'] || {};
+  if (!drive) {
+    alert(dict.error_no_drive || 'Please select a valid SD card drive or folder.');
+    return;
+  }
   const dev = document.getElementById('device-select').value;
   const btn = document.getElementById('install-btn');
   btn.disabled = true;
-  btn.textContent = 'Installing Cannelloni...';
+  btn.textContent = dict.installing || 'Installing Cannelloni...';
   
-  await fetch('/api/install', {
+  const resp = await fetch('/api/install', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({drive, lang: currentLang, color: currentColor, device: dev})
   });
+  if (!resp.ok) {
+    const err = await resp.json();
+    alert('Error: ' + (err.error || 'Failed to start installation'));
+    btn.disabled = false;
+    btn.textContent = dict.install_btn || '⚡ Install Cannelloni to SD Card';
+    return;
+  }
   
   pollProgress();
 }
@@ -1437,16 +1540,23 @@ async function startInstall() {
 async function pollProgress() {
   const res = await fetch('/api/progress');
   const data = await res.json();
+  const dict = translations[currentLang] || translations['en'] || {};
   document.getElementById('status-text').textContent = data.status;
   document.getElementById('progress-bar').style.width = data.progress + '%';
   
   if (data.completed) {
-    alert('Installation completed successfully! Safely eject your SD card, insert into your device and power on.');
+    const msg = (dict.success_msg || 'Installation Complete! Buon appetito!')
+      .replace('{drive}', getSelectedDrive())
+      .replace('{device}', document.getElementById('device-select').selectedOptions[0].text)
+      .replace('{lang}', currentLang)
+      .replace('{color}', currentColor);
+    alert(dict.success_title + '\n\n' + msg);
     document.getElementById('install-btn').disabled = false;
-    document.getElementById('install-btn').textContent = '⚡ Install Cannelloni to SD Card';
+    document.getElementById('install-btn').textContent = dict.install_btn || '⚡ Install Cannelloni to SD Card';
   } else if (data.error) {
     alert('Error: ' + data.error);
     document.getElementById('install-btn').disabled = false;
+    document.getElementById('install-btn').textContent = dict.install_btn || '⚡ Install Cannelloni to SD Card';
   } else {
     setTimeout(pollProgress, 400);
   }
@@ -1476,7 +1586,9 @@ class WebHandler(BaseHTTPRequestHandler):
             payload = {
                 "devices": DEVICES,
                 "colors": ACCENT_COLORS,
-                "drives": detect_drives()
+                "drives": detect_drives(),
+                "languages": LANGUAGES,
+                "currentLang": "en"
             }
             self.wfile.write(json.dumps(payload).encode("utf-8"))
         elif url.path == "/api/progress":
@@ -1494,6 +1606,14 @@ class WebHandler(BaseHTTPRequestHandler):
             body = self.rfile.read(length)
             params = json.loads(body.decode('utf-8'))
             
+            drive = params.get("drive", "").strip()
+            if not drive:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"error": "Target drive path cannot be empty."}')
+                return
+
             installer_state["status"] = "Starting installation..."
             installer_state["progress"] = 0
             installer_state["completed"] = False

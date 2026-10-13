@@ -115,6 +115,18 @@ class TestCannelloniInstaller(unittest.TestCase):
             # Check extracted root directories
             self.assertTrue(os.path.isdir(os.path.join(temp_target, ".system")))
             self.assertTrue(os.path.isfile(os.path.join(temp_target, "README.txt")))
+
+            # Check that NDS cores from nested payload are extracted
+            desmume_core = os.path.join(temp_target, ".system", "miyoomini", "cores", "desmume2015_libretro.so")
+            self.assertTrue(os.path.isfile(desmume_core), f"NDS core missing: {desmume_core}")
+
+            # Check that themes are extracted and pre-applied
+            theme_asset = os.path.join(temp_target, ".system", "res", "assets@1x.png")
+            self.assertTrue(os.path.isfile(theme_asset), f"Theme asset missing: {theme_asset}")
+
+            # Check that installer files and zip are cleaned up from target root
+            for bad_file in ("Cannelloni.zip", "Cannelloni-Installer.exe", "Cannelloni-Installer.bat", "Cannelloni-Installer.sh", "cannelloni_installer.py"):
+                self.assertFalse(os.path.exists(os.path.join(temp_target, bad_file)), f"Misplaced file {bad_file} found in target SD root")
         finally:
             shutil.rmtree(temp_target, ignore_errors=True)
 
@@ -133,14 +145,30 @@ class TestCannelloniInstaller(unittest.TestCase):
                 self.assertIn("devices", data)
                 self.assertIn("colors", data)
                 self.assertIn("drives", data)
+                self.assertIn("languages", data)
                 self.assertEqual(len(data["devices"]), 17)
                 self.assertEqual(len(data["colors"]), 7)
+                self.assertEqual(len(data["languages"]), 6)
 
             # Test /
             with urllib.request.urlopen(f"http://127.0.0.1:{port}/") as resp:
                 self.assertEqual(resp.status, 200)
                 html = resp.read().decode("utf-8")
                 self.assertIn("CANNELLONI SD INSTALLER", html)
+
+            # Test /api/install with empty drive (should return HTTP 400)
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/install",
+                data=json.dumps({"drive": "", "lang": "en", "color": "#f1c40f", "device": "miyoomini"}).encode("utf-8"),
+                headers={"Content-Type": "application/json"}
+            )
+            try:
+                urllib.request.urlopen(req)
+                self.fail("Expected HTTP 400 for empty drive")
+            except urllib.error.HTTPError as e:
+                self.assertEqual(e.code, 400)
+                err_body = json.loads(e.read().decode("utf-8"))
+                self.assertIn("error", err_body)
 
             # Test /api/progress
             with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/progress") as resp:
@@ -150,6 +178,7 @@ class TestCannelloniInstaller(unittest.TestCase):
                 self.assertIn("status", prog)
         finally:
             server.shutdown()
+            server.server_close()
 
     def test_linux_simulation_detect_drives(self):
         """Simulate Linux environment and drive detection logic."""
@@ -216,6 +245,37 @@ class TestCannelloniInstaller(unittest.TestCase):
             data = f.read()
         self.assertNotIn(b"\r\n", data, "Linux shell launcher must use LF line endings")
         self.assertTrue(data.startswith(b"#!/usr/bin/env bash") or data.startswith(b"#!/bin/sh"))
+
+    def test_tkinter_app_lifecycle(self):
+        """Verify Tkinter GUI can be initialized and dynamically update states."""
+        try:
+            import tkinter as tk
+            root = tk.Tk()
+            root.withdraw()
+        except Exception as e:
+            self.skipTest(f"Tkinter display not available: {e}")
+
+        try:
+            app = cannelloni_installer.CannelloniInstallerApp(root)
+            self.assertIsNotNone(app)
+
+            # Test language switching
+            app.select_language("de")
+            self.assertEqual(app.current_lang, "de")
+            app.select_language("fr")
+            self.assertEqual(app.current_lang, "fr")
+
+            # Test color switching
+            app.select_accent_color("#2ecc71")
+            self.assertEqual(app.current_color, "#2ecc71")
+
+            # Test device switching
+            rg_idx = next(i for i, d in enumerate(cannelloni_installer.DEVICES) if d["id"] == "rg35xxplus")
+            app.device_combo.current(rg_idx)
+            app.on_device_selected()
+            self.assertEqual(app.current_device_id, "rg35xxplus")
+        finally:
+            root.destroy()
 
 if __name__ == "__main__":
     unittest.main()

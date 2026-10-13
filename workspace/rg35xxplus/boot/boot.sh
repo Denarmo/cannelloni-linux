@@ -117,12 +117,18 @@ if [ -f $UPDATE_PATH ]; then
 		rm -rf $BOOT_PATH
 	fi
 
+	HAS_NESTED_ZIP=false
+	if /tmp/unzip -l "$UPDATE_PATH" 2>/dev/null | grep -qi 'Cannelloni\.zip'; then
+		HAS_NESTED_ZIP=true
+	fi
+
 	/tmp/unzip -o $UPDATE_PATH -d $SDCARD_PATH >> $TF1_PATH/log.txt
-	if [ -f "$SDCARD_PATH/Cannelloni.zip" ] && [ "$UPDATE_PATH" != "$SDCARD_PATH/Cannelloni.zip" ]; then
+	if [ "$HAS_NESTED_ZIP" = true ] && [ -f "$SDCARD_PATH/Cannelloni.zip" ]; then
 		/tmp/unzip -o "$SDCARD_PATH/Cannelloni.zip" -d "$SDCARD_PATH" >> $TF1_PATH/log.txt
 	fi
-	rm -f $UPDATE_PATH
+	rm -f "$UPDATE_PATH"
 	rm -f "$SDCARD_PATH"/Cannelloni*.zip "$SDCARD_PATH"/cannelloni*.zip "$SDCARD_PATH"/MinUI*.zip 2>/dev/null
+	rm -f "$SDCARD_PATH"/Cannelloni-Installer* "$SDCARD_PATH"/cannelloni_installer* 2>/dev/null
 	sync
 
 	# the updated system finishes the install/update
