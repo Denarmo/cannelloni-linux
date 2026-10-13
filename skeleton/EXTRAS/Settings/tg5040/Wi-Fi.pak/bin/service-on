@@ -1,5 +1,4 @@
 #!/bin/sh
-set -x
 BIN_DIR="$(dirname "$0")"
 PAK_DIR="$(dirname "$BIN_DIR")"
 PAK_NAME="$(basename "$PAK_DIR")"
@@ -111,11 +110,10 @@ main() {
         sleep 2
         ifconfig wlan0 up
         /customer/app/wpa_supplicant -B -D nl80211 -iwlan0 -c /appconfigs/wpa_supplicant.conf
-        ln -sf /dev/null /tmp/udhcpc.log
-        udhcpc -i wlan0 -s /etc/init.d/udhcpc.script &
-
         /customer/app/wpa_cli -i wlan0 reconnect
-        iw dev wlan0 set power_save off
+        iw dev wlan0 set power_save off 2>/dev/null || true
+        ln -sf /dev/null /tmp/udhcpc.log
+        udhcpc -b -i wlan0 -s /etc/init.d/udhcpc.script
     elif [ "$PLATFORM" = "tg5040" ]; then
         killall -15 wpa_supplicant || true
         killall -15 udhcpc || true
@@ -129,7 +127,7 @@ main() {
         fi
         rm -f /tmp/wpa_supplicant.log
 
-        if ! pgrep wpa_supplicant; then
+        if ! pgrep wpa_supplicant >/dev/null 2>&1; then
             echo "Failed to start wpa_supplicant"
             return 1
         fi
@@ -142,7 +140,7 @@ main() {
             echo "Failed to start wpa_supplicant via init.d"
         fi
 
-        if ! pgrep wpa_supplicant; then
+        if ! pgrep wpa_supplicant >/dev/null 2>&1; then
             echo "Failed to start wpa_supplicant"
             return 1
         fi
@@ -153,7 +151,7 @@ main() {
         ifconfig wlan0 up || true
         wpa_supplicant -B -D nl80211 -iwlan0 -c /userdata/cfg/wpa_supplicant.conf
 
-        if ! pgrep wpa_supplicant; then
+        if ! pgrep wpa_supplicant >/dev/null 2>&1; then
             echo "Failed to start wpa_supplicant"
             return 1
         fi

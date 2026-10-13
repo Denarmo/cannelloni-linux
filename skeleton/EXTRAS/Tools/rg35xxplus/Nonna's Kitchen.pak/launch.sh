@@ -2,6 +2,9 @@
 
 PAK_DIR="$(dirname "$0")"
 
+[ -z "$SDCARD_PATH" ] && SDCARD_PATH="/mnt/SDCARD"
+[ ! -d "$SDCARD_PATH" ] && [ -d "/storage/roms" ] && SDCARD_PATH="/storage/roms"
+
 # Check if Wi-Fi is already connected with a valid IP
 get_ip() {
 	ip -4 addr show dev wlan0 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1 | head -n1
@@ -51,6 +54,22 @@ Please configure Wi-Fi in Settings > Wi-Fi first."
 	exit 0
 fi
 
+# Overclock CPU for maximum transfer speeds
+if [ -x "/mnt/SDCARD/.system/miyoomini/bin/overclock.elf" ]; then
+	/mnt/SDCARD/.system/miyoomini/bin/overclock.elf 1488000 2>/dev/null
+elif command -v overclock.elf >/dev/null 2>&1; then
+	overclock.elf 1488000 2>/dev/null
+fi
+
+# Disable Wi-Fi power saving to boost throughput and eliminate latency
+iw dev wlan0 set power_save off 2>/dev/null || true
+
+# Setup direct symlinks under web/ for fast downloads where filesystem supports it
+mkdir -p "$SDCARD_PATH/Roms" "$SDCARD_PATH/Bios" "$SDCARD_PATH/Saves"
+ln -sf "$SDCARD_PATH/Roms" "$PAK_DIR/web/Roms" 2>/dev/null || true
+ln -sf "$SDCARD_PATH/Bios" "$PAK_DIR/web/Bios" 2>/dev/null || true
+ln -sf "$SDCARD_PATH/Saves" "$PAK_DIR/web/Saves" 2>/dev/null || true
+
 # Ensure CGI script is executable
 chmod +x "$PAK_DIR/web/cgi-bin/api.cgi" 2>/dev/null
 
@@ -65,6 +84,8 @@ http://$IP:1091
 
 Press A to Stop & Exit."
 
-# Stop HTTP server when user exits (leaving Wi-Fi active!)
+# Stop HTTP server and clean up symlinks when user exits (leaving Wi-Fi active!)
 kill $HTTPD_PID 2>/dev/null
 killall httpd 2>/dev/null
+rm -f "$PAK_DIR/web/Roms" "$PAK_DIR/web/Bios" "$PAK_DIR/web/Saves" 2>/dev/null
+sync

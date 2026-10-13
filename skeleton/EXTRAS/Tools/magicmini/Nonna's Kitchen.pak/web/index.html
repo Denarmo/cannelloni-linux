@@ -7,76 +7,65 @@
   <style>
     :root {
       --bg: #141414;
-      --card-bg: #1f1f1f;
-      --card-hover: #292929;
+      --card-bg: #1e1e1e;
+      --border: #333333;
       --accent: #f1c40f;
       --accent-hover: #d4ac0d;
-      --text: #f0f0f0;
-      --text-muted: #8e8e8e;
-      --border: #333333;
+      --text: #ffffff;
+      --text-muted: #888888;
       --danger: #e74c3c;
+      --success: #2ecc71;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-    body { background-color: var(--bg); color: var(--text); padding: 24px; min-height: 100vh; }
-    .container { max-width: 900px; margin: 0 auto; }
-    header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 2px solid var(--border); margin-bottom: 24px; }
-    .brand { display: flex; align-items: center; gap: 12px; }
-    .brand-icon { font-size: 2.2rem; }
-    h1 { font-size: 1.8rem; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; }
-    .subtitle { font-size: 0.85rem; color: var(--text-muted); }
-    .storage-bar-container { background: var(--card-bg); padding: 16px; border-radius: 10px; margin-bottom: 24px; border: 1px solid var(--border); }
+    body { background-color: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; }
+    .container { width: 100%; max-width: 800px; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    h1 { font-size: 1.5rem; display: flex; align-items: center; gap: 10px; color: var(--accent); }
+    .badge { background: #2a2a2a; color: var(--accent); padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; border: 1px solid #444; }
+    
+    .storage-bar-container { background: var(--card-bg); padding: 16px; border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--border); }
     .storage-header { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 8px; color: var(--text-muted); }
     .progress-bar { height: 10px; background: #333; border-radius: 5px; overflow: hidden; }
-    .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s ease; }
+    .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.2s ease; }
     
     .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
     .tab { padding: 10px 20px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); cursor: pointer; font-weight: 600; font-size: 0.95rem; transition: all 0.2s; }
-    .tab.active, .tab:hover { background: var(--accent); color: #000; border-color: var(--accent); }
+    .tab.active { background: var(--accent); color: #000; border-color: var(--accent); }
     
-    .drop-zone { border: 2px dashed var(--accent); border-radius: 12px; padding: 36px 20px; text-align: center; background: rgba(241, 196, 15, 0.03); margin-bottom: 24px; cursor: pointer; transition: all 0.2s; }
-    .drop-zone.dragover { background: rgba(241, 196, 15, 0.12); border-color: #fff; }
-    .drop-zone p { color: var(--text-muted); margin-top: 8px; font-size: 0.9rem; }
-    .drop-zone .btn-select { display: inline-block; margin-top: 12px; padding: 8px 18px; background: var(--accent); color: #000; font-weight: 600; border-radius: 6px; font-size: 0.85rem; }
-
-    .file-manager { background: var(--card-bg); border-radius: 10px; border: 1px solid var(--border); overflow: hidden; }
-    .file-manager-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; background: #181818; border-bottom: 1px solid var(--border); font-size: 0.9rem; font-weight: 600; }
-    .breadcrumbs { display: flex; gap: 6px; color: var(--accent); }
-    .breadcrumbs span { cursor: pointer; }
-    .breadcrumbs span:hover { text-decoration: underline; }
+    .drop-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 30px 20px; text-align: center; background: var(--card-bg); cursor: pointer; transition: all 0.2s; margin-bottom: 20px; }
+    .drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); background: #252525; }
+    .drop-icon { font-size: 2.5rem; margin-bottom: 10px; display: block; }
+    .btn-select { background: var(--accent); color: #000; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; display: inline-block; margin-top: 10px; }
     
-    .file-list { list-style: none; max-height: 480px; overflow-y: auto; }
-    .file-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--border); transition: background 0.15s; }
+    .file-manager { background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border); overflow: hidden; }
+    .breadcrumbs { padding: 12px 16px; background: #252525; border-bottom: 1px solid var(--border); font-size: 0.9rem; display: flex; gap: 6px; align-items: center; }
+    .breadcrumbs a { color: var(--accent); text-decoration: none; cursor: pointer; }
+    .file-list { list-style: none; max-height: 400px; overflow-y: auto; }
+    .file-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
     .file-item:last-child { border-bottom: none; }
-    .file-item:hover { background: var(--card-hover); }
-    .file-info { display: flex; align-items: center; gap: 12px; cursor: pointer; overflow: hidden; }
+    .file-info { display: flex; align-items: center; gap: 12px; cursor: pointer; text-decoration: none; color: var(--text); flex-grow: 1; }
     .file-icon { font-size: 1.2rem; }
     .file-name { font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 450px; }
     .file-meta { font-size: 0.8rem; color: var(--text-muted); min-width: 80px; text-align: right; }
     .file-actions { display: flex; gap: 8px; }
-    .btn-action { background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; }
+    .btn-action { background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
     .btn-action:hover { color: var(--text); background: #333; }
     .btn-delete:hover { color: var(--danger); }
     
-    .status-msg { margin-top: 12px; font-size: 0.85rem; color: var(--accent); text-align: center; }
+    .status-msg { margin-bottom: 15px; font-size: 0.9rem; color: var(--accent); text-align: center; font-weight: bold; }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <div class="brand">
-        <span class="brand-icon">🍝</span>
-        <div>
-          <h1>Nonna's Kitchen</h1>
-          <div class="subtitle">Cannelloni Wireless Manager (Port 1091)</div>
-        </div>
-      </div>
-      <div id="device-ip" style="font-size: 0.85rem; color: var(--accent); font-weight: 600;">Connected</div>
+      <h1>🍳 Nonna's Kitchen</h1>
+      <span class="badge">Cannelloni Web Manager</span>
     </header>
 
     <div class="storage-bar-container">
       <div class="storage-header">
         <span>SD Card Storage</span>
-        <span id="storage-text">Loading storage...</span>
+        <span id="storage-text">Loading...</span>
       </div>
       <div class="progress-bar">
         <div class="progress-fill" id="storage-fill"></div>
@@ -84,26 +73,41 @@
     </div>
 
     <div class="tabs">
-      <button class="tab active" data-path="Roms">📁 ROMs</button>
-      <button class="tab" data-path="Bios">⚙️ BIOS</button>
-      <button class="tab" data-path="Saves">💾 Saves</button>
+      <button class="tab active" onclick="switchCategory('Roms')">Roms</button>
+      <button class="tab" onclick="switchCategory('Bios')">Bios</button>
+      <button class="tab" onclick="switchCategory('Saves')">Saves</button>
     </div>
 
     <div class="drop-zone" id="drop-zone">
-      <div style="font-size: 2rem;">📤</div>
-      <div style="font-weight: 600; font-size: 1.1rem; margin-top: 4px;">Drag & Drop ROMs or Files Here</div>
-      <p>Files will be uploaded directly to the active folder</p>
+      <span class="drop-icon">📤</span>
+      <p>Drag & Drop files here to upload</p>
       <span class="btn-select">Select Files</span>
       <input type="file" id="file-input" multiple style="display: none;">
     </div>
+
+    <!-- Active Upload Progress Card -->
+    <div id="upload-progress-container" class="storage-bar-container" style="display: none; margin-bottom: 20px; border-color: var(--accent);">
+      <div class="storage-header">
+        <span id="upload-filename" style="color: var(--accent); font-weight: 600;">Uploading...</span>
+        <span id="upload-stats">0%</span>
+      </div>
+      <div class="progress-bar" style="height: 12px;">
+        <div class="progress-fill" id="upload-progress-fill" style="background: var(--success); width: 0%;"></div>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted); margin-top: 6px;">
+        <span id="upload-speed">0 KB/s</span>
+        <span id="upload-eta">-- remaining</span>
+      </div>
+    </div>
+
     <div id="upload-status" class="status-msg"></div>
 
     <div class="file-manager">
-      <div class="file-manager-header">
-        <div class="breadcrumbs" id="breadcrumbs">
-          <span onclick="navigateHome()">Root</span> / <span id="current-crumb">Roms</span>
-        </div>
-        <button class="btn-action" onclick="refreshList()">🔄 Refresh</button>
+      <div class="breadcrumbs">
+        <span>📍 /</span>
+        <a onclick="navigateHome()" id="root-crumb">Roms</a>
+        <span id="sub-crumb"></span>
+        <span id="current-crumb" style="display:none;"></span>
       </div>
       <ul class="file-list" id="file-list">
         <li class="file-item"><span style="color: var(--text-muted);">Loading files...</span></li>
@@ -115,16 +119,16 @@
     let currentDir = 'Roms';
     let baseDir = 'Roms';
 
-    const tabs = document.querySelectorAll('.tab');
-    tabs.forEach(tab => {
-      tab.addEventListener('click', () => {
-        tabs.forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        baseDir = tab.dataset.path;
-        currentDir = baseDir;
-        loadDirectory(currentDir);
+    function switchCategory(cat) {
+      baseDir = cat;
+      currentDir = cat;
+      document.querySelectorAll('.tab').forEach(t => {
+        t.classList.toggle('active', t.innerText === cat);
       });
-    });
+      document.getElementById('root-crumb').innerText = cat;
+      document.getElementById('sub-crumb').innerText = '';
+      loadDirectory(cat);
+    }
 
     async function loadStorage() {
       try {
@@ -142,7 +146,8 @@
 
     async function loadDirectory(path) {
       currentDir = path;
-      document.getElementById('current-crumb').innerText = path;
+      const sub = path.startsWith(baseDir + '/') ? path.substring(baseDir.length) : (path === baseDir ? '' : ' / ' + path);
+      document.getElementById('sub-crumb').innerText = sub ? ' / ' + sub.replace(/^\//, '') : '';
       const listEl = document.getElementById('file-list');
       listEl.innerHTML = '<li class="file-item"><span style="color: var(--text-muted);">Loading...</span></li>';
       try {
@@ -158,19 +163,59 @@
           li.className = 'file-item';
           const isDir = item.type === 'dir';
           const icon = isDir ? '📁' : '📄';
-          li.innerHTML = `
-            <div class="file-info" onclick="${isDir ? `loadDirectory('${path}/${item.name}')` : ''}">
-              <span class="file-icon">${icon}</span>
-              <span class="file-name">${item.name}</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 14px;">
-              <span class="file-meta">${isDir ? '' : item.size}</span>
-              <div class="file-actions">
-                ${!isDir ? `<a href="/${path}/${item.name}" download class="btn-action">⬇️</a>` : ''}
-                <button class="btn-action btn-delete" onclick="deleteFile('${path}/${item.name}')">🗑️</button>
-              </div>
-            </div>
-          `;
+          const fullPath = path ? `${path}/${item.name}` : item.name;
+          const downloadUrl = `/cgi-bin/api.cgi?action=download&path=${encodeURIComponent(fullPath)}`;
+
+          const infoDiv = document.createElement('div');
+          infoDiv.className = 'file-info';
+          if (isDir) {
+            infoDiv.onclick = () => loadDirectory(fullPath);
+          }
+
+          const iconSpan = document.createElement('span');
+          iconSpan.className = 'file-icon';
+          iconSpan.textContent = icon;
+
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'file-name';
+          nameSpan.title = item.name;
+          nameSpan.textContent = item.name;
+
+          infoDiv.appendChild(iconSpan);
+          infoDiv.appendChild(nameSpan);
+
+          const rightDiv = document.createElement('div');
+          rightDiv.style.cssText = 'display: flex; align-items: center; gap: 14px;';
+
+          const metaSpan = document.createElement('span');
+          metaSpan.className = 'file-meta';
+          metaSpan.textContent = isDir ? '' : item.size;
+          rightDiv.appendChild(metaSpan);
+
+          const actionsDiv = document.createElement('div');
+          actionsDiv.className = 'file-actions';
+
+          if (!isDir) {
+            const dlLink = document.createElement('a');
+            dlLink.href = downloadUrl;
+            dlLink.setAttribute('download', item.name);
+            dlLink.className = 'btn-action';
+            dlLink.title = 'Download';
+            dlLink.textContent = '⬇️';
+            actionsDiv.appendChild(dlLink);
+          }
+
+          const delBtn = document.createElement('button');
+          delBtn.className = 'btn-action btn-delete';
+          delBtn.title = 'Delete';
+          delBtn.textContent = '🗑️';
+          delBtn.onclick = () => deleteFile(fullPath);
+          actionsDiv.appendChild(delBtn);
+
+          rightDiv.appendChild(actionsDiv);
+
+          li.appendChild(infoDiv);
+          li.appendChild(rightDiv);
           listEl.appendChild(li);
         });
       } catch (e) {
@@ -213,29 +258,94 @@
       if (fileInput.files.length) uploadFiles(fileInput.files);
     });
 
+    function formatBytes(bytes) {
+      if (!bytes || bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
+    }
+
+    function formatTime(seconds) {
+      if (!isFinite(seconds) || seconds < 0) return '--';
+      if (seconds < 60) return Math.ceil(seconds) + 's';
+      const m = Math.floor(seconds / 60);
+      const s = Math.ceil(seconds % 60);
+      return `${m}m ${s}s`;
+    }
+
+    function uploadSingleFile(file, dir, fileIndex, totalFiles) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        const startTime = Date.now();
+        const progressContainer = document.getElementById('upload-progress-container');
+        const progressFill = document.getElementById('upload-progress-fill');
+        const filenameEl = document.getElementById('upload-filename');
+        const statsEl = document.getElementById('upload-stats');
+        const speedEl = document.getElementById('upload-speed');
+        const etaEl = document.getElementById('upload-eta');
+
+        progressContainer.style.display = 'block';
+        filenameEl.innerText = `[${fileIndex + 1}/${totalFiles}] ${file.name}`;
+        progressFill.style.width = '0%';
+        statsEl.innerText = '0%';
+        speedEl.innerText = 'Starting...';
+        etaEl.innerText = '--';
+
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable && e.total > 0) {
+            const percent = ((e.loaded / e.total) * 100).toFixed(1);
+            const elapsed = (Date.now() - startTime) / 1000;
+            const speed = elapsed > 0 ? e.loaded / elapsed : 0;
+            const remaining = speed > 0 ? (e.total - e.loaded) / speed : 0;
+            progressFill.style.width = percent + '%';
+            statsEl.innerText = `${percent}% (${formatBytes(e.loaded)} / ${formatBytes(e.total)})`;
+            speedEl.innerText = `${formatBytes(speed)}/s`;
+            etaEl.innerText = `${formatTime(remaining)} remaining`;
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            progressFill.style.width = '100%';
+            statsEl.innerText = '100% (Complete)';
+            speedEl.innerText = 'Transfer finished';
+            etaEl.innerText = '0s';
+            resolve(xhr.responseText);
+          } else {
+            reject(new Error(`Server returned status ${xhr.status}`));
+          }
+        };
+
+        xhr.onerror = () => reject(new Error('Network error during upload'));
+        xhr.onabort = () => reject(new Error('Upload aborted'));
+
+        xhr.open('POST', `/cgi-bin/api.cgi?action=upload&dir=${encodeURIComponent(dir)}&name=${encodeURIComponent(file.name)}`, true);
+        xhr.send(file);
+      });
+    }
+
     async function uploadFiles(files) {
+      const progressContainer = document.getElementById('upload-progress-container');
       uploadStatus.innerText = `Uploading ${files.length} file(s) to /${currentDir}...`;
       for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const formData = new FormData();
-        formData.append('file', file);
         try {
-          await fetch(`/cgi-bin/api.cgi?action=upload&dir=${encodeURIComponent(currentDir)}&name=${encodeURIComponent(file.name)}`, {
-            method: 'POST',
-            body: file
-          });
-          uploadStatus.innerText = `Uploaded (${i + 1}/${files.length}): ${file.name}`;
+          await uploadSingleFile(files[i], currentDir, i, files.length);
         } catch (e) {
-          uploadStatus.innerText = `Error uploading ${file.name}`;
+          uploadStatus.innerText = `Error uploading ${files[i].name}: ${e.message}`;
+          console.error(e);
         }
       }
-      uploadStatus.innerText = 'Upload complete!';
+      uploadStatus.innerText = 'All uploads complete!';
       refreshList();
-      setTimeout(() => { uploadStatus.innerText = ''; }, 4000);
+      setTimeout(() => {
+        uploadStatus.innerText = '';
+        progressContainer.style.display = 'none';
+      }, 3500);
     }
 
     loadStorage();
-    loadDirectory(currentDir);
+    switchCategory('Roms');
   </script>
 </body>
 </html>

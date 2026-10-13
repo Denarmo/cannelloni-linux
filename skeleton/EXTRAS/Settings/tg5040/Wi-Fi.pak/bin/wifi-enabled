@@ -1,5 +1,4 @@
 #!/bin/sh
-set -x
 BIN_DIR="$(dirname "$0")"
 PAK_DIR="$(dirname "$BIN_DIR")"
 PAK_NAME="$(basename "$PAK_DIR")"
@@ -46,7 +45,7 @@ main() {
         fi
     fi
 
-    if ! pgrep wpa_supplicant; then
+    if ! pgrep wpa_supplicant >/dev/null 2>&1; then
         return 1
     fi
 

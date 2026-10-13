@@ -659,7 +659,7 @@ def build_release():
     for cfg_path, cfg_val in [
         (".userdata/shared/.cannelloni/accent_color.txt", b"#f1c40f\n"),
         (".userdata/shared/.cannelloni/language.txt", b"en\n"),
-        (".userdata/shared/.cannelloni/emu_nds.txt", b"libretro\n"),
+        (".userdata/shared/.cannelloni/emu_nds.txt", b"drastic\n"),
         (".userdata/shared/.cannelloni/button_swap.txt", b"default\n"),
     ]:
         if cfg_path not in written_entries:

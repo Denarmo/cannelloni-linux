@@ -299,31 +299,38 @@ static void Game_open(char* path) {
 		}
 	}
 		
+	path = game.tmp_path[0]=='\0'?game.path:game.tmp_path;
+	
+	FILE *file = fopen(path, "rb");
+	if (file==NULL) {
+		LOG_error("Error opening game: %s\n\t%s\n", path, strerror(errno));
+		return;
+	}
+
+	fseek(file, 0, SEEK_END);
+	game.size = ftell(file);
+	rewind(file);
+
+	if (game.size == 0) {
+		LOG_error("Game file is empty (0 bytes): %s\n", path);
+		fclose(file);
+		return;
+	}
+
 	// some cores handle opening files themselves, eg. pcsx_rearmed
 	// if the frontend tries to load a 500MB file itself bad things happen
 	if (!core.need_fullpath) {
-		path = game.tmp_path[0]=='\0'?game.path:game.tmp_path;
-		
-		FILE *file = fopen(path, "r");
-		if (file==NULL) {
-			LOG_error("Error opening game: %s\n\t%s\n", path, strerror(errno));
-			return;
-		}
-	
-		fseek(file, 0, SEEK_END);
-		game.size = ftell(file);
-	
-		rewind(file);
 		game.data = malloc(game.size);
 		if (game.data==NULL) {
 			LOG_error("Couldn't allocate memory for file: %s\n", path);
+			fclose(file);
 			return;
 		}
-	
+
 		fread(game.data, sizeof(uint8_t), game.size, file);
-	
-		fclose(file);
 	}
+
+	fclose(file);
 	
 	// m3u-based?
 	char* tmp;
@@ -2892,7 +2899,10 @@ void Core_open(const char* core_path, const char* tag_name) {
 	LOG_info("Core_open\n");
 	core.handle = dlopen(core_path, RTLD_LAZY);
 	
-	if (!core.handle) LOG_error("%s\n", dlerror());
+	if (!core.handle) {
+		LOG_error("Failed to load core %s: %s\n", core_path, dlerror());
+		exit(1);
+	}
 	
 	core.init = dlsym(core.handle, "retro_init");
 	core.deinit = dlsym(core.handle, "retro_deinit");
@@ -2960,13 +2970,20 @@ void Core_init(void) {
 }
 void Core_load(void) {
 	LOG_info("Core_load\n");
+	if (!game.is_open || game.size == 0) {
+		LOG_error("No game loaded or game file is empty\n");
+		exit(1);
+	}
 	struct retro_game_info game_info;
 	game_info.path = game.tmp_path[0]?game.tmp_path:game.path;
 	game_info.data = game.data;
 	game_info.size = game.size;
-	LOG_info("game path: %s (%i)\n", game_info.path, game.size);
+	LOG_info("game path: %s (%zu)\n", game_info.path, game.size);
 	
-	core.load_game(&game_info);
+	if (!core.load_game(&game_info)) {
+		LOG_error("core.load_game failed for %s\n", game_info.path);
+		exit(1);
+	}
 	
 	SRAM_read();
 	RTC_read();
@@ -4699,7 +4716,10 @@ int main(int argc , char* argv[]) {
 	
 	Core_open(core_path, tag_name);
 	Game_open(rom_path); // nes tries to load gamegenie setting before this returns ffs
-	if (!game.is_open) goto finish;
+	if (!game.is_open) {
+		LOG_error("Failed to open game: %s\n", rom_path);
+		exit(1);
+	}
 	
 	simple_mode = exists(SIMPLE_MODE_PATH);
 	
