@@ -711,6 +711,78 @@ int main(void) {
 '''
         self.build_and_run(harness, shader=True)
 
+    def test_ds_frames_fit_fixed_video_pages_and_screen(self):
+        source = (MINARCH / "minarch.c").read_text()
+        defines = (ROOT / "workspace/all/common/defines.h").read_text()
+        macros = "\n".join(re.findall(r"^#define (?:MIN|MAX|CEIL_DIV)\(.*$", defines, re.M))
+        self.build_and_run(macros + r'''
+#include <assert.h>
+#include <stdio.h>
+#define LOG_info(...) ((void)0)
+#define FIXED_BPP 2
+#define HDMI_WIDTH 1280
+#define SHADER_NONE 0
+enum { SCALE_NATIVE, SCALE_ASPECT, SCALE_FULLSCREEN, SCALE_CROPPED };
+typedef struct { int w,h,pitch; } SDL_Surface;
+typedef struct {
+    void *blit; double aspect; int scale, true_w, true_h;
+    int src_x, src_y, src_w, src_h, src_p, dst_x, dst_y, dst_w, dst_h, dst_p;
+} GFX_Renderer;
+static GFX_Renderer renderer;
+static struct { double aspect_ratio; } core;
+static SDL_Surface surface, *screen = &surface;
+static int screen_scaling, screen_effect, fit;
+static int DEVICE_WIDTH, DEVICE_HEIGHT, DEVICE_PITCH, PAGE_WIDTH, PAGE_HEIGHT;
+static void buffer_realloc(int w, int h, int p) { (void)w; (void)h; (void)p; }
+static void *GFX_getScaler(GFX_Renderer *r) { (void)r; return 0; }
+static SDL_Surface *GFX_resize(int w, int h, int p) {
+    surface.w = w; surface.h = h; surface.pitch = p; return &surface;
+}
+''' + function(source, "selectScaler") + r'''
+static void device(int w, int h, int page_scale) {
+    DEVICE_WIDTH = w; DEVICE_HEIGHT = h; DEVICE_PITCH = w * FIXED_BPP;
+    PAGE_WIDTH = w * page_scale; PAGE_HEIGHT = h * page_scale;
+}
+static void check(int w, int h, int scaling) {
+    screen_scaling = scaling;
+    core.aspect_ratio = (double)w / h;
+    selectScaler(w, h, w * FIXED_BPP);
+    // The oversized surface lives in one fixed hardware page.
+    assert(screen->w <= PAGE_WIDTH && screen->h <= PAGE_HEIGHT);
+    assert(screen->pitch * screen->h <= PAGE_WIDTH * FIXED_BPP * PAGE_HEIGHT);
+    // The blit stays inside the source frame and the destination surface.
+    int scale = renderer.scale > 0 ? renderer.scale : 1;
+    assert(renderer.src_x >= 0 && renderer.src_y >= 0);
+    assert(renderer.src_x + renderer.src_w <= w && renderer.src_y + renderer.src_h <= h);
+    assert(renderer.dst_x >= 0 && renderer.dst_y >= 0);
+    if (renderer.scale > 0) {
+        assert(renderer.dst_x + renderer.src_w * scale <= screen->w);
+        assert(renderer.dst_y + renderer.src_h * scale <= screen->h);
+    }
+}
+int main(void) {
+    // DS layouts: top/bottom, left/right, single screen.
+    int frames[][2] = {{256,384}, {512,192}, {256,192}};
+    // Miyoo Mini, Miyoo Mini Plus 560p, TrimUI Smart, RG35XX.
+    int devices[][3] = {{640,480,3}, {752,560,2}, {320,240,3}, {640,480,3}};
+    for (int d=0; d<4; d++) {
+        device(devices[d][0], devices[d][1], devices[d][2]);
+        for (int f=0; f<3; f++)
+            for (int s=SCALE_NATIVE; s<=SCALE_FULLSCREEN; s++)
+                check(frames[f][0], frames[f][1], s);
+    }
+    // Miyoo Mini Plus keeps scale 2 for the default DS layout in Aspect mode.
+    device(752, 560, 2);
+    check(256, 384, SCALE_ASPECT);
+    assert(renderer.scale == 2);
+    // Other systems keep their existing scale.
+    device(640, 480, 3);
+    check(240, 160, SCALE_ASPECT);
+    assert(renderer.scale == 3);
+    return 0;
+}
+''')
+
 
 if __name__ == "__main__":
     unittest.main()

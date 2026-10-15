@@ -335,7 +335,7 @@ void PLAT_blitRenderer(GFX_Renderer* renderer) {
 		vid.special = SDL_CreateRGBSurface(SDL_SWSURFACE, renderer->src_h,renderer->src_w, FIXED_DEPTH,RGBA_MASK_565);
 		vid.rotated_pitch = vid.height * FIXED_BPP; // ((vid.height+7)/8)*8 * FIXED_BPP; // TODO: this should be the fix but it's not :sob:
 		vid.rotated_offset = (renderer->dst_x * vid.rotated_pitch) + (renderer->dst_y * FIXED_BPP);
-		vid.source_offset = (renderer->src_x * vid.special->pitch) + (renderer->src_y * FIXED_BPP);
+		vid.source_offset = 0; // the crop is applied before rotating
 		
 		LOG_info("PLAT_blitRenderer >> src:%p dst:%p blit:%p src:%ix%i (%i) dst:%i,%i %ix%i (%i) vid: %ix%i (%i) (%i)\n",
 			vid.renderer->src,
@@ -358,7 +358,9 @@ void PLAT_blitRenderer(GFX_Renderer* renderer) {
 			vid.rotated_pitch
 		);
 	}
-	rotate_16bpp(renderer->src, vid.special->pixels, renderer->src_w,renderer->src_h,renderer->src_p,vid.special->pitch);
+	// Rotate only the visible crop so the special surface matches src_w/src_h.
+	void* src = renderer->src + (renderer->src_y * renderer->src_p) + (renderer->src_x * FIXED_BPP);
+	rotate_16bpp(src, vid.special->pixels, renderer->src_w,renderer->src_h,renderer->src_p,vid.special->pitch);
 	((scaler_t)renderer->blit)(vid.special->pixels + vid.source_offset, vid.buffer->pixels+vid.rotated_offset, vid.special->w,vid.special->h, vid.special->pitch, vid.renderer->dst_h, vid.renderer->dst_w,vid.rotated_pitch);
 	
 	// LOG_info("blit(%p,%p, %i,%i,%i, %i,%i,%i)\n", vid.special->pixels, vid.buffer->pixels+vid.rotated_offset, vid.special->w,vid.special->h, vid.special->pitch, vid.renderer->dst_h, vid.renderer->dst_w,vid.rotated_pitch);

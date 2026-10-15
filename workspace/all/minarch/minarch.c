@@ -513,6 +513,9 @@ static void State_read(void) { // from picoarch
 	int was_ff = fast_forward;
 	fast_forward = 0;
 
+	// Large states (eg. Nintendo DS) can fail to allocate; the error path
+	// must not close an uninitialized file.
+	FILE *state_file = NULL;
 	void *state = calloc(1, state_size);
 	if (!state) {
 		LOG_error("Couldn't allocate memory for state\n");
@@ -522,7 +525,7 @@ static void State_read(void) { // from picoarch
 	char filename[MAX_PATH];
 	State_getPath(filename);
 	
-	FILE *state_file = fopen(filename, "r");
+	state_file = fopen(filename, "r");
 	if (!state_file) {
 		if (state_slot!=8) { // st8 is a default state in MiniUI and may not exist, that's okay
 			LOG_error("Error opening state file: %s (%s)\n", filename, strerror(errno));
@@ -555,6 +558,9 @@ static void State_write(void) { // from picoarch
 	int was_ff = fast_forward;
 	fast_forward = 0;
 
+	// Large states (eg. Nintendo DS) can fail to allocate; the error path
+	// must not close an uninitialized file.
+	FILE *state_file = NULL;
 	void *state = calloc(1, state_size);
 	if (!state) {
 		LOG_error("Couldn't allocate memory for state\n");
@@ -564,7 +570,7 @@ static void State_write(void) { // from picoarch
 	char filename[MAX_PATH];
 	State_getPath(filename);
 	
-	FILE *state_file = fopen(filename, "w");
+	state_file = fopen(filename, "w");
 	if (!state_file) {
 		LOG_error("Error opening state file: %s (%s)\n", filename, strerror(errno));
 		goto error;
@@ -2012,7 +2018,7 @@ static void Input_init(const struct retro_input_descriptor *vars) {
 	puts("---------------------------------");
 
 	const char* core_button_names[RETRO_BUTTON_COUNT] = {0};
-	int present[RETRO_BUTTON_COUNT];
+	int present[RETRO_BUTTON_COUNT] = {0};
 	int core_mapped = 0;
 	if (vars) {
 		core_mapped = 1;
@@ -2198,6 +2204,20 @@ static bool environment_callback(unsigned cmd, void *data) { // copied from pico
 		const char **out = (const char **)data;
 		if (out)
 			*out = core.saves_dir; // save_dir;
+		break;
+	}
+	case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: /* 32 */
+	case RETRO_ENVIRONMENT_SET_GEOMETRY: { /* 37 */
+		// DS cores report a new frame shape when the screen layout core
+		// option changes in the in-game menu. Timing changes are not applied.
+		const struct retro_game_geometry *geometry = NULL;
+		if (cmd==RETRO_ENVIRONMENT_SET_GEOMETRY) geometry = data;
+		else if (data) geometry = &((const struct retro_system_av_info *)data)->geometry;
+		if (!geometry || !geometry->base_width || !geometry->base_height) return false;
+		double a = geometry->aspect_ratio;
+		if (a<=0) a = (double)geometry->base_width / geometry->base_height;
+		core.aspect_ratio = a;
+		renderer.dst_p = 0; // reselect the scaler on the next frame
 		break;
 	}
 	case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO: { /* 35 */
@@ -2803,10 +2823,12 @@ static void selectScaler(int src_w, int src_h, int src_p) {
 			int ox = (DEVICE_WIDTH  - src_w) / 2; // may be negative
 			int oy = (DEVICE_HEIGHT - src_h) / 2; // may be negative
 			
-			if (ox<0) src_x = -ox;
+			// Only the visible part is blitted; a full DS frame (256x384)
+			// would otherwise be written past a 320x240 screen.
+			if (ox<0) { src_x = -ox; src_w = DEVICE_WIDTH; }
 			else dst_x = ox;
 			
-			if (oy<0) src_y = -oy;
+			if (oy<0) { src_y = -oy; src_h = DEVICE_HEIGHT; }
 			else dst_y = oy;
 		}
 		// TODO: this is all kinds of messed up
@@ -2892,6 +2914,9 @@ static void selectScaler(int src_w, int src_h, int src_p) {
 		// if (scale>4) scale = 4;
 		// if (scale>2) scale = 4; // TODO: restore, requires sanity checking
 		
+		// Tall frames (eg. Nintendo DS 256x384) pick their scale from the
+		// width, which can oversize past the platform's fixed video pages.
+	oversized:;
 		int scaled_w = src_w * scale;
 		int scaled_h = src_h * scale;
 		
@@ -2953,6 +2978,11 @@ static void selectScaler(int src_w, int src_h, int src_p) {
 				dst_h = scaled_h;
 			}
 			dst_p = dst_w * FIXED_BPP;
+		}
+		if (scale>1 && (dst_w>PAGE_WIDTH || dst_h>PAGE_HEIGHT)) {
+			scale -= 1;
+			dst_x = dst_y = 0;
+			goto oversized;
 		}
 	}
 	
@@ -4409,8 +4439,7 @@ static void Menu_scale(SDL_Surface* src, SDL_Surface* dst) {
 		}
 		else {
 			// LOG_info("forced crop\n"); // eg. fc on nano, vb on smart
-			rw -= renderer.src_x * 2;
-			rh -= renderer.src_y * 2;
+			// selectScaler already reduced src_w/src_h to the visible crop.
 			sw = rw;
 			sh = rh;
 		}

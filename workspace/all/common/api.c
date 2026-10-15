@@ -745,8 +745,10 @@ void GFX_blitButton(char* hint, char*button, SDL_Surface* dst, SDL_Rect* dst_rec
 	SDL_FreeSurface(text);
 }
 void GFX_blitMessage(TTF_Font* font, char* msg, SDL_Surface* dst, SDL_Rect* dst_rect) {
-	if (!dst_rect) dst_rect = &(SDL_Rect){0,0,dst->w,dst->h};
-	
+	// A compound literal in the if body would expire before the rect is read.
+	SDL_Rect full_rect = {0,0,dst->w,dst->h};
+	if (!dst_rect) dst_rect = &full_rect;
+
 	// LOG_info("GFX_blitMessage: %p (%ix%i)", dst, dst_rect->w,dst_rect->h);
 	
 	SDL_Surface* text;
