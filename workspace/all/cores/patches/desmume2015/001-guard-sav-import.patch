@@ -1,0 +1,14 @@
+diff --git a/desmume/src/mc.cpp b/desmume/src/mc.cpp
+index fb7d50bb..a3b9b54c 100644
+--- a/desmume/src/mc.cpp
++++ b/desmume/src/mc.cpp
+@@ -935,7 +935,8 @@ void BackupDevice::ensure(u32 addr, u8 val, EMUFILE_FILE *fpOut)
+ 	//IDEALLY, no assumptions about the file pointer can be made.
+ 	//but someone (actually, not really) so very carefully profiled the save IO code and discovered that not fseeking for every byte read/write was a great optimization.
+ 	//so, now all this code is depending/assuming on the FP being kept in a precise position, and I dont think its smart to change the main user of this assumption to paper over this bug by making it fseek before read/write, while leaving other unknown assuming clients intact
+-	fpMC->fseek(addr-1, SEEK_SET);
++	// A raw .sav is imported before fpMC is opened; only reposition fpMC once it exists.
++	if (fpMC) fpMC->fseek(addr-1, SEEK_SET);
+ #endif
+ }
+ 
