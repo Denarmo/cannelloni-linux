@@ -1897,7 +1897,7 @@ static void input_poll_callback(void) {
 	static int toggled_ff_on = 0; // this logic only works because TOGGLE_FF is before HOLD_FF in the menu...
 	for (int i=0; i<SHORTCUT_COUNT; i++) {
 		ButtonMapping* mapping = &config.shortcuts[i];
-		int btn = 1 << mapping->local;
+		int btn = mapping->local==BTN_ID_NONE ? BTN_NONE : 1 << mapping->local;
 		if (btn==BTN_NONE) continue; // not bound
 		if (!mapping->mod || PAD_isPressed(BTN_MENU)) {
 			if (i==SHORTCUT_TOGGLE_FF) {
@@ -1969,7 +1969,7 @@ static void input_poll_callback(void) {
 	buttons = 0;
 	for (int i=0; config.controls[i].name; i++) {
 		ButtonMapping* mapping = &config.controls[i];
-		int btn = 1 << mapping->local;
+		int btn = mapping->local==BTN_ID_NONE ? BTN_NONE : 1 << mapping->local;
 		if (btn==BTN_NONE) continue; // present buttons can still be unbound
 		if (gamepad_type==0) {
 			switch(btn) {

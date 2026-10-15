@@ -1,0 +1,36 @@
+diff --git a/desmume/src/arm_jit.h b/desmume/src/arm_jit.h
+index 8d927a00..75f60f67 100644
+--- a/desmume/src/arm_jit.h
++++ b/desmume/src/arm_jit.h
+@@ -57,7 +57,7 @@ extern CACHE_ALIGN JIT_struct JIT;
+ #define JIT_MAPPED(adr, PROCNUM) JIT.JIT_MEM[PROCNUM][(adr)>>14]
+ #else
+ // actually an array of function pointers, but they fit in 32bit address space, so might as well save memory
+-extern uintptr_t compiled_funcs[];
++extern uintptr_t *compiled_funcs;
+ // there isn't anything mapped between 07000000 and 0EFFFFFF, so we can mask off bit 27 and get away with a smaller array
+ #define JIT_COMPILED_FUNC(adr, PROCNUM) compiled_funcs[((adr) & 0x07FFFFFE) >> 1]
+ #define JIT_COMPILED_FUNC_PREMASKED(adr, PROCNUM, ofs) JIT_COMPILED_FUNC(adr+(ofs<<1), PROCNUM)
+diff --git a/desmume/src/utils/arm_arm/arm_jit.cpp b/desmume/src/utils/arm_arm/arm_jit.cpp
+index 221910f9..9002b07d 100644
+--- a/desmume/src/utils/arm_arm/arm_jit.cpp
++++ b/desmume/src/utils/arm_arm/arm_jit.cpp
+@@ -146,7 +146,17 @@ static void init_jit_mem()
+ }
+ 
+ #else
+-DS_ALIGN(4096) uintptr_t compiled_funcs[1<<26] = {0};
++// 256MB sparse table. A static array lands in .bss, which dlopen maps as one
++// committed region; small-RAM kernels in heuristic overcommit mode refuse it.
++// MAP_NORESERVE keeps it sparse and unaccounted; untouched pages read as zero.
++#include <sys/mman.h>
++static uintptr_t *alloc_compiled_funcs()
++{
++   void *p = mmap(NULL, sizeof(uintptr_t) << 26, PROT_READ | PROT_WRITE,
++                  MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
++   return p == MAP_FAILED ? NULL : (uintptr_t *)p;
++}
++uintptr_t *compiled_funcs = alloc_compiled_funcs();
+ #endif
+ 
+ template<int PROCNUM, int thumb>
