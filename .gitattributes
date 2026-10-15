@@ -11,3 +11,5 @@ makefile* text eol=lf
 *.jpg binary
 *.img binary
 *.meta binary
+# DeSmuME 2015 sources use CRLF; these patches must keep it for git apply.
+workspace/all/cores/patches/desmume2015/*.patch -text
