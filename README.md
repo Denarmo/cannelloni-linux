@@ -2,15 +2,15 @@
 
 <img src=".github/resources/banner.svg" width="100%" alt="Cannelloni — a frontend with just the right amount of filling">
 
-**Cannelloni 1.0.1 — a focused retro gaming frontend for Linux handhelds.**
+**Cannelloni 1.0.2 — a focused retro gaming frontend for Linux handhelds.**
 
 Built on [MinUI](https://github.com/shauninman/MinUI), inspired by [Cannoli](https://github.com/CannoliHQ/cannoli), with shaders from [Cannelloni for Android](https://github.com/Denarmo/cannelloni).
 
-[![Release 1.0.1](https://img.shields.io/badge/Release-1.0.1-f1c40f?style=for-the-badge&labelColor=242424)](https://github.com/Denarmo/cannelloni-linux/releases/tag/v1.0.1)
+[![Release 1.0.2](https://img.shields.io/badge/Release-1.0.2-f1c40f?style=for-the-badge&labelColor=242424)](https://github.com/Denarmo/cannelloni-linux/releases/tag/v1.0.2)
 [![Linux handhelds](https://img.shields.io/badge/Platform-Linux_handhelds-555555?style=for-the-badge&labelColor=242424)](#supported-devices)
 [![Licenses](https://img.shields.io/badge/Licenses-%26_attribution-555555?style=for-the-badge&labelColor=242424)](#credits-and-licenses)
 
-[Download 1.0.1](https://github.com/Denarmo/cannelloni-linux/releases/tag/v1.0.1) · [Installation guide](#install-with-the-desktop-installer) · [Shaders](#in-game-shaders) · [Report an issue](https://github.com/Denarmo/cannelloni-linux/issues)
+[Download 1.0.2](https://github.com/Denarmo/cannelloni-linux/releases/tag/v1.0.2) · [Installation guide](#install-with-the-desktop-installer) · [Shaders](#in-game-shaders) · [Report an issue](https://github.com/Denarmo/cannelloni-linux/issues)
 
 </div>
 
@@ -18,7 +18,7 @@ Built on [MinUI](https://github.com/shauninman/MinUI), inspired by [Cannoli](htt
 
 Cannelloni brings a simple game library, collections, recent games, save states, and a shared in-game menu to supported Linux handhelds. Choose an accent color, put your games in the supplied console folders, and launch them from the same interface.
 
-Version **1.0.1** fixes device-specific installation, accent rendering, Wi-Fi feedback, Nonna's Kitchen transfers and shutdown, and emulator video-buffer handling. The installer supplies the full emulator folder selection supported by the chosen device. Nintendo DS uses libretro by default, and the in-game overlay includes a dedicated **Shaders** section.
+Version **1.0.2** fixes Nintendo DS crashes on Miyoo Mini/Plus and TrimUI Smart: games no longer crash on the first frame or when opening the in-game menu, games with an existing raw `.sav` start normally, and the DeSmuME 2015 core loads on 128MB devices. The installer supplies the full emulator folder selection supported by the chosen device. Nintendo DS uses libretro by default, and the in-game overlay includes a dedicated **Shaders** section.
 
 <p align="center">
   <img src=".github/resources/screenshots/os-shaders.png" width="640" alt="Cannelloni Linux Shaders menu with preset, parameters, and save options">
@@ -31,7 +31,7 @@ Version **1.0.1** fixes device-specific installation, accent rendering, Wi-Fi fe
 
 ### 1. Download and prepare your card
 
-Download **[Cannelloni-Installer.zip](https://github.com/Denarmo/cannelloni-linux/releases/download/v1.0.1/Cannelloni-Installer.zip)** and extract it into a folder on your computer. Keep **`Cannelloni.zip` and `VERSION` beside the installer**. That ZIP is the OS payload: leave it compressed. Legacy payloads named `Cannoli.zip` are also recognized.
+Download **[Cannelloni-Installer.zip](https://github.com/Denarmo/cannelloni-linux/releases/download/v1.0.2/Cannelloni-Installer.zip)** and extract it into a folder on your computer. Keep **`Cannelloni.zip` and `VERSION` beside the installer**. That ZIP is the OS payload: leave it compressed. Legacy payloads named `Cannoli.zip` are also recognized.
 
 Use a FAT32 SD card prepared for your handheld. The installer copies files; it does not format the card or replace the device's underlying firmware. Back up an existing card first, especially `Saves` and `.userdata`, because installation replaces system files and applies fresh settings. See the [device notes](#supported-devices) for cards that also need a separate boot card.
 
@@ -163,7 +163,7 @@ For local frontend builds, use Docker, a POSIX shell, and make on a host that ma
 
 Build **`dist/Cannelloni-Installer.exe`** using PyInstaller on Windows, then run **`python scripts/create_release_archives.py`** with all required platform artifacts available. Packaging requires freshly built launcher/minarch binaries and a matching DS core for each platform; it rejects missing builds or incorrect core architectures. **`python scripts/verify_release_archive.py releases/Cannelloni-Installer.zip --built-workspace workspace`** verifies the packaged payload against those builds.
 
-The [release workflow](.github/workflows/release.yml) performs the tests, platform builds, Windows installer build, packaging, and archive verification before publishing. Releases use semantic versions such as **1.0.1**, with the Git tag **`v1.0.1`**.
+The [release workflow](.github/workflows/release.yml) performs the tests, platform builds, Windows installer build, packaging, and archive verification before publishing. Releases use semantic versions such as **1.0.2**, with the Git tag **`v1.0.2`**.
 
 For a targeted CI check, choose one platform when manually running the workflow. Single-platform runs upload build artifacts but skip tagging and publication; select **all** to build and publish a complete release.
 

@@ -1,4 +1,4 @@
-Cannelloni 1.0.1
+Cannelloni 1.0.2
 
 Cannelloni is a focused retro gaming launcher and libretro frontend for supported Linux handhelds. The release includes separate platform builds, a desktop SD installer, Nintendo DS integration, and configurable software shader effects.
 
@@ -11,7 +11,7 @@ Installing
 DESKTOP INSTALLER (WINDOWS / LINUX)
 
 Download Cannelloni-Installer.zip from:
-https://github.com/Denarmo/cannelloni-linux/releases/tag/v1.0.1
+https://github.com/Denarmo/cannelloni-linux/releases/tag/v1.0.2
 
 1. Extract the installer package to a folder on your computer. Keep its bundled
    Cannelloni.zip beside the installer, compressed, and retain the VERSION file.

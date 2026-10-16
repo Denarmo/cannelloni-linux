@@ -1,4 +1,4 @@
-Cannelloni 1.0.1 SD Installer
+Cannelloni 1.0.2 SD Installer
 
 Full illustrated guide:
 https://github.com/Denarmo/cannelloni-linux#install-with-the-desktop-installer

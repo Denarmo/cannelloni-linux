@@ -1,17 +1,15 @@
-# Cannelloni 1.0.1
+# Cannelloni 1.0.2
 
-This bug-fix release corrects device installation, theme colors, network tools, and emulator video handling.
+This bug-fix release stops Nintendo DS games crashing on Miyoo Mini/Plus and TrimUI Smart, including the crash when opening the in-game menu.
 
 ## Fixes
 
-- **Correct accent colors.** Native menus tint an immutable neutral spritesheet, avoiding double tinting and color buildup around rounded corners. Installer and on-device presets now match.
-- **Visible Wi-Fi progress.** Connection screens show the current stage and result, with managed status messages that do not cover the network picker or keyboard.
-- **Nonna’s Kitchen file browser.** The web API handles encoded filenames on legacy BusyBox, runs CGI from executable temporary storage, reports request failures, and reads file metadata without scanning entire ROMs.
-- **Kitchen shutdown.** Closing its screen stops the exact web-server process it started. Settings and Tools open the same service.
-- **Only the selected device’s files.** The installer filters platform binaries, tools, settings, boot files, theme widgets, and emulator folders. Existing unrelated files on a card are preserved.
-- **Complete Miyoo emulator selection.** Base and optional upstream emulator packs are included with their matching cores and ROM/BIOS/save folders, instead of exposing only GBA, DS, and PlayStation.
-- **GBA and in-game overlay crash fix.** A malformed menu-loop condition could read past the end of the menu items. The loop now stops at the correct item. The frontend also owns the last video frame, declines unsupported direct framebuffer requests, and handles missing frames and changed geometry.
-- **Miyoo Nintendo DS startup.** Mini/Plus explicitly use DeSmuME2015 with its supported ARM JIT build instead of the generic melonDS selection. DS startup displays progress and reports a core that fails to produce a frame within 60 seconds, returning to the launcher instead of leaving an indefinite black screen.
+- **DS frames fit the screen.** A portrait DS frame (256x384) could be scaled to a surface larger than the fixed video page on Miyoo Mini Plus and TrimUI Smart, so the first frame wrote past it and the game crashed before the in-game menu could open. The scaler now steps down until the frame fits.
+- **Tall frames are cropped, not overrun.** Native mode crops tall frames to the screen. Miyoo Mini and RG35XX apply the crop offset, and TrimUI Smart crops before rotating.
+- **DS layout changes apply live.** Changing the screen layout in the core options updates the aspect ratio and scaler instead of keeping the old geometry.
+- **Games with a raw `.sav` start.** When `Saves/NDS/<game>.sav` exists without a `.dsv` (for example a save written by melonDS on earlier builds), DeSmuME 2015 no longer crashes while importing it. The save is still converted.
+- **DS core loads on 128MB devices.** The DeSmuME 2015 ARM JIT reserved about 256MB of memory up front, so Miyoo Mini could refuse to load the core and return to the launcher. The table is now allocated lazily.
+- **Smaller stability fixes.** The DS loading message no longer reads freed memory, save states no longer close an uninitialized file when a large state cannot be allocated, and unbound buttons no longer trigger an invalid shift.
 
 ## Download and install
 
@@ -25,6 +23,6 @@ Back up saves and settings first. The installer does not format the card. Previo
 
 ## Validation and compatibility
 
-Release publication requires host regression tests, all 12 platform builds, a Windows installer build, and verification of the exact packaged binaries and emulator cores. Physical Miyoo Mini/Plus testing is still needed to confirm the reported GBA and DS failures are resolved on hardware; these changes address identified source defects and build configuration, not a device-reproduced crash trace.
+Release publication requires host regression tests, all 12 platform builds, a Windows installer build, and verification of the exact packaged binaries and emulator cores. These fixes address identified source defects; physical Miyoo Mini/Plus and TrimUI Smart testing is still needed to confirm the DS crashes are resolved on hardware.
 
-Software shaders remain off by default. DS speed and compatibility depend on the game and device. ROMs and BIOS files are not included. Libretro and standalone DraStic save states are not interchangeable.
+DS speed and compatibility depend on the game and device. ROMs and BIOS files are not included. Libretro and standalone DraStic save states are not interchangeable.
