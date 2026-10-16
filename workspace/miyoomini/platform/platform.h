@@ -122,6 +122,8 @@ extern int is_560p;
 #define SDCARD_PATH "/mnt/SDCARD"
 #define MUTE_VOLUME_RAW -60
 #define HAS_NEON
+// minarch writes shader output straight into the screen surface.
+#define SHADER_DIRECT_BLIT
 
 ///////////////////////////////
 

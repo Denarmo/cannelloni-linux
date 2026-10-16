@@ -21,7 +21,7 @@ class ShaderTests(unittest.TestCase):
                 "-I", str(ROOT / "workspace/all/minarch"),
                 str(ROOT / "tests/shader_harness.c"),
                 str(ROOT / "workspace/all/minarch/shader.c"),
-                "-lm", "-o", str(executable),
+                "-lm", "-pthread", "-o", str(executable),
             ], check=True, capture_output=True, text=True)
             result = subprocess.run([str(executable)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

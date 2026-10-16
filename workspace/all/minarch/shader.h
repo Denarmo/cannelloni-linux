@@ -39,26 +39,36 @@ typedef struct {
     int glow;
 } ShaderSettings;
 
-/* Caller zero-initializes; owns/reuses this context until Shader_destroy(). */
+struct ShaderState;
+
+/* Caller zero-initializes; owns/reuses this context until Shader_destroy().
+   threads: rows rendered in parallel (0 or 1 = calling thread only). It is
+   clamped to the online CPU count; set it before any call, or between calls. */
 typedef struct {
     uint16_t *pixels;
     size_t capacity;
-    uint16_t *blur;
+    uint32_t *blur;
     size_t blur_capacity;
     int tables_ready;
-    float sine[1024];
-    float gamma[1024];
-    float falloff[1024];
+    int threads;
+    struct ShaderState *state;
 } ShaderContext;
 
 const ShaderPreset *Shader_getPreset(int preset);
 ShaderSettings Shader_defaults(int preset);
 void Shader_sanitize(ShaderSettings *settings);
 
-/* Output is packed RGB565 owned by context (pitch = output_width * 2).
+/* Renders packed RGB565 into caller memory (destination pitch in bytes).
    Source may point at an already cropped region with its original byte pitch.
-   Returns NULL on invalid geometry/allocation failure; source is never modified.
+   Returns 0 on invalid geometry/allocation failure; source is never modified.
    CPU adaptations render at output resolution, before platform presentation. */
+int Shader_render(ShaderContext *context, const ShaderSettings *settings,
+    const void *source, int source_width, int source_height, int source_pitch,
+    void *destination, int destination_pitch,
+    int output_width, int output_height, unsigned frame);
+
+/* As Shader_render, into a buffer owned by context (pitch = output_width * 2).
+   Returns NULL on failure. */
 const uint16_t *Shader_process(ShaderContext *context,
     const ShaderSettings *settings, const void *source,
     int source_width, int source_height, int source_pitch,

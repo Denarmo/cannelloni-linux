@@ -27,7 +27,7 @@ class MinarchIntegrationTests(unittest.TestCase):
             binary = root / "harness.exe"
             command = [shutil.which("gcc"), "-std=c99", "-I", str(MINARCH), str(code), "-o", str(binary)]
             if shader:
-                command += [str(MINARCH / "shader.c"), "-lm"]
+                command += [str(MINARCH / "shader.c"), "-lm", "-pthread"]
             result = subprocess.run(command, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             for name, content in (files or {}).items():
@@ -555,7 +555,7 @@ int main(void) {
         renderer_types = (ROOT / "workspace/all/common/api.h").read_text()
         renderer_types = re.search(r"typedef struct GFX_Renderer \{.*?\} GFX_Renderer;",
                                    renderer_types, re.S).group(0)
-        wrapper = function(source, "Shader_blit")
+        wrapper = function(source, "Shader_clearBorders") + "\n" + function(source, "Shader_blit")
         harness = r'''
 #include <assert.h>
 #include <stdint.h>
@@ -614,7 +614,7 @@ static SDL_Surface *screen, *shader_screen;
 static ShaderContext shader_context;
 static ShaderSettings shader_settings;
 static unsigned shader_frame;
-static int screen_effect, screen_scaling, DEVICE_WIDTH=16, DEVICE_HEIGHT=12;
+static int screen_effect, screen_scaling, thread_video, DEVICE_WIDTH=16, DEVICE_HEIGHT=12;
 static struct { double aspect_ratio; } core;
 static struct { struct { struct { char *key; } options[1]; } frontend; } config;
 static void Config_syncFrontend(char *key,int value) { screen_effect=value; }
@@ -706,6 +706,86 @@ int main(void) {
     SDL_FreeSurface(screen); SDL_FreeSurface(shader_screen);
     assert(allocations==frees);
     Shader_destroy(&shader_context);
+    return 0;
+}
+'''
+        self.build_and_run(harness, shader=True)
+
+    def test_shader_blit_direct_to_screen(self):
+        source = (MINARCH / "minarch.c").read_text()
+        renderer_types = (ROOT / "workspace/all/common/api.h").read_text()
+        renderer_types = re.search(r"typedef struct GFX_Renderer \{.*?\} GFX_Renderer;",
+                                   renderer_types, re.S).group(0)
+        wrapper = function(source, "Shader_clearBorders") + "\n" + function(source, "Shader_blit")
+        harness = r'''
+#include <assert.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include "shader.h"
+#define SHADER_DIRECT_BLIT
+#define MIN(a,b) ((a)<(b)?(a):(b))
+#define CEIL_DIV(a,b) (((a)+(b)-1)/(b))
+#define HDMI_WIDTH 1280
+#define SDL_SWSURFACE 0
+#define RGBA_MASK_565 0xf800,0x07e0,0x001f,0
+#define LOG_error(...) ((void)0)
+enum { SCALE_NATIVE, SCALE_ASPECT, SCALE_FULLSCREEN, SCALE_CROPPED };
+enum { FE_OPT_EFFECT };
+typedef struct { int w,h,pitch; void *pixels; } SDL_Surface;
+static SDL_Surface *SDL_CreateRGBSurface(int f,int w,int h,int d,unsigned r,unsigned g,unsigned b,unsigned a) {
+    (void)f;(void)w;(void)h;(void)d;(void)r;(void)g;(void)b;(void)a;
+    assert(!"direct rendering needs no intermediate surface");
+    return 0;
+}
+static void SDL_FreeSurface(SDL_Surface *s) { (void)s; }
+''' + renderer_types + r'''
+static GFX_Renderer renderer, shader_renderer;
+static SDL_Surface *screen, *shader_screen;
+static ShaderContext shader_context;
+static ShaderSettings shader_settings;
+static unsigned shader_frame;
+static int screen_effect, screen_scaling, thread_video, presentations, DEVICE_WIDTH=640, DEVICE_HEIGHT=480;
+static struct { double aspect_ratio; } core;
+static struct { struct { struct { char *key; } options[1]; } frontend; } config;
+static void Config_syncFrontend(char *key,int value) { (void)key; screen_effect=value; }
+static void *GFX_getScaler(GFX_Renderer *r) { return r; }
+static void GFX_blitRenderer(GFX_Renderer *r) { (void)r; presentations++; }
+''' + wrapper + r'''
+static uint16_t raw[160*144];
+int main(void) {
+    for (int n=0; n<160*144; ++n) raw[n]=(uint16_t)(n*2654435761u>>16);
+    renderer=(GFX_Renderer){.src=raw,.true_w=160,.true_h=144,.src_w=160,.src_h=144,.src_p=320};
+    SDL_Surface s={640,480,640*2+64,0};
+    s.pixels=malloc((size_t)s.pitch*480);
+    memset(s.pixels,0x5a,(size_t)s.pitch*480);
+    screen=&s;
+    screen_scaling=SCALE_ASPECT; core.aspect_ratio=10.0/9;
+    int presets[]={SHADER_DOT,SHADER_CANNELLONI,SHADER_ZFAST_LCD};
+    for (int p=0; p<3; ++p) for (int threaded=0; threaded<2; ++threaded) {
+        screen_effect=presets[p];
+        shader_settings=Shader_defaults(screen_effect);
+        thread_video=threaded;
+        Shader_blit();
+        assert(!presentations && !shader_screen);
+        /* 160x144 at 10:9 fills 533x480 centred at x=53. */
+        ShaderContext expected_context={0};
+        const uint16_t *expected=Shader_process(&expected_context,&shader_settings,
+            raw,160,144,320,533,480,shader_frame-1);
+        assert(expected);
+        for (int y=0; y<480; ++y) {
+            const uint8_t *row=(const uint8_t *)s.pixels+y*s.pitch;
+            for (int x=0; x<640; ++x) {
+                uint16_t v; memcpy(&v,row+x*2,2);
+                if (x>=53 && x<586) assert(v==expected[y*533+x-53]);
+                else assert(v==0);
+            }
+            for (int n=640*2; n<s.pitch; ++n) assert(row[n]==0x5a);
+        }
+        Shader_destroy(&expected_context);
+    }
+    Shader_destroy(&shader_context);
+    free(s.pixels);
     return 0;
 }
 '''

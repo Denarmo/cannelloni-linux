@@ -38,6 +38,25 @@ Scanline Sine uses a periodic grid in both axes. Glow and Dot Matrix cost more
 CPU; Lite and Zfast presets are preferable on slower devices. Performance and
 presentation still need validation on each target handheld.
 
+Performance
+-----------
+The renderer is written for handhelds without a usable GPU, such as the Miyoo
+Mini Plus (two Cortex-A7 cores with NEON). Floating point only runs when the
+settings or frame geometry change: per-column and per-row tables hold sample
+taps, scanline profiles and mask phases. Pixels are blended in a packed RGB565
+form, and each row finishes in plain 16-bit loops that compilers vectorize.
+Without curvature the vertical blend runs once per source pixel; with
+curvature it runs once per source column at that column's warped row. When the
+core is not already threaded, minarch splits rows across two CPUs. Shaders are
+built separately at -O3 (with NEON on the Miyoo Mini) and, on the Miyoo Mini,
+written straight into the screen.
+
+Further approximations made for speed, all below one RGB565 step on average:
+CRT gamma uses c^(10/9) = c(0.834 + 0.166c) after folding the scanline and mask
+weights out of the power; Dot Matrix fits its neighbour falloff with separable
+functions and keeps the exact radial falloff for the centre tap; glow and
+Cannelloni's vignette and sweep are sampled from quarter-texel tables.
+
 Attribution and licenses
 ------------------------
 CRT Cannelloni: Denarmo/Cannelloni contributors; CRT base derived from EasyMode

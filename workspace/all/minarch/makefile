@@ -21,12 +21,15 @@ SDL?=SDL
 
 TARGET = minarch
 INCDIR = -I. -I./libretro-common/include/ -I../common/ -I../../$(PLATFORM)/platform/
-SOURCE = $(TARGET).c shader.c ../common/scaler.c ../common/utils.c ../common/api.c ../../$(PLATFORM)/platform/platform.c
+SOURCE = $(TARGET).c ../common/scaler.c ../common/utils.c ../common/api.c ../../$(PLATFORM)/platform/platform.c
 
 CC = $(CROSS_COMPILE)gcc
 CFLAGS   = $(ARCH) -fomit-frame-pointer
 CFLAGS  += $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -DUSE_$(SDL) -Ofast -std=gnu99
 CFLAGS	+= -Os -flto
+# The software shaders run per output pixel every frame: build them for speed,
+# with -O3 so their row loops are vectorized (NEON on ARM).
+SHADER_CFLAGS = $(ARCH) $(SHADER_ARCH) -fomit-frame-pointer $(INCDIR) -DPLATFORM=\"$(PLATFORM)\" -std=gnu99 -O3
 LDFLAGS	 = -ldl $(LIBS) -lmsettings -l$(SDL) -l$(SDL)_image -l$(SDL)_ttf -lpthread -lm -lz
 # CFLAGS  += -Wall -Wno-unused-variable -Wno-unused-function -Wno-format-overflow
 # CFLAGS  += -fsanitize=address -fno-common
@@ -42,7 +45,8 @@ PRODUCT= build/$(PLATFORM)/$(TARGET).elf
 
 all: libretro-common $(PREFIX)/include/msettings.h
 	mkdir -p build/$(PLATFORM)
-	$(CC) $(SOURCE) -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
+	$(CC) -c shader.c -o build/$(PLATFORM)/shader.o $(SHADER_CFLAGS)
+	$(CC) $(SOURCE) build/$(PLATFORM)/shader.o -o $(PRODUCT) $(CFLAGS) $(LDFLAGS)
 clean:
 	rm -f $(PRODUCT)
 

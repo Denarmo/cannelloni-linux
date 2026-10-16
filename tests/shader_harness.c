@@ -89,9 +89,27 @@ int main(void) {
     assert(s.preset==SHADER_NONE && s.intensity==0 && s.curvature==100 &&
            s.brightness==50 && s.mask==100 && s.glow==0);
     assert(Shader_getPreset(-1)==Shader_getPreset(SHADER_NONE));
+    /* Splitting rows across threads renders exactly the same frame. */
+    enum { BIG_W=200, BIG_H=150, BIG_OW=640, BIG_OH=480 };
+    static uint16_t big[BIG_W*BIG_H], single[BIG_OW*BIG_OH];
+    for (int n=0; n<BIG_W*BIG_H; ++n) big[n]=(uint16_t)(n*2654435761u>>13);
+    for (int preset=0; preset<SHADER_COUNT; ++preset) {
+        ShaderContext one={0}, two={0};
+        two.threads=2;
+        s=Shader_defaults(preset);
+        for (unsigned frame=0; frame<3; ++frame) {
+            out=Shader_process(&one,&s,big,BIG_W,BIG_H,BIG_W*2,BIG_OW,BIG_OH,frame*50);
+            assert(out);
+            memcpy(single,out,sizeof(single));
+            out=Shader_process(&two,&s,big,BIG_W,BIG_H,BIG_W*2,BIG_OW,BIG_OH,frame*50);
+            assert(out && !memcmp(single,out,sizeof(single)));
+        }
+        Shader_destroy(&one); Shader_destroy(&two);
+    }
+    s=Shader_defaults(SHADER_NONE);
     Shader_destroy(&context);
     assert(!context.pixels && !context.blur && !context.capacity && !context.tables_ready);
     Shader_destroy(&context);
-    puts("Shader rendering, parameter, crop, source-integrity and allocation checks passed.");
+    puts("Shader rendering, parameter, crop, source-integrity, threading and allocation checks passed.");
     return 0;
 }

@@ -3029,18 +3029,33 @@ static void selectScaler(int src_w, int src_h, int src_p) {
 // Render effects at display resolution so masks and scanlines keep their
 // intended size on both SDL1 blitters and SDL2 texture renderers. The original
 // core frame remains untouched for save previews and returning from the menu.
+static void Shader_clearBorders(uint8_t* pixels, int pitch, int w, int h, int dx, int dy, int dw, int dh) {
+	for (int y = 0; y < h; y++) {
+		uint8_t* row = pixels + y * pitch;
+		if (y < dy || y >= dy + dh) { memset(row, 0, w * 2); continue; }
+		if (dx > 0) memset(row, 0, dx * 2);
+		if (dx + dw < w) memset(row + (dx + dw) * 2, 0, (w - dx - dw) * 2);
+	}
+}
 static void Shader_blit(void) {
 	if (screen_effect == SHADER_NONE) {
 		renderer.dst = screen->pixels;
 		GFX_blitRenderer(&renderer);
 		return;
 	}
-	if (!shader_screen || shader_screen->w != DEVICE_WIDTH || shader_screen->h != DEVICE_HEIGHT) {
+	// Platforms that copy a renderer straight to the screen can take the
+	// shader output there directly instead of through an intermediate surface.
+#ifdef SHADER_DIRECT_BLIT
+	int direct = screen->w == DEVICE_WIDTH && screen->h == DEVICE_HEIGHT;
+#else
+	int direct = 0;
+#endif
+	if (!direct && (!shader_screen || shader_screen->w != DEVICE_WIDTH || shader_screen->h != DEVICE_HEIGHT)) {
 		if (shader_screen) SDL_FreeSurface(shader_screen);
 		shader_screen = SDL_CreateRGBSurface(SDL_SWSURFACE, DEVICE_WIDTH, DEVICE_HEIGHT,
 			16, RGBA_MASK_565);
 	}
-	if (!shader_screen) return;
+	if (!direct && !shader_screen) return;
 	int sw = renderer.true_w, sh = renderer.true_h, sx = 0, sy = 0;
 	int dw = DEVICE_WIDTH, dh = DEVICE_HEIGHT;
 	int scaling = screen_scaling;
@@ -3063,20 +3078,20 @@ static void Shader_blit(void) {
 		}
 	}
 	if (sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0) return;
+	uint8_t* target = direct ? (uint8_t*)screen->pixels : (uint8_t*)shader_screen->pixels;
+	int target_pitch = direct ? screen->pitch : shader_screen->pitch;
+	int dx = (DEVICE_WIDTH - dw) / 2, dy = (DEVICE_HEIGHT - dh) / 2;
 	const uint8_t* source = (const uint8_t*)renderer.src + sy * renderer.src_p + sx * 2;
-	const uint16_t* pixels = Shader_process(&shader_context, &shader_settings,
-		source, sw, sh, renderer.src_p, dw, dh, shader_frame++);
-	if (!pixels) {
+	// A threaded core already keeps the second CPU busy emulating.
+	shader_context.threads = thread_video ? 1 : 2;
+	if (!Shader_render(&shader_context, &shader_settings, source, sw, sh, renderer.src_p,
+			target + dy * target_pitch + dx * 2, target_pitch, dw, dh, shader_frame++)) {
 		LOG_error("Unable to allocate shader frame; disabling shaders.\n");
 		Config_syncFrontend(config.frontend.options[FE_OPT_EFFECT].key, SHADER_NONE);
 		return;
 	}
-	SDL_FillRect(shader_screen, NULL, 0);
-	int dx = (DEVICE_WIDTH - dw) / 2, dy = (DEVICE_HEIGHT - dh) / 2;
-	for (int y = 0; y < dh; y++) {
-		memcpy((uint8_t*)shader_screen->pixels + (y + dy) * shader_screen->pitch + dx * 2,
-			pixels + y * dw, dw * 2);
-	}
+	Shader_clearBorders(target, target_pitch, DEVICE_WIDTH, DEVICE_HEIGHT, dx, dy, dw, dh);
+	if (direct) return;
 	shader_renderer = (GFX_Renderer){
 		.src = shader_screen->pixels, .dst = screen->pixels, .aspect = -1, .scale = 1,
 		.true_w = DEVICE_WIDTH, .true_h = DEVICE_HEIGHT,
